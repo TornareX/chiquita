@@ -2,6 +2,11 @@
 export const SIM_HZ = 240;
 export const SIM_DT = 1 / SIM_HZ;
 
+// Balle (specs FIP : diamètre 6,35–6,77 cm, masse 56,0–59,4 g).
+export const BALL_RADIUS = 0.0325;
+export const BALL_MASS = 0.0575;
+export const BALL_AREA = Math.PI * BALL_RADIUS * BALL_RADIUS;
+
 // Terrain (règles FIP), en mètres.
 // Repère : Y vers le haut, origine au centre du filet au sol, Z dans la longueur,
 // joueur côté Z négatif.

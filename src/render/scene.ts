@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { World } from '../sim/world';
+import { createBallView } from './ball';
 import { createCourt } from './court';
 
 export interface View {
@@ -6,7 +8,7 @@ export interface View {
   render(alpha: number): void;
 }
 
-export function createView(canvas: HTMLCanvasElement): View {
+export function createView(canvas: HTMLCanvasElement, world: World): View {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -17,6 +19,8 @@ export function createView(canvas: HTMLCanvasElement): View {
   sun.position.set(6, 12, -4);
   scene.add(sun);
   scene.add(createCourt());
+  const ballView = createBallView();
+  scene.add(ballView.object);
 
   // FOV vertical de 70° : environ 100° à l'horizontale en 16:9.
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 200);
@@ -40,7 +44,8 @@ export function createView(canvas: HTMLCanvasElement): View {
   resize();
 
   return {
-    render(_alpha: number): void {
+    render(alpha: number): void {
+      ballView.update(world, alpha);
       renderer.render(scene, camera);
     },
   };

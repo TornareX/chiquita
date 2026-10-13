@@ -7,7 +7,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('Canvas #scene introuvable');
 
 const world = new World();
-const view = createView(canvas);
+const view = createView(canvas, world);
 const loop = new FixedStepLoop(SIM_DT, () => world.step());
 
 const debug = import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
