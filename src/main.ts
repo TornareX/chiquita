@@ -13,7 +13,11 @@ const world = new World();
 const view = createView(canvas, world);
 const input = createKeyboardMouse(canvas);
 const hud = createHud();
-const loop = new FixedStepLoop(SIM_DT, () => world.step(input.sample()));
+const loop = new FixedStepLoop(SIM_DT, () => {
+  const commands = input.sample();
+  const script = window.__sim?.commandScript;
+  world.step(script ? { ...commands, ...script(world) } : commands);
+});
 
 const params = new URLSearchParams(location.search);
 

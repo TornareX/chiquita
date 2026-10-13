@@ -4,6 +4,7 @@ import type { World } from '../sim/world';
 import { createBallView } from './ball';
 import { createCourt } from './court';
 import { createMachineView } from './machine';
+import { createRacketView } from './racket';
 
 export interface View {
   /** `alpha` : fraction de pas de simulation écoulée, pour interpoler entre deux états. */
@@ -36,6 +37,12 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
     camera.lookAt(0, 1, -2);
   }
 
+  const racketView = createRacketView();
+  if (!overview) {
+    scene.add(camera);
+    camera.add(racketView.object);
+  }
+
   const updateCamera = (alpha: number): void => {
     const { player, prevPlayerPos, profile } = world;
     const pos = lerp(prevPlayerPos, player.pos, alpha);
@@ -59,6 +66,7 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
       if (!overview) updateCamera(alpha);
       ballView.update(world, alpha);
       machineView.update(world);
+      racketView.update(world);
       renderer.render(scene, camera);
     },
   };

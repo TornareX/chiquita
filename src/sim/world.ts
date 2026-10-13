@@ -5,6 +5,7 @@ import { SIM_DT } from './constants';
 import { Machine, type Exercise } from './machine';
 import { createPlayer, NO_LAUNCH, stepPlayer, type Player } from './player';
 import { REALISTIC, type PhysicsProfile } from './profile';
+import { createRacket, stepRacket, type Racket, type Shot } from './racket';
 import type { Vec3 } from './vec3';
 
 /** État complet de la simulation. Avance uniquement par pas fixes de SIM_DT. */
@@ -21,6 +22,11 @@ export class World {
   player: Player = createPlayer();
   /** Position du joueur au pas précédent, pour l'interpolation du rendu. */
   prevPlayerPos: Vec3 = this.player.pos;
+  racket: Racket = createRacket();
+  /** Frappe réussie pendant le dernier pas, sinon `null`. */
+  shot: Shot | null = null;
+  /** Dernière frappe sur la balle en cours. */
+  lastShot: Shot | null = null;
 
   /** Temps simulé en secondes, dérivé du compteur de pas pour éviter toute dérive. */
   get time(): number {
@@ -30,6 +36,7 @@ export class World {
   launchBall(pos: Vec3, vel: Vec3, spin?: Vec3): void {
     this.ball = createBall(pos, vel, spin);
     this.prevBallPos = pos;
+    this.lastShot = null;
   }
 
   /** Démarre un exercice : la machine lancera ses balles à partir de maintenant. */
@@ -44,13 +51,22 @@ export class World {
     const launch = this.machine?.update(this.time);
     if (launch) this.launchBall(launch.pos, launch.vel, launch.spin);
 
+    // Pendant le swing, la souris oriente surtout le coup : la caméra tourne moins.
+    const lookFactor = this.racket.phase === 'swinging' ? this.profile.racket.swingLookFactor : 1;
+    const playerCommands: PlayerCommands = {
+      ...commands,
+      look: { yaw: commands.look.yaw * lookFactor, pitch: commands.look.pitch * lookFactor },
+    };
     this.prevPlayerPos = this.player.pos;
-    stepPlayer(this.player, commands, SIM_DT, this.profile, this.machine ?? NO_LAUNCH, this.time);
+    stepPlayer(this.player, playerCommands, SIM_DT, this.profile, this.machine ?? NO_LAUNCH, this.time);
 
+    const ballBefore = this.ball?.pos ?? null;
     if (this.ball) {
       this.prevBallPos = this.ball.pos;
       stepBall(this.ball, SIM_DT, this.profile, this.contacts);
     }
+    this.shot = stepRacket(this.racket, this.player, this.ball, ballBefore, commands, SIM_DT, this.profile);
+    if (this.shot) this.lastShot = this.shot;
     this.tick++;
   }
 }

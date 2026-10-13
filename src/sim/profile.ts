@@ -28,9 +28,69 @@ export interface PlayerTuning {
   boostSpeedFactor: number;
 }
 
+/** Réglages de la raquette. Longueurs en mètres, durées en secondes, angles en degrés. */
+export interface RacketTuning {
+  /** Durée de maintien pour une préparation complète. */
+  prepareTime: number;
+  /** Durée du swing : sans préparation (max) et avec préparation complète (min). */
+  swingDurationMax: number;
+  swingDurationMin: number;
+  recoverTime: number;
+  /** Rayon du tamis. */
+  headRadius: number;
+  /** Multiplicateur de la taille effective du tamis (aide d'entraînement, 1 = réel). */
+  tolerance: number;
+  /** Recul du tamis derrière le joueur : sans préparation et avec préparation complète. */
+  backswingMin: number;
+  backswingMax: number;
+  /** Avancée maximale du tamis devant le joueur en fin de swing. */
+  reachForward: number;
+  /** Écart latéral du tamis : au début et à la fin du swing. */
+  lateralStart: number;
+  lateralEnd: number;
+  /** Position d'attente du tamis. */
+  readyForward: number;
+  readyLateral: number;
+  readyHeight: number;
+  /** Le tamis suit la hauteur de la balle dans ces limites, à cette vitesse max (m/s). */
+  heightMin: number;
+  heightMax: number;
+  heightRate: number;
+  /** Rebond de la balle sur le tamis (coefficient apparent) et friction. */
+  restitution: number;
+  friction: number;
+  /** Ouverture du tamis pour un coup à pleine vitesse (`referenceSpeed`, en m/s), regard horizontal. */
+  baseLoft: number;
+  /** Ouverture supplémentaire quand la vitesse du tamis tend vers zéro. */
+  slowLoft: number;
+  referenceSpeed: number;
+  /** Part du regard vertical reprise dans l'angle de sortie, et sa contribution maximale. */
+  pitchInfluence: number;
+  maxPitchLoft: number;
+  /** Geste vertical de souris pendant le swing → angle de brossage (degrés par radian de souris). */
+  brushGain: number;
+  maxBrush: number;
+  /** Part de l'angle de brossage vers le haut qui ouvre aussi le tamis (lob). */
+  loftPerBrush: number;
+  /** Pendant le swing, part du mouvement de souris qui tourne encore la caméra ; le reste oriente le coup. */
+  swingLookFactor: number;
+  /** Multiplicateur de vitesse du coup de toucher. */
+  softFactor: number;
+  /** Point idéal du contact le long du swing (0 = début, 1 = fin). */
+  idealContact: number;
+  /** Déviation latérale par unité de retard ou d'avance sur le point idéal. */
+  timingAngle: number;
+  /** Contact au bord du tamis : perte de vitesse (fraction) et déviation maximale. */
+  edgeSpeedLoss: number;
+  edgeDeviation: number;
+  /** Qualité de contact à partir de laquelle le coup est « parfait ». */
+  perfectQuality: number;
+}
+
 /** Tous les coefficients de la physique, regroupés pour être modifiables à chaud. */
 export interface PhysicsProfile {
   player: PlayerTuning;
+  racket: RacketTuning;
   gravity: number;
   airDensity: number;
   dragCoefficient: number;
@@ -70,6 +130,43 @@ export const REALISTIC: PhysicsProfile = {
     boostDuration: 0.5,
     boostAccelFactor: 2,
     boostSpeedFactor: 1.15,
+  },
+  // Idem : tout le ressenti de la frappe est [à calibrer] en jouant.
+  racket: {
+    prepareTime: 0.45,
+    swingDurationMax: 0.19,
+    swingDurationMin: 0.14,
+    recoverTime: 0.25,
+    headRadius: 0.13,
+    tolerance: 1,
+    backswingMin: 0.1,
+    backswingMax: 0.45,
+    reachForward: 0.95,
+    lateralStart: 0.6,
+    lateralEnd: 0.4,
+    readyForward: 0.35,
+    readyLateral: 0.3,
+    readyHeight: 1,
+    heightMin: 0.25,
+    heightMax: 1.9,
+    heightRate: 4,
+    restitution: 0.35,
+    friction: 0.35,
+    baseLoft: 5,
+    slowLoft: 10,
+    referenceSpeed: 15,
+    pitchInfluence: 0.35,
+    maxPitchLoft: 12,
+    brushGain: 115,
+    maxBrush: 40,
+    loftPerBrush: 0.35,
+    swingLookFactor: 0.3,
+    softFactor: 0.45,
+    idealContact: 0.6,
+    timingAngle: 25,
+    edgeSpeedLoss: 0.4,
+    edgeDeviation: 10,
+    perfectQuality: 0.85,
   },
   gravity: 9.81,
   airDensity: 1.2,
