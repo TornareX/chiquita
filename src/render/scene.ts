@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createCourt } from './court';
 
 export interface View {
   /** `alpha` : fraction de pas de simulation écoulée, pour interpoler entre deux états. */
@@ -11,14 +12,22 @@ export function createView(canvas: HTMLCanvasElement): View {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1b2733);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4450, 2.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+  sun.position.set(6, 12, -4);
+  scene.add(sun);
+  scene.add(createCourt());
 
-  // Repère provisoire en attendant le terrain : grille au sol (1 m par case) et axes à l'origine.
-  scene.add(new THREE.GridHelper(20, 20, 0x5fa8d3, 0x33475b));
-  scene.add(new THREE.AxesHelper(1));
-
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 100);
-  camera.position.set(0, 1.7, -8);
-  camera.lookAt(0, 1, 0);
+  // FOV vertical de 70° : environ 100° à l'horizontale en 16:9.
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 200);
+  // `?cam=overview` : vue d'ensemble extérieure, pour contrôler la géométrie.
+  if (new URLSearchParams(location.search).get('cam') === 'overview') {
+    camera.position.set(8, 6.5, -14);
+    camera.lookAt(0, 1, -2);
+  } else {
+    camera.position.set(0, 1.7, -7);
+    camera.lookAt(0, 1.2, 0);
+  }
 
   const resize = (): void => {
     const width = canvas.clientWidth;
