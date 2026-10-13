@@ -18,6 +18,16 @@ import {
 } from './rules';
 import { vec3, type Vec3 } from './vec3';
 
+/** Un pas enregistré : de quoi revoir le point sous un autre angle. */
+export interface ReplayFrame {
+  ball: Vec3;
+  player: Vec3;
+  yaw: number;
+}
+
+/** Durée maximale enregistrée par balle (s). */
+const HISTORY_SECONDS = 12;
+
 /** État complet de la simulation. Avance uniquement par pas fixes de SIM_DT. */
 export class World {
   tick = 0;
@@ -46,6 +56,10 @@ export class World {
   stats: Stats = createStats();
   /** En pause, `step` ne fait rien : le temps simulé s'arrête. */
   paused = false;
+  /** Enregistrement de la balle en cours, pas par pas, pour la revoir. */
+  history: ReplayFrame[] = [];
+  /** Enregistrement de la balle précédente. */
+  previousHistory: ReplayFrame[] = [];
 
   /** Temps simulé en secondes, dérivé du compteur de pas pour éviter toute dérive. */
   get time(): number {
@@ -59,6 +73,8 @@ export class World {
     this.prevBallPos = pos;
     this.lastShot = null;
     this.rally = createRally();
+    if (this.history.length > 0) this.previousHistory = this.history;
+    this.history = [];
   }
 
   /** Démarre un exercice : la machine lancera ses balles à partir de maintenant. */
@@ -80,6 +96,11 @@ export class World {
   replayLastBall(): void {
     const launch = this.machine?.replay(this.time);
     if (launch) this.launchBall(launch.pos, launch.vel, launch.spin);
+  }
+
+  /** Le dernier point à revoir : la balle en cours si elle est jugée, sinon la précédente. */
+  get lastPoint(): readonly ReplayFrame[] {
+    return this.rally.result || this.previousHistory.length === 0 ? this.history : this.previousHistory;
   }
 
   private settle(result: BallResult | null): void {
@@ -118,6 +139,9 @@ export class World {
       this.stats.qualitySum += this.shot.quality;
     }
     if (this.ball) this.settle(judgeStep(this.rally, this.contacts, this.shot !== null));
+    if (this.ball && this.history.length < HISTORY_SECONDS / SIM_DT) {
+      this.history.push({ ball: this.ball.pos, player: this.player.pos, yaw: this.player.yaw });
+    }
     this.tick++;
   }
 }

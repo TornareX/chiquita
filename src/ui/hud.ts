@@ -4,7 +4,7 @@ import type { World } from '../sim/world';
 
 export interface Hud {
   /** À appeler à chaque image. `active` : la souris est capturée et le joueur a la main. */
-  update(world: World, active: boolean): void;
+  update(world: World, active: boolean, reviewing: boolean): void;
   showResult(result: BallResult): void;
   showShot(shot: Shot): void;
 }
@@ -50,7 +50,8 @@ export function createHud(): Hud {
     '<strong>Cliquer pour jouer</strong>' +
     '<span>ZQSD : se déplacer · Souris : regarder · Espace : split-step</span>' +
     '<span>Clic gauche maintenu : préparer, relâcher : frapper · Clic droit : coup de toucher</span>' +
-    '<span>1 à 6 : exercice · P : pause · R : rejouer la balle · Échap : libérer la souris</span>';
+    '<span>1 à 6 : exercice · P : pause · R : rejouer la balle · V : revoir le point</span>' +
+    '<span>Échap : libérer la souris et ouvrir les réglages</span>';
   const stats = element('stats');
   const result = element('result');
   const contact = element('contact');
@@ -58,9 +59,11 @@ export function createHud(): Hud {
   pause.textContent = 'Pause';
 
   return {
-    update(world: World, active: boolean): void {
+    update(world: World, active: boolean, reviewing: boolean): void {
       prompt.hidden = active;
       pause.hidden = !world.paused;
+      pause.textContent = reviewing ? 'Revue du point · ZQSD et souris : caméra libre · V : reprendre' : 'Pause';
+      pause.classList.toggle('review', reviewing);
       const exercise = world.machine?.exercise;
       if (!exercise) {
         stats.textContent = '';

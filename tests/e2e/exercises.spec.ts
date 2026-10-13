@@ -3,13 +3,13 @@ import { expect, test } from '@playwright/test';
 test('choix de l’exercice, pause, rejeu, cadence et difficulté', async ({ page }) => {
   await page.goto('/?seed=1');
   await page.waitForFunction(() => window.__sim?.world.machine != null);
-  await expect(page.locator('#panel button.selected')).toHaveText('1 · Vitre de fond');
+  await expect(page.locator('#panel .exercises button.selected')).toHaveText('1 · Vitre de fond');
   await expect(page.locator('#panel .exercises button')).toHaveCount(6);
 
   // Touche 5 : exercice « Volée », le joueur est replacé près du filet.
   await page.keyboard.press('Digit5');
   await expect(page.locator('#stats')).toHaveText(/^Volée/);
-  await expect(page.locator('#panel button.selected')).toHaveText('5 · Volée');
+  await expect(page.locator('#panel .exercises button.selected')).toHaveText('5 · Volée');
   expect(await page.evaluate(() => window.__sim!.world.player.pos.z)).toBe(-3);
 
   // Clic dans le panneau : exercice « Lob ».

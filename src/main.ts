@@ -6,6 +6,7 @@ import { EXERCISES, findExercise } from './sim/exercises';
 import { FixedStepLoop } from './sim/loop';
 import { DEFAULT_DIFFICULTY } from './sim/machine';
 import { World } from './sim/world';
+import { createAids } from './ui/aids';
 import { createHud } from './ui/hud';
 import { createPanel } from './ui/panel';
 
@@ -13,7 +14,8 @@ const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('Canvas #scene introuvable');
 
 const world = new World();
-const view = createView(canvas, world);
+const aids = createAids();
+const view = createView(canvas, world, aids);
 const input = createKeyboardMouse(canvas);
 const hud = createHud();
 const sounds = createSounds();
@@ -61,13 +63,25 @@ const actions = {
     world.machine?.setDifficulty(value);
   },
   togglePause(): void {
+    // Pendant la revue d'un point, la pause est imposée.
+    if (view.replaying) return;
     world.paused = !world.paused;
   },
   replay(): void {
     world.replayLastBall();
   },
+  /** Revue du dernier point en caméra libre : le jeu est en pause pendant ce temps. */
+  toggleReview(): void {
+    if (view.replaying) {
+      view.setReplay(null);
+      world.paused = false;
+    } else if (world.lastPoint.length > 0) {
+      view.setReplay([...world.lastPoint]);
+      world.paused = true;
+    }
+  },
 };
-const panel = createPanel(actions);
+const panel = createPanel(actions, aids);
 
 window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
@@ -76,6 +90,7 @@ window.addEventListener('keydown', (event) => {
   if (exercise) actions.startExercise(exercise.id);
   else if (event.code === 'KeyP') actions.togglePause();
   else if (event.code === 'KeyR') actions.replay();
+  else if (event.code === 'KeyV') actions.toggleReview();
 });
 
 // `?exercise=none` : aucun exercice au démarrage.
@@ -83,7 +98,7 @@ const exerciseId = params.get('exercise') ?? 'back-glass';
 if (exerciseId !== 'none') actions.startExercise(exerciseId);
 
 const debug = import.meta.env.DEV || params.has('debug');
-if (debug) window.__sim = { world };
+if (debug) window.__sim = { world, aids };
 
 let last = performance.now();
 let alpha = 0;
@@ -91,10 +106,12 @@ const frame = (now: number): void => {
   const frameTime = (now - last) / 1000;
   last = now;
   // Pendant la micro-pause, la simulation est figée ; le temps réel écoulé n'est pas rattrapé.
-  if (now >= hitstopUntil) alpha = loop.advance(frameTime);
+  world.profile.racket.tolerance = aids.tolerance;
+  if (view.replaying) view.moveReplayCamera(input.sample(), frameTime);
+  else if (now >= hitstopUntil) alpha = loop.advance(frameTime * aids.timeScale);
   view.render(alpha, frameTime);
-  hud.update(world, input.active);
-  panel.update(world, input.active);
+  hud.update(world, input.active, view.replaying);
+  panel.update(world, input.active, view.replaying);
   requestAnimationFrame(frame);
 };
 requestAnimationFrame(frame);

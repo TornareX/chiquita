@@ -1,17 +1,19 @@
 import { EXERCISES } from '../sim/exercises';
 import { MAX_INTERVAL, MIN_INTERVAL } from '../sim/machine';
 import type { World } from '../sim/world';
+import { MAX_TOLERANCE, TIME_SCALES, type Aids } from './aids';
 
 export interface PanelActions {
   startExercise(id: string): void;
   setDifficulty(value: number): void;
   togglePause(): void;
   replay(): void;
+  toggleReview(): void;
 }
 
 export interface Panel {
   /** À appeler à chaque image. Le panneau n'est visible que quand la souris est libre. */
-  update(world: World, active: boolean): void;
+  update(world: World, active: boolean, reviewing: boolean): void;
 }
 
 function slider(label: string, min: number, max: number, step: number): {
@@ -33,6 +35,25 @@ function slider(label: string, min: number, max: number, step: number): {
   return { row, input, value };
 }
 
+function checkbox(label: string, checked: boolean, onChange: (checked: boolean) => void): HTMLLabelElement {
+  const row = document.createElement('label');
+  row.className = 'check';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.addEventListener('change', () => onChange(input.checked));
+  const text = document.createElement('span');
+  text.textContent = label;
+  row.append(input, text);
+  return row;
+}
+
+function heading(text: string): HTMLHeadingElement {
+  const element = document.createElement('h2');
+  element.textContent = text;
+  return element;
+}
+
 function button(label: string, onClick: () => void): HTMLButtonElement {
   const element = document.createElement('button');
   element.type = 'button';
@@ -41,13 +62,12 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   return element;
 }
 
-/** Panneau de réglage de l'exercice : choix, cadence, difficulté, pause, rejeu. */
-export function createPanel(actions: PanelActions): Panel {
+/** Panneau de réglage : exercice, cadence, difficulté, pause, rejeu, et aides d'entraînement. */
+export function createPanel(actions: PanelActions, aids: Aids): Panel {
   const panel = document.createElement('div');
   panel.id = 'panel';
 
-  const title = document.createElement('h2');
-  title.textContent = 'Exercice';
+  const title = heading('Exercice');
   const list = document.createElement('div');
   list.className = 'exercises';
   const exerciseButtons = EXERCISES.map((exercise, index) => {
@@ -67,7 +87,42 @@ export function createPanel(actions: PanelActions): Panel {
   buttons.className = 'actions';
   buttons.append(pause, replay);
 
-  panel.append(title, list, cadence.row, difficulty.row, buttons);
+  // Aides d'entraînement.
+  const trajectory = checkbox('Trajectoire prévue', aids.trajectory, (on) => (aids.trajectory = on));
+  trajectory.dataset.aid = 'trajectory';
+  const bounce = checkbox('Point de rebond au sol', aids.bounceMarker, (on) => (aids.bounceMarker = on));
+  bounce.dataset.aid = 'bounce';
+  const tolerance = slider('Taille du tamis', 100, MAX_TOLERANCE * 100, 10);
+  tolerance.row.dataset.aid = 'tolerance';
+  tolerance.input.value = String(aids.tolerance * 100);
+  tolerance.input.addEventListener('input', () => (aids.tolerance = Number(tolerance.input.value) / 100));
+  const speeds = document.createElement('div');
+  speeds.className = 'speeds';
+  const speedButtons = TIME_SCALES.map((scale) => {
+    const element = button(`${String(scale).replace('.', ',')}×`, () => (aids.timeScale = scale));
+    speeds.append(element);
+    return { scale, element };
+  });
+  const review = button('', actions.toggleReview);
+  review.dataset.action = 'review';
+  const reviewRow = document.createElement('div');
+  reviewRow.className = 'actions';
+  reviewRow.append(review);
+
+  panel.append(
+    title,
+    list,
+    cadence.row,
+    difficulty.row,
+    buttons,
+    heading('Aides'),
+    trajectory,
+    bounce,
+    tolerance.row,
+    heading('Vitesse du temps'),
+    speeds,
+    reviewRow,
+  );
   document.body.append(panel);
 
   let world: World | null = null;
@@ -75,10 +130,13 @@ export function createPanel(actions: PanelActions): Panel {
   difficulty.input.addEventListener('input', () => actions.setDifficulty(Number(difficulty.input.value) / 100));
 
   return {
-    update(current: World, active: boolean): void {
+    update(current: World, active: boolean, reviewing: boolean): void {
       world = current;
       panel.hidden = active;
       if (active) return;
+      tolerance.value.textContent = `${Math.round(aids.tolerance * 100)} %`;
+      for (const { scale, element } of speedButtons) element.classList.toggle('selected', aids.timeScale === scale);
+      review.textContent = reviewing ? 'Reprendre le jeu (V)' : 'Revoir le dernier point (V)';
       const machine = current.machine;
       for (const element of exerciseButtons) {
         element.classList.toggle('selected', element.dataset.exercise === machine?.exercise.id);

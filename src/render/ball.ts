@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { BALL_RADIUS } from '../sim/constants';
-import { lerp } from '../sim/vec3';
-import type { World } from '../sim/world';
+import type { Vec3 } from '../sim/vec3';
 
 export interface BallView {
   readonly object: THREE.Group;
-  update(world: World, alpha: number): void;
+  /** `null` : pas de balle à afficher. */
+  update(pos: Vec3 | null): void;
 }
 
 /** Balle et son ombre au sol (repère de profondeur indispensable en première personne). */
@@ -25,11 +25,9 @@ export function createBallView(): BallView {
 
   return {
     object,
-    update(world: World, alpha: number): void {
-      const { ball, prevBallPos } = world;
-      object.visible = ball !== null;
-      if (!ball) return;
-      const pos = prevBallPos ? lerp(prevBallPos, ball.pos, alpha) : ball.pos;
+    update(pos: Vec3 | null): void {
+      object.visible = pos !== null;
+      if (!pos) return;
       sphere.position.set(pos.x, pos.y, pos.z);
       shadow.position.set(pos.x, 0.008, pos.z);
     },

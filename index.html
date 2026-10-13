@@ -36,9 +36,12 @@
       }
       #panel {
         position: fixed;
-        top: 50px;
+        top: 44px;
         left: 18px;
         width: 250px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        box-sizing: border-box;
         padding: 14px 16px;
         border-radius: 10px;
         background: rgba(10, 16, 22, 0.82);
@@ -109,6 +112,28 @@
         font: 600 30px/1 system-ui, sans-serif;
         text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
         pointer-events: none;
+      }
+      #pause.review {
+        top: 8%;
+        font-size: 16px;
+      }
+      #panel label.check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        cursor: pointer;
+      }
+      #panel label.check input {
+        width: auto;
+      }
+      #panel .speeds {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+      }
+      #panel .speeds button {
+        text-align: center;
       }
       #pause[hidden] {
         display: none;
