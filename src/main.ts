@@ -41,6 +41,7 @@ const loop = new FixedStepLoop(SIM_DT, () => {
     // 30 à 50 ms selon la qualité, rien sur un contact au bord du tamis. [à calibrer]
     if (shot.quality >= 0.5) hitstopUntil = performance.now() + 30 + 20 * shot.quality;
   }
+  if (world.swingMiss) hud.showMiss(world.swingMiss);
   if (world.result) {
     sounds.result(world.result);
     hud.showResult(world.result);

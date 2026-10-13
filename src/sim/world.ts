@@ -5,7 +5,7 @@ import { SIM_DT } from './constants';
 import { Machine, type Exercise } from './machine';
 import { createPlayer, NO_LAUNCH, stepPlayer, type Player } from './player';
 import { REALISTIC, type PhysicsProfile } from './profile';
-import { createRacket, stepRacket, type Racket, type Shot } from './racket';
+import { createRacket, isInReach, reachOf, stepRacket, type Racket, type Shot, type SwingMiss } from './racket';
 import {
   abandon,
   createRally,
@@ -45,6 +45,10 @@ export class World {
   racket: Racket = createRacket();
   /** Frappe réussie pendant le dernier pas, sinon `null`. */
   shot: Shot | null = null;
+  /** Swing dans le vide terminé pendant le dernier pas : la raison, sinon `null`. */
+  swingMiss: SwingMiss | null = null;
+  /** La balle est en ce moment dans la zone de frappe du joueur. */
+  inReach = false;
   /** Dernière frappe sur la balle en cours. */
   lastShot: Shot | null = null;
   rally: Rally = createRally();
@@ -114,6 +118,7 @@ export class World {
     this.contacts.length = 0;
     this.result = null;
     this.shot = null;
+    this.swingMiss = null;
     if (this.paused) return;
     const launch = this.machine?.update(this.time);
     if (launch) this.launchBall(launch.pos, launch.vel, launch.spin);
@@ -127,12 +132,17 @@ export class World {
     this.prevPlayerPos = this.player.pos;
     stepPlayer(this.player, playerCommands, SIM_DT, this.profile, this.machine ?? NO_LAUNCH, this.time);
 
-    const ballBefore = this.ball?.pos ?? null;
     if (this.ball) {
       this.prevBallPos = this.ball.pos;
       stepBall(this.ball, SIM_DT, this.profile, this.contacts);
     }
-    this.shot = stepRacket(this.racket, this.player, this.ball, ballBefore, commands, SIM_DT, this.profile);
+    const missBefore = this.racket.miss;
+    this.shot = stepRacket(this.racket, this.player, this.ball, commands, SIM_DT, this.profile);
+    if (this.racket.miss && !missBefore) this.swingMiss = this.racket.miss;
+    this.inReach =
+      this.ball !== null &&
+      !this.ball.out &&
+      isInReach(reachOf(this.player, this.racket, this.ball, this.profile.racket));
     if (this.shot) {
       this.lastShot = this.shot;
       this.stats.hits++;

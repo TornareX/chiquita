@@ -4,7 +4,7 @@ export interface Aids {
   trajectory: boolean;
   /** Marqueur du prochain point de rebond au sol. */
   bounceMarker: boolean;
-  /** Taille effective du tamis (1 = réelle). */
+  /** Taille de la zone de frappe (1 = réelle). */
   tolerance: number;
   /** Vitesse du temps : 1, 0,75 ou 0,5. */
   timeScale: number;

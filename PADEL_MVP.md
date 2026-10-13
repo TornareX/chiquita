@@ -327,6 +327,10 @@ Chaque étape se termine par des tests verts et une capture d'écran.
 
 ## 14. Décisions prises
 
+- **Frappe par zone de portée, pas par collision exacte du tamis** (révise le §7). La première version exigeait que la balle traverse un couloir de 30 cm invisible à l'écran : injouable. Désormais la balle est touchée si elle est dans la zone que le bras peut atteindre pendant le swing ; le placement et le timing déterminent la qualité du contact. Un repère au centre de l'écran s'allume quand la balle est à portée, et un swing dans le vide dit pourquoi (trop tôt, trop tard, trop loin…).
+- **Le coup vise un passage au-dessus du filet** (révise le §7). Un rebond physique pur sur le tamis envoyait la balle au sol. La direction suit le regard ; la hauteur de passage se règle avec le regard vertical et le geste de souris ; la vitesse vient du swing et de la balle entrante.
+- **Jouabilité vérifiée par un joueur automatique** (`tests/sim/playability.test.ts`) : il passe par les mêmes commandes qu'un humain et doit renvoyer la majorité des balles de chaque exercice.
+
 - **Revers à une main.**
 - **Smash, bandeja et víbora : après le MVP.** Le swing au-dessus de la tête demande un geste différent, à concevoir plus tard.
 - **Clavier/souris uniquement pour le MVP.** Le support manette viendra plus tard (les commandes abstraites du §4 le permettent).

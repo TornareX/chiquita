@@ -54,14 +54,14 @@
     "player": { "x": 0, "z": -5 },
     "launch": {
       "pos": { "x": 0, "y": 1.1, "z": 8 },
-      "speed": 12.5,
-      "azimuth": 22.5,
-      "elevation": 21,
+      "speed": 11,
+      "azimuth": 22,
+      "elevation": 37,
       "topspin": 0,
       "sidespin": 0
     },
-    "launchHard": { "speed": 13, "elevation": 19 },
-    "variation": { "speed": 0.15, "azimuth": 0.9, "elevation": 0.5, "mirror": true }
+    "launchHard": { "speed": 11.3, "elevation": 34.5 },
+    "variation": { "speed": 0.1, "azimuth": 0.6, "elevation": 0.6, "mirror": true }
   },
   {
     "id": "volley",

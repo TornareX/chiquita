@@ -36,9 +36,29 @@ export interface RacketTuning {
   swingDurationMax: number;
   swingDurationMin: number;
   recoverTime: number;
-  /** Rayon du tamis. */
-  headRadius: number;
-  /** Multiplicateur de la taille effective du tamis (aide d'entraînement, 1 = réel). */
+  /**
+   * Zone de frappe, par rapport au joueur : la balle y est touchée si elle s'y trouve pendant le swing.
+   * Le bras fait l'ajustement fin ; plus la balle est loin du point idéal, moins le contact est bon.
+   * Profondeur le long du regard : du plus en arrière au plus en avant, et point idéal.
+   */
+  reachBack: number;
+  reachFront: number;
+  idealForward: number;
+  /** Écart latéral, du côté de la raquette : limite côté corps (négatif = de l'autre côté), limite extérieure, idéal. */
+  reachInside: number;
+  reachLateral: number;
+  idealLateral: number;
+  /** Hauteur de la balle : limites, et plage confortable sans perte de qualité. */
+  reachLow: number;
+  reachHigh: number;
+  comfortLow: number;
+  comfortHigh: number;
+  /** Partie du swing (avancement 0..1) pendant laquelle le tamis peut toucher la balle. */
+  contactStart: number;
+  contactEnd: number;
+  /** Décalage du point de contact le long du swing quand la balle est en limite de zone, devant ou derrière. */
+  timingSpread: number;
+  /** Multiplicateur de la taille de la zone de frappe (aide d'entraînement, 1 = réel). */
   tolerance: number;
   /** Recul du tamis derrière le joueur : sans préparation et avec préparation complète. */
   backswingMin: number;
@@ -56,22 +76,20 @@ export interface RacketTuning {
   heightMin: number;
   heightMax: number;
   heightRate: number;
-  /** Rebond de la balle sur le tamis (coefficient apparent) et friction. */
+  /** Part de la vitesse du tamis, et de celle de la balle entrante, rendue à la balle (coefficient apparent). */
   restitution: number;
-  friction: number;
-  /** Ouverture du tamis pour un coup à pleine vitesse (`referenceSpeed`, en m/s), regard horizontal. */
-  baseLoft: number;
-  /** Ouverture supplémentaire quand la vitesse du tamis tend vers zéro. */
-  slowLoft: number;
-  referenceSpeed: number;
-  /** Part du regard vertical reprise dans l'angle de sortie, et sa contribution maximale. */
-  pitchInfluence: number;
-  maxPitchLoft: number;
+  /** Hauteur de passage visée au-dessus du filet pour un coup normal (m). */
+  netClearance: number;
+  /** Hauteur de passage ajoutée par degré de regard vers le haut (m). */
+  clearancePerPitch: number;
   /** Geste vertical de souris pendant le swing → angle de brossage (degrés par radian de souris). */
   brushGain: number;
   maxBrush: number;
-  /** Part de l'angle de brossage vers le haut qui ouvre aussi le tamis (lob). */
-  loftPerBrush: number;
+  /** Hauteur de passage ajoutée par un brossage maximal vers le haut (lob), retirée vers le bas (m). */
+  lobClearance: number;
+  sliceClearance: number;
+  /** Effet donné à la balle par le brossage : fraction de la vitesse de la balle convertie en rotation. */
+  spinGain: number;
   /** Pendant le swing, part du mouvement de souris qui tourne encore la caméra ; le reste oriente le coup. */
   swingLookFactor: number;
   /** Multiplicateur de vitesse du coup de toucher. */
@@ -137,7 +155,19 @@ export const REALISTIC: PhysicsProfile = {
     swingDurationMax: 0.19,
     swingDurationMin: 0.14,
     recoverTime: 0.25,
-    headRadius: 0.13,
+    reachBack: -0.5,
+    reachFront: 1.4,
+    idealForward: 0.5,
+    reachInside: -0.15,
+    reachLateral: 1.2,
+    idealLateral: 0.55,
+    reachLow: 0.1,
+    reachHigh: 2.1,
+    comfortLow: 0.45,
+    comfortHigh: 1.4,
+    contactStart: 0.3,
+    contactEnd: 0.9,
+    timingSpread: 0.35,
     tolerance: 1,
     backswingMin: 0.1,
     backswingMax: 0.45,
@@ -151,15 +181,13 @@ export const REALISTIC: PhysicsProfile = {
     heightMax: 1.9,
     heightRate: 4,
     restitution: 0.35,
-    friction: 0.35,
-    baseLoft: 5,
-    slowLoft: 10,
-    referenceSpeed: 15,
-    pitchInfluence: 0.35,
-    maxPitchLoft: 12,
+    netClearance: 0.6,
+    clearancePerPitch: 0.06,
     brushGain: 115,
     maxBrush: 40,
-    loftPerBrush: 0.35,
+    lobClearance: 3.5,
+    sliceClearance: 0.4,
+    spinGain: 0.6,
     swingLookFactor: 0.3,
     softFactor: 0.45,
     idealContact: 0.6,

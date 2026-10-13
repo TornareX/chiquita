@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { Contact } from '../../src/sim/collisions';
 import { NEUTRAL_COMMANDS, type PlayerCommands } from '../../src/sim/commands';
 import { SIM_DT } from '../../src/sim/constants';
+import { createBall } from '../../src/sim/ball';
+import { createPlayer } from '../../src/sim/player';
 import { REALISTIC } from '../../src/sim/profile';
-import { computeShot, type Shot, type ShotInput } from '../../src/sim/racket';
+import { computeShot, createRacket, isInReach, reachOf, type Shot, type ShotInput } from '../../src/sim/racket';
 import { length, vec3, type Vec3 } from '../../src/sim/vec3';
 import { World } from '../../src/sim/world';
 
@@ -11,14 +13,14 @@ const T = REALISTIC.racket;
 
 /**
  * Scénario de référence : le joueur reste en (0, 0, -7), face au filet. La balle arrive sur son
- * coup droit (à droite = -X), après un rebond au sol, et traverse son couloir de frappe vers t = 1,2 s.
+ * coup droit (à droite = -X), après un rebond au sol, et traverse sa zone de frappe vers t = 1,2 s.
  */
 interface Scenario {
   /** Durée de maintien de la préparation avant le relâchement (s). */
   hold: number;
   /** Instant du relâchement, qui déclenche le swing (s). `null` : pas de swing. */
   release: number | null;
-  /** Abscisse de la balle : -0,5 est dans l'axe du couloir du coup droit. */
+  /** Abscisse de la balle : -0,5 est à la distance idéale, côté coup droit. */
   ballX?: number;
   extra?: Partial<PlayerCommands>;
 }
@@ -130,13 +132,30 @@ describe('frappe', () => {
     expect(soft.speed).toBeLessThan(normal.speed * 0.7);
   });
 
-  it('la balle doit être dans le couloir de frappe : trop loin sur le côté, elle est manquée', () => {
-    const centered = play({ hold: 0.25, release: 1.18 }).shot!;
-    const offCenter = play({ hold: 0.25, release: 1.18, ballX: -0.62 }).shot!;
-    expect(offCenter.quality).toBeLessThan(centered.quality);
-    expect(offCenter.speed).toBeLessThan(centered.speed);
-    expect(play({ hold: 0.25, release: 1.18, ballX: -0.9 }).shot).toBeNull();
-    expect(play({ hold: 0.25, release: 1.18, ballX: -0.15 }).shot).toBeNull();
+  it('plus la balle est loin du point idéal, moins le contact est bon ; hors de portée, elle est manquée', () => {
+    const ideal = play({ hold: 0.25, release: 1.18 }).shot!;
+    const stretched = play({ hold: 0.25, release: 1.18, ballX: -1.0 }).shot!;
+    expect(stretched.quality).toBeLessThan(ideal.quality - 0.2);
+    expect(stretched.speed).toBeLessThan(ideal.speed);
+    // À 1,6 m sur le côté, le bras ne suffit plus.
+    const outcome = play({ hold: 0.25, release: 1.18, ballX: -1.6 });
+    expect(outcome.shot).toBeNull();
+    expect(outcome.world.racket.miss).toBe('far');
+  });
+
+  it('un swing dans le vide dit pourquoi : trop tôt ou trop tard', () => {
+    const early = play({ hold: 0.25, release: 0.95 });
+    expect(early.shot).toBeNull();
+    expect(early.world.racket.miss).toBe('early');
+    const late = play({ hold: 0.25, release: 1.45 });
+    expect(late.shot).toBeNull();
+    expect(late.world.racket.miss).toBe('late');
+  });
+
+  it('un swing sans balle à proximité ne signale rien', () => {
+    const outcome = play({ hold: 0.25, release: 0.3 });
+    expect(outcome.shot).toBeNull();
+    expect(outcome.world.racket.miss).toBeNull();
   });
 
   it('balle à gauche : le revers est choisi automatiquement', () => {
@@ -165,8 +184,8 @@ describe('frappe', () => {
 
 describe('calcul du coup', () => {
   const BASE: ShotInput = {
+    contact: vec3(-0.55, 0.9, -6.5),
     ballVel: vec3(0, -1, -8),
-    ballSpin: vec3(0, 0, 0),
     yaw: 0,
     pitch: 0,
     headSpeed: 12,
@@ -175,6 +194,7 @@ describe('calcul du coup', () => {
     progress: T.idealContact,
     offsetRight: 0,
     offsetUp: 0,
+    depth: 0,
     gestureX: 0,
     gestureY: 0,
     soft: false,
@@ -237,5 +257,44 @@ describe('calcul du coup', () => {
 
   it('pas de contact si la balle fuit plus vite que le tamis', () => {
     expect(computeShot({ ...BASE, ballVel: vec3(0, 0, 30) }, REALISTIC)).toBeNull();
+  });
+});
+
+describe('zone de frappe', () => {
+  const player = createPlayer();
+  const racket = createRacket();
+  // Joueur en (0, 0, -7) face au filet ; coup droit à droite, donc vers -X.
+  const reach = (x: number, y: number, z: number) =>
+    reachOf(player, racket, createBall(vec3(x, y, z), vec3(0, 0, 0)), T);
+
+  it('le point idéal est devant le joueur, sur le côté, à hauteur de hanche', () => {
+    const ideal = reach(-T.idealLateral, 0.9, -7 + T.idealForward);
+    expect(ideal).toEqual({ depth: 0, side: 0, height: 0 });
+    expect(isInReach(ideal)).toBe(true);
+  });
+
+  it('la zone couvre ce qu’un bras tendu peut atteindre', () => {
+    expect(isInReach(reach(-1.1, 0.9, -6.5))).toBe(true);
+    expect(isInReach(reach(-0.5, 0.3, -6))).toBe(true);
+    expect(isInReach(reach(-0.5, 1.9, -6.5))).toBe(true);
+    // Trop loin, trop devant, trop haut (pas de coup au-dessus de la tête dans le MVP).
+    expect(isInReach(reach(-1.5, 0.9, -6.5))).toBe(false);
+    expect(isInReach(reach(-0.5, 0.9, -5))).toBe(false);
+    expect(isInReach(reach(-0.5, 2.6, -6.5))).toBe(false);
+  });
+
+  it('les écarts sont signés : devant, derrière, loin, près, haut, bas', () => {
+    expect(reach(-0.55, 0.9, -5.8).depth).toBeGreaterThan(0);
+    expect(reach(-0.55, 0.9, -7.3).depth).toBeLessThan(0);
+    expect(reach(-1, 0.9, -6.5).side).toBeGreaterThan(0);
+    expect(reach(-0.1, 0.9, -6.5).side).toBeLessThan(0);
+    expect(reach(-0.55, 1.8, -6.5).height).toBeGreaterThan(0);
+    expect(reach(-0.55, 0.2, -6.5).height).toBeLessThan(0);
+  });
+
+  it('l’aide « taille de la zone » l’agrandit', () => {
+    const ball = createBall(vec3(-1.5, 0.9, -6.5), vec3(0, 0, 0));
+    expect(isInReach(reachOf(player, racket, ball, T))).toBe(false);
+    expect(isInReach(reachOf(player, racket, ball, { ...T, tolerance: 1.6 }))).toBe(true);
   });
 });

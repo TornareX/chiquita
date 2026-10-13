@@ -1,4 +1,4 @@
-import type { Shot } from '../sim/racket';
+import type { Shot, SwingMiss } from '../sim/racket';
 import { averageQuality, successRate, type BallResult } from '../sim/rules';
 import type { World } from '../sim/world';
 
@@ -7,6 +7,8 @@ export interface Hud {
   update(world: World, active: boolean, reviewing: boolean): void;
   showResult(result: BallResult): void;
   showShot(shot: Shot): void;
+  /** Swing dans le vide : dit pourquoi la balle n'a pas été touchée. */
+  showMiss(reason: SwingMiss): void;
 }
 
 const RESULT_LABELS = {
@@ -20,6 +22,15 @@ const RESULT_LABELS = {
   'second-bounce': 'Ratée : deuxième rebond',
   'not-touched': 'Ratée : balle non touchée',
 } as const;
+
+const MISS_LABELS: Record<SwingMiss, string> = {
+  early: 'Trop tôt',
+  late: 'Trop tard',
+  far: 'Trop loin de la balle',
+  close: 'Trop près de la balle',
+  high: 'Balle trop haute',
+  low: 'Balle trop basse',
+};
 
 export function resultLabel(result: BallResult): string {
   return RESULT_LABELS[result.kind === 'valid' ? 'valid' : result.reason];
@@ -56,12 +67,16 @@ export function createHud(): Hud {
   const result = element('result');
   const contact = element('contact');
   const pause = element('pause');
+  // Repère au centre de l'écran : il s'allume quand la balle est dans la zone de frappe.
+  const reach = element('reach');
   pause.textContent = 'Pause';
 
   return {
     update(world: World, active: boolean, reviewing: boolean): void {
       prompt.hidden = active;
       pause.hidden = !world.paused;
+      reach.hidden = reviewing;
+      reach.classList.toggle('on', world.inReach);
       pause.textContent = reviewing ? 'Revue du point · ZQSD et souris : caméra libre · V : reprendre' : 'Pause';
       pause.classList.toggle('review', reviewing);
       const exercise = world.machine?.exercise;
@@ -79,6 +94,9 @@ export function createHud(): Hud {
     },
     showResult(value: BallResult): void {
       flash(result, resultLabel(value), value.kind);
+    },
+    showMiss(reason: SwingMiss): void {
+      flash(contact, MISS_LABELS[reason], 'miss');
     },
     showShot(shot: Shot): void {
       flash(contact, shot.perfect ? 'Parfait' : `Contact ${percent(shot.quality)}`, shot.perfect ? 'perfect' : 'normal');

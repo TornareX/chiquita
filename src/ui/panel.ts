@@ -92,7 +92,7 @@ export function createPanel(actions: PanelActions, aids: Aids): Panel {
   trajectory.dataset.aid = 'trajectory';
   const bounce = checkbox('Point de rebond au sol', aids.bounceMarker, (on) => (aids.bounceMarker = on));
   bounce.dataset.aid = 'bounce';
-  const tolerance = slider('Taille du tamis', 100, MAX_TOLERANCE * 100, 10);
+  const tolerance = slider('Zone de frappe', 100, MAX_TOLERANCE * 100, 10);
   tolerance.row.dataset.aid = 'tolerance';
   tolerance.input.value = String(aids.tolerance * 100);
   tolerance.input.addEventListener('input', () => (aids.tolerance = Number(tolerance.input.value) / 100));

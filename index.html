@@ -175,6 +175,28 @@
         top: 58%;
         font-size: 17px;
       }
+      #contact[data-kind='miss'] {
+        color: #ffb38a;
+      }
+      #reach {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 14px;
+        height: 14px;
+        margin: -9px 0 0 -9px;
+        border: 2px solid rgba(255, 255, 255, 0.45);
+        border-radius: 50%;
+        pointer-events: none;
+        transition: transform 0.08s, border-color 0.08s;
+      }
+      #reach.on {
+        border-color: #6dff8f;
+        transform: scale(1.9);
+      }
+      #reach[hidden] {
+        display: none;
+      }
       #contact[data-kind='perfect'] {
         color: #ffd95a;
         font-size: 22px;
