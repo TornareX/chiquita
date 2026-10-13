@@ -5,8 +5,32 @@ export interface SurfaceParams {
   friction: number;
 }
 
+export interface PlayerTuning {
+  /** Vitesse de course (m/s). */
+  maxSpeed: number;
+  /** Accélération au démarrage et freinage à l'arrêt (m/s²) : c'est l'inertie. */
+  acceleration: number;
+  deceleration: number;
+  /** Fraction de la vitesse conservée pendant la préparation du coup. */
+  prepareSpeedFactor: number;
+  /** Rayon du joueur pour les collisions avec les murs et le filet (m). */
+  radius: number;
+  /** Hauteur des yeux (m). */
+  eyeHeight: number;
+  /** Vitesse verticale du petit saut de split-step (m/s). */
+  hopSpeed: number;
+  /** La réception doit tomber dans cette fenêtre autour du lancement de la machine (s). */
+  splitStepWindowBefore: number;
+  splitStepWindowAfter: number;
+  /** Bonus d'un split-step réussi : durée (s) et multiplicateurs. */
+  boostDuration: number;
+  boostAccelFactor: number;
+  boostSpeedFactor: number;
+}
+
 /** Tous les coefficients de la physique, regroupés pour être modifiables à chaud. */
 export interface PhysicsProfile {
+  player: PlayerTuning;
   gravity: number;
   airDensity: number;
   dragCoefficient: number;
@@ -32,6 +56,21 @@ export interface PhysicsProfile {
 }
 
 export const REALISTIC: PhysicsProfile = {
+  // Tout le ressenti du déplacement est [à calibrer] en jouant.
+  player: {
+    maxSpeed: 5,
+    acceleration: 20,
+    deceleration: 26,
+    prepareSpeedFactor: 0.55,
+    radius: 0.3,
+    eyeHeight: 1.65,
+    hopSpeed: 1.5,
+    splitStepWindowBefore: 0.15,
+    splitStepWindowAfter: 0.4,
+    boostDuration: 0.5,
+    boostAccelFactor: 2,
+    boostSpeedFactor: 1.15,
+  },
   gravity: 9.81,
   airDensity: 1.2,
   dragCoefficient: 0.55, // [à calibrer]

@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 
+const BARREL_IDLE = 0x22262b;
+const BARREL_ARMED = 0xff4a3d;
+/** Le canon s'allume ce délai avant chaque balle : c'est le signal du split-step (s). */
+const ARMED_LEAD_TIME = 0.6;
+
 export interface MachineView {
   readonly object: THREE.Group;
   update(world: World): void;
@@ -14,10 +19,8 @@ export function createMachineView(): MachineView {
     new THREE.BoxGeometry(0.5, 1, 0.6),
     new THREE.MeshLambertMaterial({ color: 0xe0802a }),
   );
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.07, 0.07, 0.4),
-    new THREE.MeshLambertMaterial({ color: 0x22262b }),
-  );
+  const barrelMaterial = new THREE.MeshBasicMaterial({ color: BARREL_IDLE });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4), barrelMaterial);
   barrel.rotation.x = Math.PI / 2;
   object.add(body, barrel);
 
@@ -32,6 +35,8 @@ export function createMachineView(): MachineView {
       body.scale.y = y;
       body.position.set(x, y / 2, z + 0.5);
       barrel.position.set(x, y, z + 0.2);
+      const armed = machine.nextLaunchTime - world.time < ARMED_LEAD_TIME;
+      barrelMaterial.color.setHex(armed ? BARREL_ARMED : BARREL_IDLE);
     },
   };
 }

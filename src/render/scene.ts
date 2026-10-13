@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { lerp } from '../sim/vec3';
 import type { World } from '../sim/world';
 import { createBallView } from './ball';
 import { createCourt } from './court';
@@ -27,14 +28,21 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
 
   // FOV vertical de 70° : environ 100° à l'horizontale en 16:9.
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 200);
-  // `?cam=overview` : vue d'ensemble extérieure, pour contrôler la géométrie.
-  if (new URLSearchParams(location.search).get('cam') === 'overview') {
+  camera.rotation.order = 'YXZ';
+  // `?cam=overview` : vue d'ensemble extérieure fixe, pour contrôler la géométrie.
+  const overview = new URLSearchParams(location.search).get('cam') === 'overview';
+  if (overview) {
     camera.position.set(8, 6.5, -14);
     camera.lookAt(0, 1, -2);
-  } else {
-    camera.position.set(0, 1.7, -7);
-    camera.lookAt(0, 1.2, 0);
   }
+
+  const updateCamera = (alpha: number): void => {
+    const { player, prevPlayerPos, profile } = world;
+    const pos = lerp(prevPlayerPos, player.pos, alpha);
+    camera.position.set(pos.x, pos.y + profile.player.eyeHeight, pos.z);
+    // La caméra Three.js regarde vers -Z ; le yaw 0 du joueur regarde vers +Z.
+    camera.rotation.set(player.pitch, Math.PI - player.yaw, 0);
+  };
 
   const resize = (): void => {
     const width = canvas.clientWidth;
@@ -48,6 +56,7 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
 
   return {
     render(alpha: number): void {
+      if (!overview) updateCamera(alpha);
       ballView.update(world, alpha);
       machineView.update(world);
       renderer.render(scene, camera);

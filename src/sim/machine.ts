@@ -83,7 +83,8 @@ export const FIRST_BALL_DELAY = 1.5;
 /** Machine à balles : lance les balles d'un exercice à cadence fixe, de façon déterministe. */
 export class Machine {
   private readonly rng: Prng;
-  private nextLaunchTime: number;
+  nextLaunchTime: number;
+  lastLaunchTime = -Infinity;
   /** Nombre de balles lancées. */
   count = 0;
 
@@ -104,6 +105,7 @@ export class Machine {
   /** À appeler à chaque pas : retourne la balle à lancer si c'est le moment. */
   update(time: number): Launch | null {
     if (time < this.nextLaunchTime) return null;
+    this.lastLaunchTime = this.nextLaunchTime;
     this.nextLaunchTime += this.exercise.interval;
     this.count++;
     return toLaunch(sampleParams(this.exercise, this.rng));
