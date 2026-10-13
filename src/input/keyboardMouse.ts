@@ -23,12 +23,17 @@ export function createKeyboardMouse(canvas: HTMLCanvasElement): InputSource {
   let softShot = false;
 
   const locked = (): boolean => document.pointerLockElement === canvas;
+  // Certains contextes (page intégrée dans une autre) refusent la capture de la souris.
+  // On joue alors sans capture : le curseur reste visible et bute sur les bords.
+  let uncaptured = false;
+  const active = (): boolean => locked() || uncaptured;
 
   window.addEventListener('keydown', (event) => {
     if (event.code === 'Space') {
       event.preventDefault();
       if (!event.repeat) jump = true;
     }
+    if (event.code === 'Escape') uncaptured = false;
     held.add(event.code);
   });
   window.addEventListener('keyup', (event) => held.delete(event.code));
@@ -38,16 +43,23 @@ export function createKeyboardMouse(canvas: HTMLCanvasElement): InputSource {
   });
 
   canvas.addEventListener('click', () => {
-    if (!locked()) void canvas.requestPointerLock();
+    if (active()) return;
+    // Selon le navigateur, le refus arrive par une exception ou par une promesse rejetée.
+    try {
+      const request = canvas.requestPointerLock() as Promise<void> | undefined;
+      request?.catch(() => (uncaptured = true));
+    } catch {
+      uncaptured = true;
+    }
   });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   document.addEventListener('mousemove', (event) => {
-    if (!locked()) return;
+    if (!active()) return;
     yaw += event.movementX * MOUSE_SENSITIVITY;
     pitch -= event.movementY * MOUSE_SENSITIVITY;
   });
   document.addEventListener('mousedown', (event) => {
-    if (!locked()) return;
+    if (!active()) return;
     if (event.button === 0) prepare = true;
     if (event.button === 2) softShot = true;
   });
@@ -58,13 +70,14 @@ export function createKeyboardMouse(canvas: HTMLCanvasElement): InputSource {
   document.addEventListener('pointerlockchange', () => {
     if (!locked()) prepare = softShot = false;
   });
+  document.addEventListener('pointerlockerror', () => (uncaptured = true));
 
   const axis = (positive: string[], negative: string[]): number =>
     (positive.some((code) => held.has(code)) ? 1 : 0) - (negative.some((code) => held.has(code)) ? 1 : 0);
 
   return {
     get active(): boolean {
-      return locked();
+      return active();
     },
     sample(): PlayerCommands {
       const commands: PlayerCommands = {
