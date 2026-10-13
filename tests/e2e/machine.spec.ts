@@ -12,6 +12,10 @@ test('exercice « vitre de fond » : la machine lance des balles qui touchent la
   expect(afterGlass.out).toBe(false);
   expect(afterGlass.pos.z).toBeLessThan(-7);
 
+  // Personne ne frappe : au deuxième rebond, la balle est comptée ratée.
+  await expect(page.locator('#result')).toHaveText('Ratée : deuxième rebond');
+  await expect(page.locator('#stats')).toHaveText('Vitre de fond · 0/1 valides (0 %)');
+
   // Capture de la balle suivante en vol.
   await page.waitForFunction(() => window.__sim!.world.machine!.count >= 2);
   await page.waitForFunction(() => window.__sim!.world.ball!.pos.z < -1);

@@ -33,4 +33,9 @@ test('un swing calé renvoie la balle dans le camp adverse', async ({ page }) =>
   expect(ball.out).toBe(false);
   expect(ball.pos.z).toBeGreaterThan(0);
   expect(ball.pos.z).toBeLessThan(10);
+
+  // Retour au joueur : verdict et qualité du contact affichés.
+  await expect(page.locator('#result')).toHaveText('Valide');
+  await expect(page.locator('#contact')).toHaveText(/Parfait|Contact \d+ %/);
+  await page.screenshot({ path: 'screenshots/07-verdict.png' });
 });

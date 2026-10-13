@@ -34,6 +34,62 @@
         text-align: center;
         pointer-events: none;
       }
+      #stats,
+      #result,
+      #contact {
+        position: fixed;
+        color: #f2f5f7;
+        font: 15px/1.4 system-ui, sans-serif;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+      }
+      #stats {
+        top: 14px;
+        left: 18px;
+      }
+      #result,
+      #contact {
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        font-weight: 600;
+      }
+      #result {
+        top: 16%;
+        font-size: 26px;
+      }
+      #result[data-kind='valid'] {
+        color: #7be08a;
+      }
+      #result[data-kind='fault'] {
+        color: #ff8a7a;
+      }
+      #result[data-kind='missed'] {
+        color: #cfd6dc;
+      }
+      #contact {
+        top: 58%;
+        font-size: 17px;
+      }
+      #contact[data-kind='perfect'] {
+        color: #ffd95a;
+        font-size: 22px;
+      }
+      .flash {
+        animation: flash 1.8s ease-out forwards;
+      }
+      #contact.flash {
+        animation-duration: 0.9s;
+      }
+      @keyframes flash {
+        0%,
+        60% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
       #start-prompt[hidden] {
         display: none;
       }

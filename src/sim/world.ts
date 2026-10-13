@@ -6,6 +6,16 @@ import { Machine, type Exercise } from './machine';
 import { createPlayer, NO_LAUNCH, stepPlayer, type Player } from './player';
 import { REALISTIC, type PhysicsProfile } from './profile';
 import { createRacket, stepRacket, type Racket, type Shot } from './racket';
+import {
+  abandon,
+  createRally,
+  createStats,
+  judgeStep,
+  recordResult,
+  type BallResult,
+  type Rally,
+  type Stats,
+} from './rules';
 import type { Vec3 } from './vec3';
 
 /** État complet de la simulation. Avance uniquement par pas fixes de SIM_DT. */
@@ -27,6 +37,13 @@ export class World {
   shot: Shot | null = null;
   /** Dernière frappe sur la balle en cours. */
   lastShot: Shot | null = null;
+  rally: Rally = createRally();
+  /** Verdict tombé pendant le dernier pas, sinon `null`. */
+  result: BallResult | null = null;
+  /** Dernier verdict rendu. */
+  lastResult: BallResult | null = null;
+  /** Statistiques de l'exercice en cours. */
+  stats: Stats = createStats();
 
   /** Temps simulé en secondes, dérivé du compteur de pas pour éviter toute dérive. */
   get time(): number {
@@ -34,9 +51,12 @@ export class World {
   }
 
   launchBall(pos: Vec3, vel: Vec3, spin?: Vec3): void {
+    // Une balle remplacée avant son verdict est jugée en l'état.
+    if (this.ball) this.settle(abandon(this.rally));
     this.ball = createBall(pos, vel, spin);
     this.prevBallPos = pos;
     this.lastShot = null;
+    this.rally = createRally();
   }
 
   /** Démarre un exercice : la machine lancera ses balles à partir de maintenant. */
@@ -44,10 +64,22 @@ export class World {
     this.machine = new Machine(exercise, seed, this.time);
     this.ball = null;
     this.prevBallPos = null;
+    this.rally = createRally();
+    this.stats = createStats();
+    this.lastResult = null;
+    this.lastShot = null;
+  }
+
+  private settle(result: BallResult | null): void {
+    if (!result) return;
+    this.result = result;
+    this.lastResult = result;
+    recordResult(this.stats, result);
   }
 
   step(commands: PlayerCommands = NEUTRAL_COMMANDS): void {
     this.contacts.length = 0;
+    this.result = null;
     const launch = this.machine?.update(this.time);
     if (launch) this.launchBall(launch.pos, launch.vel, launch.spin);
 
@@ -66,7 +98,12 @@ export class World {
       stepBall(this.ball, SIM_DT, this.profile, this.contacts);
     }
     this.shot = stepRacket(this.racket, this.player, this.ball, ballBefore, commands, SIM_DT, this.profile);
-    if (this.shot) this.lastShot = this.shot;
+    if (this.shot) {
+      this.lastShot = this.shot;
+      this.stats.hits++;
+      this.stats.qualitySum += this.shot.quality;
+    }
+    if (this.ball) this.settle(judgeStep(this.rally, this.contacts, this.shot !== null));
     this.tick++;
   }
 }

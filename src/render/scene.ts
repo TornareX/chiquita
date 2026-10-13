@@ -7,9 +7,18 @@ import { createMachineView } from './machine';
 import { createRacketView } from './racket';
 
 export interface View {
-  /** `alpha` : fraction de pas de simulation écoulée, pour interpoler entre deux états. */
-  render(alpha: number): void;
+  /**
+   * `alpha` : fraction de pas de simulation écoulée, pour interpoler entre deux états.
+   * `frameTime` : durée réelle de l'image (s), pour les effets purement visuels.
+   */
+  render(alpha: number, frameTime: number): void;
+  /** Léger recul de caméra à la frappe ; `strength` de 0 à 1. */
+  kick(strength: number): void;
 }
+
+/** Recul maximal de la caméra à la frappe (m) et vitesse de retour (1/s). [à calibrer] */
+const KICK_DISTANCE = 0.035;
+const KICK_RECOVERY = 14;
 
 export function createView(canvas: HTMLCanvasElement, world: World): View {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -43,10 +52,17 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
     camera.add(racketView.object);
   }
 
+  let kick = 0;
   const updateCamera = (alpha: number): void => {
     const { player, prevPlayerPos, profile } = world;
     const pos = lerp(prevPlayerPos, player.pos, alpha);
-    camera.position.set(pos.x, pos.y + profile.player.eyeHeight, pos.z);
+    // Le recul pousse la caméra vers l'arrière, le long du regard horizontal.
+    const back = kick * KICK_DISTANCE;
+    camera.position.set(
+      pos.x + Math.sin(player.yaw) * back,
+      pos.y + profile.player.eyeHeight,
+      pos.z - Math.cos(player.yaw) * back,
+    );
     // La caméra Three.js regarde vers -Z ; le yaw 0 du joueur regarde vers +Z.
     camera.rotation.set(player.pitch, Math.PI - player.yaw, 0);
   };
@@ -62,7 +78,11 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
   resize();
 
   return {
-    render(alpha: number): void {
+    kick(strength: number): void {
+      kick = Math.max(kick, strength);
+    },
+    render(alpha: number, frameTime: number): void {
+      kick *= Math.exp(-KICK_RECOVERY * frameTime);
       if (!overview) updateCamera(alpha);
       ballView.update(world, alpha);
       machineView.update(world);
