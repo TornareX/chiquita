@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import { createBallView } from './ball';
 import { createCourt } from './court';
+import { createMachineView } from './machine';
 
 export interface View {
   /** `alpha` : fraction de pas de simulation écoulée, pour interpoler entre deux états. */
@@ -21,6 +22,8 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
   scene.add(createCourt());
   const ballView = createBallView();
   scene.add(ballView.object);
+  const machineView = createMachineView();
+  scene.add(machineView.object);
 
   // FOV vertical de 70° : environ 100° à l'horizontale en 16:9.
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 200);
@@ -46,6 +49,7 @@ export function createView(canvas: HTMLCanvasElement, world: World): View {
   return {
     render(alpha: number): void {
       ballView.update(world, alpha);
+      machineView.update(world);
       renderer.render(scene, camera);
     },
   };
