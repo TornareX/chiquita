@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('aides : trajectoire, point de rebond, taille du tamis, ralenti et revue du point', async ({ page }) => {
-  await page.goto('/?seed=1');
+  await page.goto('/?seed=1&models=off');
   await page.waitForFunction(() => window.__sim?.world.ball != null);
 
   // Par défaut : trajectoire et point de rebond affichés, tamis agrandi, vitesse normale.

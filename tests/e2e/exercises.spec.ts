@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('choix de l’exercice, pause, rejeu, cadence et difficulté', async ({ page }) => {
-  await page.goto('/?seed=1');
+  await page.goto('/?seed=1&models=off');
   await page.waitForFunction(() => window.__sim?.world.machine != null);
   await expect(page.locator('#panel .exercises button.selected')).toHaveText('1 · Vitre de fond');
   await expect(page.locator('#panel .exercises button')).toHaveCount(6);

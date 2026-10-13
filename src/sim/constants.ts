@@ -27,8 +27,11 @@ export const CENTER_LINE_OVERSHOOT = 0.2;
 export const BACK_GLASS_HEIGHT = 3;
 export const BACK_WALL_HEIGHT = 4;
 
-// Murs latéraux, variante 1 (avec marche) : en partant du fond, un panneau vitré
-// haut puis un panneau vitré bas, le reste en grillage.
+// Murs latéraux : en partant du fond, deux panneaux vitrés, le reste en grillage.
+// Variante 1 (avec marche) : le deuxième panneau est plus bas que le premier.
+// Variante 2 : les deux panneaux ont la hauteur du premier. C'est celle du modèle 3D du terrain.
+export type SideWallVariant = 1 | 2;
+export const SIDE_WALL_VARIANT: SideWallVariant = 2;
 export const SIDE_GLASS_PANEL_LENGTH = 2;
 export const SIDE_GLASS_HEIGHT_HIGH = 3;
 export const SIDE_GLASS_HEIGHT_LOW = 2;

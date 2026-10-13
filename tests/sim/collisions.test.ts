@@ -71,13 +71,13 @@ describe('murs', () => {
     expect(after / impact).toBeCloseTo(P.glass.restitution, 2);
   });
 
-  it('mur latéral : vitre haute au fond, grillage au-dessus de la vitre basse', () => {
+  it('mur latéral : vitre sur les 4 m du fond, grillage au-delà', () => {
     const surfaceHit = (z: number): string | undefined => {
       const ball = createBall(vec3(4, 2.5, z), vec3(12, 1, 0));
       return simulate(ball, 0.3)[0]?.surface;
     };
     expect(surfaceHit(-9)).toBe('glass');
-    expect(surfaceHit(-7)).toBe('mesh');
+    expect(surfaceHit(-7)).toBe('glass');
     expect(surfaceHit(-3)).toBe('mesh');
   });
 

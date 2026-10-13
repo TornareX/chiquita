@@ -1,14 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { HALF_LENGTH, HALF_WIDTH } from '../../src/sim/constants';
-import { netHeightAt, PANELS, WALLS, wallSurfaceAt, type WallId, type WallSurface } from '../../src/sim/court';
+import {
+  buildPanels,
+  netHeightAt,
+  PANELS,
+  WALLS,
+  wallSurfaceAt,
+  type Panel,
+  type WallId,
+  type WallSurface,
+} from '../../src/sim/court';
 import { dot, vec3 } from '../../src/sim/vec3';
 
 const WALL_IDS = Object.keys(WALLS) as WallId[];
 const BACK_WALLS: WallId[] = ['backNear', 'backFar'];
 const SIDE_WALLS: WallId[] = ['sidePosX', 'sideNegX'];
 
-function area(wall: WallId, surface: WallSurface): number {
-  return PANELS.filter((p) => p.wall === wall && p.surface === surface).reduce(
+const VARIANT_1 = buildPanels(1);
+const VARIANT_2 = buildPanels(2);
+
+function area(wall: WallId, surface: WallSurface, panels: readonly Panel[] = PANELS): number {
+  return panels.filter((p) => p.wall === wall && p.surface === surface).reduce(
     (sum, p) => sum + (p.max - p.min) * (p.yMax - p.yMin),
     0,
   );
@@ -68,21 +80,46 @@ describe('murs latéraux (variante 1, avec marche)', () => {
   for (const wall of SIDE_WALLS) {
     for (const end of [-1, 1]) {
       it.each(cases)(`${wall}, extrémité z ${end > 0 ? '+' : '-'} : à %s m du fond, hauteur %s m → %s`, (d, y, expected) => {
-        expect(wallSurfaceAt(wall, end * (HALF_LENGTH - d), y)).toBe(expected);
+        expect(wallSurfaceAt(wall, end * (HALF_LENGTH - d), y, VARIANT_1)).toBe(expected);
       });
     }
   }
 
   it.each(SIDE_WALLS)('%s : 20 m² de vitre et 44 m² de grillage', (wall) => {
-    expect(area(wall, 'glass')).toBe(20);
-    expect(area(wall, 'mesh')).toBe(44);
+    expect(area(wall, 'glass', VARIANT_1)).toBe(20);
+    expect(area(wall, 'mesh', VARIANT_1)).toBe(44);
+  });
+});
+
+describe('murs latéraux (variante 2, sans marche)', () => {
+  it.each(SIDE_WALLS)('%s : vitre de 3 m sur les 4 premiers mètres, grillage de 4 m sur les 2 premiers', (wall) => {
+    for (const end of [-1, 1]) {
+      const at = (d: number, y: number) => wallSurfaceAt(wall, end * (HALF_LENGTH - d), y, VARIANT_2);
+      expect(at(1, 2.5)).toBe('glass');
+      expect(at(1, 3.5)).toBe('mesh');
+      expect(at(3, 1.5)).toBe('glass');
+      expect(at(3, 2.5)).toBe('glass');
+      expect(at(3, 3.5)).toBeNull();
+      expect(at(5, 2.5)).toBe('mesh');
+      expect(at(5, 3.5)).toBeNull();
+    }
+  });
+
+  it.each(SIDE_WALLS)('%s : 24 m² de vitre et 40 m² de grillage', (wall) => {
+    expect(area(wall, 'glass', VARIANT_2)).toBe(24);
+    expect(area(wall, 'mesh', VARIANT_2)).toBe(40);
+  });
+
+  it('est la variante utilisée par le jeu, comme le modèle 3D', () => {
+    expect(PANELS).toEqual(VARIANT_2);
   });
 });
 
 describe('panneaux', () => {
-  it('ne se chevauchent pas', () => {
-    for (const a of PANELS) {
-      for (const b of PANELS) {
+  it.each([1, 2] as const)('variante %s : ne se chevauchent pas', (variant) => {
+    const panels = buildPanels(variant);
+    for (const a of panels) {
+      for (const b of panels) {
         if (a === b || a.wall !== b.wall) continue;
         const overlap = a.min < b.max && b.min < a.max && a.yMin < b.yMax && b.yMin < a.yMax;
         expect(overlap).toBe(false);

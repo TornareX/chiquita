@@ -6,6 +6,8 @@ export interface RacketView {
   /** À attacher à la caméra : la raquette est dessinée dans le repère de la vue. */
   readonly object: THREE.Group;
   update(world: World): void;
+  /** Remplace la raquette en formes simples par le modèle 3D (même origine : le bout du manche). */
+  setModel(model: THREE.Object3D): void;
 }
 
 interface Pose {
@@ -49,10 +51,16 @@ export function createRacketView(): RacketView {
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.012, 8, 32), frame);
   rim.scale.set(0.9, 1.05, 1.6);
   rim.position.y = 0.34;
-  object.add(handle, head, rim);
+  const simple = new THREE.Group();
+  simple.add(handle, head, rim);
+  object.add(simple);
 
   return {
     object,
+    setModel(model: THREE.Object3D): void {
+      object.remove(simple);
+      object.add(model);
+    },
     update(world: World): void {
       const { racket, profile } = world;
       const t = profile.racket;

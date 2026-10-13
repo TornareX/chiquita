@@ -70,37 +70,36 @@ function createPanel(panel: Panel, meshTexture: THREE.Texture): THREE.Mesh {
   return mesh;
 }
 
-function createGround(): THREE.Group {
-  const group = new THREE.Group();
+/** Sol : `shapes` reçoit ce que le modèle 3D remplace, `kept` ce qui reste toujours affiché. */
+function createGround(shapes: THREE.Group, kept: THREE.Group): void {
 
   const surround = new THREE.Mesh(
     new THREE.PlaneGeometry(60, 60),
     new THREE.MeshLambertMaterial({ color: 0x2b3138 }),
   );
   surround.rotation.x = -Math.PI / 2;
-  surround.position.y = -0.01;
-  group.add(surround);
+  surround.position.y = -0.02;
+  kept.add(surround);
 
   const turf = new THREE.Mesh(
     new THREE.PlaneGeometry(COURT_WIDTH, COURT_LENGTH),
     new THREE.MeshLambertMaterial({ color: 0x2f6fb5 }),
   );
   turf.rotation.x = -Math.PI / 2;
-  group.add(turf);
+  shapes.add(turf);
 
   const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const addLine = (x: number, z: number, sizeX: number, sizeZ: number): void => {
     const line = new THREE.Mesh(new THREE.PlaneGeometry(sizeX, sizeZ), lineMaterial);
     line.rotation.x = -Math.PI / 2;
     line.position.set(x, 0.004, z);
-    group.add(line);
+    kept.add(line);
   };
   for (const side of [-1, 1]) {
     addLine(0, side * SERVICE_LINE_DISTANCE, COURT_WIDTH, LINE_WIDTH);
     const centerLength = SERVICE_LINE_DISTANCE + CENTER_LINE_OVERSHOOT;
     addLine(0, (side * centerLength) / 2, LINE_WIDTH, centerLength);
   }
-  return group;
 }
 
 function createNet(): THREE.Group {
@@ -146,11 +145,27 @@ function createNet(): THREE.Group {
   return group;
 }
 
+export interface CourtView {
+  readonly object: THREE.Group;
+  /** Remplace les formes simples par le modèle 3D. Les lignes, aux cotes FIP, restent celles du jeu. */
+  setModel(model: THREE.Object3D, keepShapes?: boolean): void;
+}
+
 /** Terrain en formes simples, construit à partir de la géométrie de collision. */
-export function createCourt(): THREE.Group {
-  const court = new THREE.Group();
-  court.add(createGround(), createNet());
+export function createCourt(): CourtView {
+  const object = new THREE.Group();
+  const shapes = new THREE.Group();
+  const kept = new THREE.Group();
+  createGround(shapes, kept);
+  shapes.add(createNet());
   const meshTexture = createMeshTexture();
-  for (const panel of PANELS) court.add(createPanel(panel, meshTexture));
-  return court;
+  for (const panel of PANELS) shapes.add(createPanel(panel, meshTexture));
+  object.add(shapes, kept);
+  return {
+    object,
+    setModel(model: THREE.Object3D, keepShapes = false): void {
+      shapes.visible = keepShapes;
+      object.add(model);
+    },
+  };
 }

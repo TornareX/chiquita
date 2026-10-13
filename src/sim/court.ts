@@ -10,6 +10,8 @@ import {
   SIDE_GLASS_PANEL_LENGTH,
   SIDE_WALL_HEIGHT,
   SIDE_WALL_HEIGHT_END,
+  SIDE_WALL_VARIANT,
+  type SideWallVariant,
 } from './constants';
 import { vec3, type Vec3 } from './vec3';
 
@@ -53,9 +55,10 @@ function backPanels(wall: WallId): Panel[] {
   ];
 }
 
-function sidePanels(wall: WallId): Panel[] {
+function sidePanels(wall: WallId, variant: SideWallVariant): Panel[] {
   const panels: Panel[] = [];
   const p = SIDE_GLASS_PANEL_LENGTH;
+  const secondGlass = variant === 1 ? SIDE_GLASS_HEIGHT_LOW : SIDE_GLASS_HEIGHT_HIGH;
   for (const end of [-1, 1]) {
     // Intervalle en z situé entre d0 et d1 mètres du mur du fond de cette extrémité.
     const span = (d0: number, d1: number) => {
@@ -66,28 +69,38 @@ function sidePanels(wall: WallId): Panel[] {
     panels.push(
       { wall, surface: 'glass', ...span(0, p), yMin: 0, yMax: SIDE_GLASS_HEIGHT_HIGH },
       { wall, surface: 'mesh', ...span(0, p), yMin: SIDE_GLASS_HEIGHT_HIGH, yMax: SIDE_WALL_HEIGHT_END },
-      { wall, surface: 'glass', ...span(p, 2 * p), yMin: 0, yMax: SIDE_GLASS_HEIGHT_LOW },
-      { wall, surface: 'mesh', ...span(p, 2 * p), yMin: SIDE_GLASS_HEIGHT_LOW, yMax: SIDE_WALL_HEIGHT },
+      { wall, surface: 'glass', ...span(p, 2 * p), yMin: 0, yMax: secondGlass },
+      { wall, surface: 'mesh', ...span(p, 2 * p), yMin: secondGlass, yMax: SIDE_WALL_HEIGHT },
       { wall, surface: 'mesh', ...span(2 * p, HALF_LENGTH), yMin: 0, yMax: SIDE_WALL_HEIGHT },
     );
   }
-  return panels;
+  // En variante 2, le grillage au-dessus du deuxième panneau a une hauteur nulle.
+  return panels.filter((panel) => panel.yMax > panel.yMin);
+}
+
+export function buildPanels(variant: SideWallVariant): Panel[] {
+  return [
+    ...backPanels('backNear'),
+    ...backPanels('backFar'),
+    ...sidePanels('sidePosX', variant),
+    ...sidePanels('sideNegX', variant),
+  ];
 }
 
 /** Tous les panneaux du terrain. Source unique pour les collisions et le rendu en formes simples. */
-export const PANELS: readonly Panel[] = [
-  ...backPanels('backNear'),
-  ...backPanels('backFar'),
-  ...sidePanels('sidePosX'),
-  ...sidePanels('sideNegX'),
-];
+export const PANELS: readonly Panel[] = buildPanels(SIDE_WALL_VARIANT);
 
 /**
  * Matière d'un mur à la position `along` (le long de l'axe du mur) et à la hauteur `y`.
  * Retourne `null` hors de tout panneau : au-dessus du mur, la balle sort du terrain.
  */
-export function wallSurfaceAt(wall: WallId, along: number, y: number): WallSurface | null {
-  for (const panel of PANELS) {
+export function wallSurfaceAt(
+  wall: WallId,
+  along: number,
+  y: number,
+  panels: readonly Panel[] = PANELS,
+): WallSurface | null {
+  for (const panel of panels) {
     if (
       panel.wall === wall &&
       along >= panel.min &&

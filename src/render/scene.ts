@@ -8,6 +8,7 @@ import { createAidsView } from './aids';
 import { createBallView } from './ball';
 import { createCourt } from './court';
 import { createMachineView } from './machine';
+import { loadModel, modelsEnabled } from './models';
 import { createRacketView } from './racket';
 
 export interface View {
@@ -42,7 +43,8 @@ export function createView(canvas: HTMLCanvasElement, world: World, aids: Aids):
   const sun = new THREE.DirectionalLight(0xffffff, 1.2);
   sun.position.set(6, 12, -4);
   scene.add(sun);
-  scene.add(createCourt());
+  const courtView = createCourt();
+  scene.add(courtView.object);
   const ballView = createBallView();
   const machineView = createMachineView();
   const aidsView = createAidsView();
@@ -74,6 +76,20 @@ export function createView(canvas: HTMLCanvasElement, world: World, aids: Aids):
   trail.frustumCulled = false;
   playerMarker.visible = trail.visible = false;
   scene.add(playerMarker, trail);
+
+  // Modèles 3D : chargés en arrière-plan ; les formes simples restent tant qu'ils ne sont pas là.
+  canvas.dataset.models = 'pending';
+  if (modelsEnabled()) {
+    void Promise.all([loadModel('court'), loadModel('ball'), loadModel('racket')]).then(([court, ball, racket]) => {
+      // `?overlay` : garde les formes de collision par-dessus le modèle, pour contrôler l'alignement.
+      if (court) courtView.setModel(court, new URLSearchParams(location.search).has('overlay'));
+      if (ball) ballView.setModel(ball);
+      if (racket) racketView.setModel(racket);
+      canvas.dataset.models = court && ball && racket ? 'loaded' : 'partial';
+    });
+  } else {
+    canvas.dataset.models = 'off';
+  }
 
   let replay: { frames: readonly ReplayFrame[]; time: number } | null = null;
   const freeCamera = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };

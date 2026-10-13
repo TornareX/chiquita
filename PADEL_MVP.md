@@ -101,8 +101,8 @@ Repère : **unités en mètres, Y vers le haut**, origine au centre du filet au 
 - Filet : **0,88 m au centre, 0,92 m aux extrémités**.
 - Lignes de service : **6,95 m** du filet.
 - Murs du fond : **3 m de vitre + 1 m de grillage au-dessus** (4 m au total).
-- Murs latéraux, variante 1 (à utiliser par défaut) : à chaque extrémité, un panneau vitré de **3 m de haut sur 2 m**, puis un de **2 m de haut sur 2 m**. Le reste est en grillage, jusqu'à 3 m de haut dans les 6 m centraux et 4 m aux extrémités.
-- Variante 2 (« crystal », hors MVP) : un panneau de 3 m de haut sur 4 m à chaque extrémité, sans marche.
+- Murs latéraux, variante 1 : à chaque extrémité, un panneau vitré de **3 m de haut sur 2 m**, puis un de **2 m de haut sur 2 m**. Le reste est en grillage, jusqu'à 3 m de haut dans les 6 m centraux et 4 m aux extrémités.
+- Variante 2 (« crystal », **utilisée par le jeu**, voir §14) : un panneau de 3 m de haut sur 4 m à chaque extrémité, sans marche.
 
 ### Balle
 - Diamètre : **6,35 à 6,77 cm** (MVP : 6,5 cm).
@@ -229,19 +229,29 @@ Contenu (pack « padel_corona ») :
 - formats : `.FBX`, `.OBJ` + `.mtl`, `.3DS`, `.max`, `.DWG`/`.DXF` ;
 - textures : dossier `uploads_files_4886662_textures/` (sol, grillage, raquette…), certaines très lourdes (jusqu'à 38 Mo par image).
 
-Analyse de l'OBJ :
-- **Unités en centimètres, Y vers le haut.**
-- `Padel006` : le terrain complet, environ 20,5 × 10,6 × 5 m.
-- `Padel000`–`Padel005` : 6 balles d'environ 6,9 cm.
-- `Padel008`–`Padel010` : 3 raquettes d'environ 46 cm.
-- `Padel007` : un objet avec du tissu, à identifier (sac ?), probablement inutile.
-- Le `.mtl` ne référence aucune texture : elles sont à rebrancher à la main.
+Analyse du FBX (faite avec `tools/inspect_assets.py`) :
+- **Unités en centimètres** (objets à l'échelle 0,01), **Z vers le haut**.
+- `Padel007` : le terrain complet, 20,45 × 10,56 × 5,04 m avec la structure et les projecteurs. Son sol fait exactement 20 × 10 m.
+- `Padel000`–`Padel006` : 7 balles d'environ 6,9 cm.
+- `Padel008`–`Padel010` : 3 raquettes d'environ 45 cm.
+- Le FBX ne garde que quelques textures (grillage, filet, raquette) ; les autres matériaux pointent vers des maps procédurales de 3ds Max et sont refaits à la main.
+- **Les murs latéraux du modèle sont en variante 2** (vitre de 3 m sur 4 m, sans marche).
+- **Les lignes du modèle ne sont pas aux cotes FIP** (service à environ 6,4 m du filet au lieu de 6,95 m).
 
-Pipeline de conversion :
-1. Partir du FBX. Convertir en `.glb` via Blender en ligne de commande (script Python).
-2. Mettre à l'échelle (cm → m) et séparer en `court.glb`, `racket.glb`, `ball.glb`.
-3. Réduire les textures (2048 px maximum, compression JPEG ou KTX2).
-4. Vérifier l'alignement avec les dimensions FIP du §5.
+Pipeline de conversion (`tools/convert_assets.py`, Blender en ligne de commande) :
+1. Importer le FBX, recentrer le terrain sur le centre du filet, tourner sa longueur sur l'axe Z du jeu.
+2. Retirer les lignes du modèle : le jeu dessine les siennes, aux cotes FIP.
+3. Balle : centrée, au rayon exact du jeu. Raquette : redressée, origine au bout du manche.
+4. Réduire les textures (2048 px pour le sol, 1024 px pour le reste) et les rebrancher.
+5. Exporter `public/models/court.glb`, `racket.glb` et `ball.glb`.
+
+Pour régénérer les modèles :
+
+```
+"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background --python tools/convert_assets.py -- "C:\Users\xavie\Documents\Dev\assets\padel\uploads_files_4886662_FBX.FBX" "C:\Users\xavie\Documents\Dev\assets\padel\uploads_files_4886662_textures" public/models
+```
+
+L'alignement se contrôle avec `?overlay` dans l'URL, qui superpose les surfaces de collision au modèle ; `?models=off` force les formes simples.
 
 **Le modèle 3D sert au visuel uniquement.** Les collisions utilisent la géométrie simple de `sim/court.ts`, construite à partir des constantes FIP.
 
@@ -320,7 +330,7 @@ Chaque étape se termine par des tests verts et une capture d'écran.
 - **Revers à une main.**
 - **Smash, bandeja et víbora : après le MVP.** Le swing au-dessus de la tête demande un geste différent, à concevoir plus tard.
 - **Clavier/souris uniquement pour le MVP.** Le support manette viendra plus tard (les commandes abstraites du §4 le permettent).
-- **Mur latéral : variante 1 (avec marche) uniquement**, celle des pistes du circuit pro (Premier Padel, FIP). La variante 2 est hors MVP.
+- **Mur latéral : variante 2 (sans marche)**, parce que c'est celle du modèle 3D fourni : ce qu'on voit doit correspondre à ce sur quoi la balle rebondit. La variante 1 reste disponible dans le code (`SIDE_WALL_VARIANT` dans `src/sim/constants.ts`), mais le modèle ne lui correspondrait plus.
 
 ---
 
