@@ -3,14 +3,96 @@
     "id": "back-glass",
     "name": "Vitre de fond",
     "interval": 5,
+    "player": { "x": 0, "z": -7 },
     "launch": {
       "pos": { "x": 0, "y": 1.1, "z": 8 },
-      "speed": 17,
+      "speed": 16,
       "azimuth": 0,
-      "elevation": 15,
+      "elevation": 18,
       "topspin": 0,
       "sidespin": 0
     },
-    "variation": { "x": 0.5, "speed": 0.5, "azimuth": 8, "elevation": 1 }
+    "launchHard": { "speed": 20, "elevation": 10 },
+    "variation": { "x": 0.4, "speed": 0.4, "azimuth": 5, "elevation": 0.8 }
+  },
+  {
+    "id": "double-glass",
+    "name": "Double vitre",
+    "interval": 5,
+    "player": { "x": 0, "z": -7 },
+    "launch": {
+      "pos": { "x": 0, "y": 1.1, "z": 8 },
+      "speed": 16,
+      "azimuth": 14.5,
+      "elevation": 18,
+      "topspin": 0,
+      "sidespin": 0
+    },
+    "launchHard": { "speed": 20, "elevation": 10 },
+    "variation": { "speed": 0.3, "azimuth": 0.5, "elevation": 0.6, "mirror": true }
+  },
+  {
+    "id": "lob",
+    "name": "Lob",
+    "interval": 6,
+    "player": { "x": 0, "z": -6 },
+    "launch": {
+      "pos": { "x": 0, "y": 1.1, "z": 8 },
+      "speed": 13,
+      "azimuth": 0,
+      "elevation": 48,
+      "topspin": 0,
+      "sidespin": 0
+    },
+    "launchHard": { "speed": 14, "elevation": 46 },
+    "variation": { "x": 0.5, "speed": 0.15, "azimuth": 5, "elevation": 0.8 }
+  },
+  {
+    "id": "mesh",
+    "name": "Grillage",
+    "interval": 5,
+    "player": { "x": 0, "z": -5 },
+    "launch": {
+      "pos": { "x": 0, "y": 1.1, "z": 8 },
+      "speed": 12.5,
+      "azimuth": 22.5,
+      "elevation": 21,
+      "topspin": 0,
+      "sidespin": 0
+    },
+    "launchHard": { "speed": 13, "elevation": 19 },
+    "variation": { "speed": 0.15, "azimuth": 0.9, "elevation": 0.5, "mirror": true }
+  },
+  {
+    "id": "volley",
+    "name": "Volée",
+    "interval": 4,
+    "player": { "x": 0, "z": -3 },
+    "launch": {
+      "pos": { "x": 0, "y": 1.1, "z": 8 },
+      "speed": 18,
+      "azimuth": 0,
+      "elevation": 12,
+      "topspin": 0,
+      "sidespin": 0
+    },
+    "launchHard": { "speed": 22, "elevation": 8.5 },
+    "variation": { "x": 0.5, "speed": 0.4, "azimuth": 5, "elevation": 0.4 }
+  },
+  {
+    "id": "mix",
+    "name": "Mix aléatoire",
+    "interval": 5,
+    "player": { "x": 0, "z": -6 },
+    "launch": {
+      "pos": { "x": 0, "y": 1.1, "z": 8 },
+      "speed": 16,
+      "azimuth": 0,
+      "elevation": 18,
+      "topspin": 0,
+      "sidespin": 0
+    },
+    "variation": {},
+    "mix": ["back-glass", "double-glass", "lob", "mesh", "volley"]
   }
 ]

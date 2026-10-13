@@ -2,10 +2,12 @@ import { createSounds } from './audio/sounds';
 import { createKeyboardMouse } from './input/keyboardMouse';
 import { createView } from './render/scene';
 import { SIM_DT } from './sim/constants';
-import { findExercise } from './sim/exercises';
+import { EXERCISES, findExercise } from './sim/exercises';
 import { FixedStepLoop } from './sim/loop';
+import { DEFAULT_DIFFICULTY } from './sim/machine';
 import { World } from './sim/world';
 import { createHud } from './ui/hud';
+import { createPanel } from './ui/panel';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('Canvas #scene introuvable');
@@ -45,11 +47,40 @@ const loop = new FixedStepLoop(SIM_DT, () => {
 
 const params = new URLSearchParams(location.search);
 
-// `?exercise=none` : aucun exercice ; `?seed=N` : choisit la suite de balles.
+// La difficulté choisie est conservée d'un exercice à l'autre.
+let difficulty = DEFAULT_DIFFICULTY;
+const actions = {
+  /** `?seed=N` fixe la suite de balles ; sinon elle change à chaque démarrage. */
+  startExercise(id: string): void {
+    const seed = params.has('seed') ? Number(params.get('seed')) : Date.now() % 1_000_000;
+    world.startExercise(findExercise(id), seed);
+    world.machine?.setDifficulty(difficulty);
+  },
+  setDifficulty(value: number): void {
+    difficulty = value;
+    world.machine?.setDifficulty(value);
+  },
+  togglePause(): void {
+    world.paused = !world.paused;
+  },
+  replay(): void {
+    world.replayLastBall();
+  },
+};
+const panel = createPanel(actions);
+
+window.addEventListener('keydown', (event) => {
+  if (event.repeat) return;
+  const digit = /^Digit([1-9])$/.exec(event.code);
+  const exercise = digit ? EXERCISES[Number(digit[1]) - 1] : undefined;
+  if (exercise) actions.startExercise(exercise.id);
+  else if (event.code === 'KeyP') actions.togglePause();
+  else if (event.code === 'KeyR') actions.replay();
+});
+
+// `?exercise=none` : aucun exercice au démarrage.
 const exerciseId = params.get('exercise') ?? 'back-glass';
-if (exerciseId !== 'none') {
-  world.startExercise(findExercise(exerciseId), Number(params.get('seed') ?? 1));
-}
+if (exerciseId !== 'none') actions.startExercise(exerciseId);
 
 const debug = import.meta.env.DEV || params.has('debug');
 if (debug) window.__sim = { world };
@@ -63,6 +94,7 @@ const frame = (now: number): void => {
   if (now >= hitstopUntil) alpha = loop.advance(frameTime);
   view.render(alpha, frameTime);
   hud.update(world, input.active);
+  panel.update(world, input.active);
   requestAnimationFrame(frame);
 };
 requestAnimationFrame(frame);

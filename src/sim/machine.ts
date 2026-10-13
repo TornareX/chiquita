@@ -1,3 +1,4 @@
+import { findExercise } from './exercises';
 import { Prng } from './prng';
 import { cross, normalize, scale, vec3, type Vec3 } from './vec3';
 
@@ -24,6 +25,8 @@ export interface LaunchVariation {
   elevation?: number;
   topspin?: number;
   sidespin?: number;
+  /** Une balle sur deux en moyenne est lancée en miroir (coup droit / revers). */
+  mirror?: boolean;
 }
 
 export interface Exercise {
@@ -31,8 +34,15 @@ export interface Exercise {
   name: string;
   /** Temps entre deux balles (s). */
   interval: number;
+  /** Position de départ du joueur. */
+  player: { x: number; z: number };
+  /** Lancement à la difficulté minimale. */
   launch: LaunchParams;
+  /** Valeurs remplacées à la difficulté maximale ; entre les deux, on interpole. */
+  launchHard?: Partial<Omit<LaunchParams, 'pos'>>;
   variation: LaunchVariation;
+  /** Mix : chaque balle est tirée parmi ces exercices. */
+  mix?: string[];
 }
 
 export interface Launch {
@@ -44,6 +54,10 @@ export interface Launch {
 const UP = vec3(0, 1, 0);
 const DEG = Math.PI / 180;
 
+export const DEFAULT_DIFFICULTY = 0.3;
+export const MIN_INTERVAL = 2;
+export const MAX_INTERVAL = 10;
+
 /** Convertit des paramètres de lancement en état initial de la balle. */
 export function toLaunch(params: LaunchParams): Launch {
   const az = params.azimuth * DEG;
@@ -54,39 +68,59 @@ export function toLaunch(params: LaunchParams): Launch {
   return {
     pos: params.pos,
     vel: scale(dir, params.speed),
-    spin: vec3(
-      liftAxis.x * params.topspin,
-      params.sidespin,
-      liftAxis.z * params.topspin,
-    ),
+    spin: vec3(liftAxis.x * params.topspin, params.sidespin, liftAxis.z * params.topspin),
   };
 }
 
-/** Tire les paramètres d'une balle : valeurs de l'exercice plus une variation bornée. */
-export function sampleParams(exercise: Exercise, rng: Prng): LaunchParams {
-  const { launch, variation } = exercise;
+/**
+ * Tire les paramètres d'une balle. La difficulté (0..1) rapproche le lancement de `launchHard`
+ * (balle plus rapide et plus tendue) et élargit la variation aléatoire.
+ */
+export function sampleParams(
+  exercise: Exercise,
+  rng: Prng,
+  difficulty: number = DEFAULT_DIFFICULTY,
+): LaunchParams {
+  const { launch, launchHard = {}, variation } = exercise;
+  const spread = 0.5 + difficulty;
   // Un tirage par paramètre, toujours dans le même ordre, même si l'amplitude est nulle.
-  const vary = (amplitude: number | undefined): number => rng.range(-1, 1) * (amplitude ?? 0);
+  const value = (easy: number, hard: number | undefined, amplitude: number | undefined): number =>
+    easy + ((hard ?? easy) - easy) * difficulty + rng.range(-1, 1) * (amplitude ?? 0) * spread;
+
+  const x = launch.pos.x + rng.range(-1, 1) * (variation.x ?? 0) * spread;
+  const speed = value(launch.speed, launchHard.speed, variation.speed);
+  const azimuth = value(launch.azimuth, launchHard.azimuth, variation.azimuth);
+  const elevation = value(launch.elevation, launchHard.elevation, variation.elevation);
+  const topspin = value(launch.topspin, launchHard.topspin, variation.topspin);
+  const sidespin = value(launch.sidespin, launchHard.sidespin, variation.sidespin);
+  const side = rng.next() < 0.5 && variation.mirror ? -1 : 1;
+
   return {
-    pos: vec3(launch.pos.x + vary(variation.x), launch.pos.y, launch.pos.z),
-    speed: launch.speed + vary(variation.speed),
-    azimuth: launch.azimuth + vary(variation.azimuth),
-    elevation: launch.elevation + vary(variation.elevation),
-    topspin: launch.topspin + vary(variation.topspin),
-    sidespin: launch.sidespin + vary(variation.sidespin),
+    pos: vec3(x * side, launch.pos.y, launch.pos.z),
+    speed,
+    azimuth: azimuth * side,
+    elevation,
+    topspin,
+    sidespin: sidespin * side,
   };
 }
 
 /** Délai avant la première balle d'un exercice (s). */
 export const FIRST_BALL_DELAY = 1.5;
 
-/** Machine à balles : lance les balles d'un exercice à cadence fixe, de façon déterministe. */
+/** Machine à balles : lance les balles d'un exercice à cadence réglable, de façon déterministe. */
 export class Machine {
   private readonly rng: Prng;
   nextLaunchTime: number;
   lastLaunchTime = -Infinity;
-  /** Nombre de balles lancées. */
+  /** Nombre de balles lancées (hors rejeux). */
   count = 0;
+  /** Temps entre deux balles (s). */
+  interval: number;
+  /** Difficulté de 0 à 1. */
+  difficulty = DEFAULT_DIFFICULTY;
+  /** Paramètres de la dernière balle, pour la rejouer. */
+  lastParams: LaunchParams | null = null;
 
   constructor(
     readonly exercise: Exercise,
@@ -94,6 +128,7 @@ export class Machine {
     startTime: number,
   ) {
     this.rng = new Prng(seed);
+    this.interval = exercise.interval;
     this.nextLaunchTime = startTime + FIRST_BALL_DELAY;
   }
 
@@ -106,8 +141,28 @@ export class Machine {
   update(time: number): Launch | null {
     if (time < this.nextLaunchTime) return null;
     this.lastLaunchTime = this.nextLaunchTime;
-    this.nextLaunchTime += this.exercise.interval;
+    this.nextLaunchTime += this.interval;
     this.count++;
-    return toLaunch(sampleParams(this.exercise, this.rng));
+
+    const { mix } = this.exercise;
+    const source = mix ? findExercise(mix[Math.floor(this.rng.next() * mix.length)]!) : this.exercise;
+    this.lastParams = sampleParams(source, this.rng, this.difficulty);
+    return toLaunch(this.lastParams);
+  }
+
+  /** Relance tout de suite la dernière balle, à l'identique ; la suivante est décalée d'autant. */
+  replay(time: number): Launch | null {
+    if (!this.lastParams) return null;
+    this.lastLaunchTime = time;
+    this.nextLaunchTime = time + this.interval;
+    return toLaunch(this.lastParams);
+  }
+
+  setInterval(seconds: number): void {
+    this.interval = Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, seconds));
+  }
+
+  setDifficulty(value: number): void {
+    this.difficulty = Math.min(1, Math.max(0, value));
   }
 }

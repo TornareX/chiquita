@@ -16,7 +16,7 @@ import {
   type Rally,
   type Stats,
 } from './rules';
-import type { Vec3 } from './vec3';
+import { vec3, type Vec3 } from './vec3';
 
 /** État complet de la simulation. Avance uniquement par pas fixes de SIM_DT. */
 export class World {
@@ -44,6 +44,8 @@ export class World {
   lastResult: BallResult | null = null;
   /** Statistiques de l'exercice en cours. */
   stats: Stats = createStats();
+  /** En pause, `step` ne fait rien : le temps simulé s'arrête. */
+  paused = false;
 
   /** Temps simulé en secondes, dérivé du compteur de pas pour éviter toute dérive. */
   get time(): number {
@@ -68,6 +70,16 @@ export class World {
     this.stats = createStats();
     this.lastResult = null;
     this.lastShot = null;
+    this.player = createPlayer(vec3(exercise.player.x, 0, exercise.player.z));
+    this.prevPlayerPos = this.player.pos;
+    this.racket = createRacket();
+    this.paused = false;
+  }
+
+  /** Relance la dernière balle de la machine, à l'identique. */
+  replayLastBall(): void {
+    const launch = this.machine?.replay(this.time);
+    if (launch) this.launchBall(launch.pos, launch.vel, launch.spin);
   }
 
   private settle(result: BallResult | null): void {
@@ -80,6 +92,8 @@ export class World {
   step(commands: PlayerCommands = NEUTRAL_COMMANDS): void {
     this.contacts.length = 0;
     this.result = null;
+    this.shot = null;
+    if (this.paused) return;
     const launch = this.machine?.update(this.time);
     if (launch) this.launchBall(launch.pos, launch.vel, launch.spin);
 

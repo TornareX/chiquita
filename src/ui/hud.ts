@@ -50,14 +50,17 @@ export function createHud(): Hud {
     '<strong>Cliquer pour jouer</strong>' +
     '<span>ZQSD : se déplacer · Souris : regarder · Espace : split-step</span>' +
     '<span>Clic gauche maintenu : préparer, relâcher : frapper · Clic droit : coup de toucher</span>' +
-    '<span>Échap : libérer la souris</span>';
+    '<span>1 à 6 : exercice · P : pause · R : rejouer la balle · Échap : libérer la souris</span>';
   const stats = element('stats');
   const result = element('result');
   const contact = element('contact');
+  const pause = element('pause');
+  pause.textContent = 'Pause';
 
   return {
     update(world: World, active: boolean): void {
       prompt.hidden = active;
+      pause.hidden = !world.paused;
       const exercise = world.machine?.exercise;
       if (!exercise) {
         stats.textContent = '';
