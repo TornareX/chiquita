@@ -17,9 +17,20 @@ export interface BotOptions {
   sliceShare: number;
   /** Amplitude maximale de visée au stick (0..1). */
   aim: number;
+  /**
+   * Se place lui-même au stick pendant la charge (assistance partielle ou désactivée) au lieu de
+   * laisser la course assistée faire. Sinon, il ne touche au stick que pour viser, juste avant l'impact.
+   */
+  manualPlacement: boolean;
 }
 
-export const DEFAULT_BOT: BotOptions = { reaction: 0.2, normalShare: 0.7, sliceShare: 0.15, aim: 0.7 };
+export const DEFAULT_BOT: BotOptions = {
+  reaction: 0.2,
+  normalShare: 0.7,
+  sliceShare: 0.15,
+  aim: 0.7,
+  manualPlacement: false,
+};
 
 export class Bot {
   private readonly prng: Prng;
@@ -46,11 +57,11 @@ export class Bot {
 
   commands(duel: Duel): ArcadeCommands {
     const me = duel.players[this.index];
-    const press = (): ArcadeCommands => {
+    const press = (stick = this.stick): ArcadeCommands => {
       // Un appui est un front montant : le bouton est relâché au pas suivant.
-      if (this.pressedFor === duel.tick - 1) return { stick: this.stick, shot: null };
+      if (this.pressedFor === duel.tick - 1) return { stick, shot: null };
       this.pressedFor = duel.tick;
-      return { stick: this.stick, shot: this.kind };
+      return { stick, shot: this.kind };
     };
 
     if (duel.phase === 'serve' && duel.server === this.index) {
@@ -61,10 +72,34 @@ export class Bot {
 
     if (duel.isReceiving(this.index)) {
       const opponentHit = duel.players[this.index === 0 ? 1 : 0].lastHitTick;
-      if (me.engagement) return { stick: this.stick, shot: me.heldShot };
+      const engagement = me.engagement;
+      if (engagement) {
+        const plan = engagement.plan;
+        if (this.options.manualPlacement && plan) {
+          // Il lit la trajectoire comme un humain et court lui-même vers le point d'impact.
+          const dx = plan.stand.x - me.pos.x;
+          const dz = plan.stand.z - me.pos.z;
+          const distance = Math.sqrt(dx * dx + dz * dz);
+          if (distance < 0.05) return { stick: { forward: 0, right: 0 }, shot: me.heldShot };
+          const t = duel.profile.player;
+          // Assez vite pour arriver, assez lentement pour freiner à temps.
+          const speed = Math.min(1, Math.sqrt(2 * t.deceleration * distance) / t.maxSpeed);
+          const f = forwardFor(me.side);
+          const r = rightFor(me.side);
+          const stick = {
+            forward: ((dx * f.x + dz * f.z) / distance) * speed,
+            right: ((dx * r.x + dz * r.z) / distance) * speed,
+          };
+          return { stick, shot: me.heldShot };
+        }
+        // Visée seulement dans la fenêtre d'avant l'impact : plus tôt, elle couperait l'assistance partielle.
+        const aiming = plan !== null && (plan.tick - duel.tick) * SIM_DT <= duel.profile.rally.aimWindow;
+        return { stick: aiming ? this.stick : { forward: 0, right: 0 }, shot: me.heldShot };
+      }
       if (duel.tick - opponentHit >= this.options.reaction / SIM_DT) {
         if (this.pressedFor === null || this.pressedFor < opponentHit) this.chooseShot();
-        return press();
+        // Il appuie stick au repos : il visera plus tard, juste avant l'impact.
+        return press({ forward: 0, right: 0 });
       }
       return NEUTRAL_ARCADE;
     }

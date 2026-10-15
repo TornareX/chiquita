@@ -226,7 +226,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const charge = Math.min(1, Math.max(0, ((duel.tick - start) * SIM_DT) / duel.profile.rally.chargeTime));
       view.chargeRing.scale.setScalar(0.6 + 0.6 * charge);
       view.chargeMaterial.opacity = 0.35 + 0.6 * charge;
-      const stand = player.engagement.plan?.stand;
+      // En placement manuel, pas de point d'arrivée : le joueur se place lui-même.
+      const stand = player.engagement.manual ? undefined : player.engagement.plan?.stand;
       if (stand) {
         view.standMarker.position.set(stand.x, 0.011, stand.z);
         view.standMarker.visible = true;

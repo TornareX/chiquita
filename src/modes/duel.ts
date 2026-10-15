@@ -5,14 +5,15 @@ import { createDuelView } from '../render/duelScene';
 import { Bot } from '../sim/bot';
 import type { ArcadeCommands } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
-import { Duel } from '../sim/duel';
+import { ASSIST_LEVELS, Duel, type AssistLevel } from '../sim/duel';
 import { FixedStepLoop } from '../sim/loop';
 import { createDuelHud } from '../ui/duelHud';
 
 /**
  * Mode principal (GAME_DESIGN.md §12, étape A) : échange libre en 1 contre 1, à deux manettes
  * ou au clavier. Paramètres : `?far=own` (directions du joueur d'en face vues de son côté),
- * `?bot=1`, `?bot=2` ou `?bot=both` (joueur automatique à la place d'un humain).
+ * `?bot=1`, `?bot=2` ou `?bot=both` (joueur automatique à la place d'un humain),
+ * `?assist=full|partial|off` ou `?assist=full,off` (assistance de chaque joueur, sinon complète).
  */
 export function startDuel(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
@@ -35,6 +36,14 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   ] as const;
   const sources: [string, string] = ['Clavier', 'Clavier'];
 
+  const assists = (params.get('assist') ?? '').split(',');
+  duel.players.forEach((player, i) => {
+    const level = assists[i] ?? assists[0];
+    if (ASSIST_LEVELS.includes(level as AssistLevel)) player.assist = level as AssistLevel;
+  });
+  /** Bouton d'assistance maintenu au pas précédent : un appui fait passer au niveau suivant. */
+  const assistHeld = [false, false];
+
   /** Commandes des deux joueurs : manette n° i pour le joueur i, clavier en complément. */
   const sample = (): [ArcadeCommands, ArcadeCommands] => {
     const pads = connectedGamepads();
@@ -47,6 +56,11 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const pad = pads[index];
       sources[index] = pad ? `Manette ${index + 1}` : 'Clavier';
       const state: PadState = mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(index));
+      if (state.assistButton && !assistHeld[index]) {
+        const player = duel.players[index];
+        player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;
+      }
+      assistHeld[index] = state.assistButton;
       return toCommands(state, index === 0, farOwnView);
     };
     return [read(0), read(1)];

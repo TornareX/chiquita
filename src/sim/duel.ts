@@ -7,6 +7,15 @@ import { ARCADE, type PhysicsProfile } from './profile';
 import { aimTarget, forwardFor, rightFor, solveShot, type CourtSide } from './shots';
 import { addScaled, length, vec3, type Vec3 } from './vec3';
 
+/**
+ * Assistance de course, réglable par joueur (GAME_DESIGN.md §6) :
+ * - `full` : à l'appui, le joueur court seul au point d'impact ; le stick ne fait que viser ;
+ * - `partial` : pareil, mais toucher au stick tôt pendant la charge reprend la main (placement manuel) ;
+ * - `off` : le joueur se place toujours lui-même ; la frappe part dès que la balle est à portée.
+ */
+export type AssistLevel = 'full' | 'partial' | 'off';
+export const ASSIST_LEVELS: readonly AssistLevel[] = ['full', 'partial', 'off'];
+
 /** Coup en cours : armé par l'appui sur un bouton, joué à l'impact. */
 export interface Engagement {
   kind: ShotKind;
@@ -14,6 +23,10 @@ export interface Engagement {
   pressTick: number;
   /** Point d'impact visé par la course assistée, une fois la balle en route vers le joueur. */
   plan: Intercept | null;
+  /** Le joueur se place lui-même pour ce coup : pas de course assistée, meilleurs angles. */
+  manual: boolean;
+  /** Stick au moment de l'appui : seul un changement après l'appui compte comme reprise en main. */
+  pressStick: ArcadeCommands['stick'];
 }
 
 export interface DuelPlayer {
@@ -30,6 +43,7 @@ export interface DuelPlayer {
   /** Pas de la dernière frappe (animation, récupération). */
   lastHitTick: number;
   lastHit: DuelShot | null;
+  assist: AssistLevel;
 }
 
 export interface DuelShot {
@@ -42,6 +56,8 @@ export interface DuelShot {
   speed: number;
   volley: boolean;
   serve: boolean;
+  /** Coup joué en placement manuel. */
+  manual: boolean;
 }
 
 export type PointReason =
@@ -85,6 +101,7 @@ function createDuelPlayer(side: CourtSide): DuelPlayer {
     stick: { forward: 0, right: 0 },
     lastHitTick: -Infinity,
     lastHit: null,
+    assist: 'full',
   };
 }
 
@@ -199,18 +216,34 @@ export class Duel {
     } else if (pressed && this.phase === 'rally' && this.tick - player.lastHitTick >= r.recoverTime / SIM_DT) {
       // Appuyer à nouveau pendant la charge change seulement le type de coup.
       if (player.engagement) player.engagement.kind = pressed;
-      else player.engagement = { kind: pressed, pressTick: this.tick, plan: null };
+      else {
+        player.engagement = {
+          kind: pressed,
+          pressTick: this.tick,
+          plan: null,
+          manual: player.assist === 'off',
+          pressStick: cmd.stick,
+        };
+      }
     }
 
     const engagement = player.engagement;
     if (engagement && !engagement.plan && this.isReceiving(index) && this.ball) {
       engagement.plan = planIntercept(this.ball, player.pos, player.side, this.tick, this.profile);
     }
+    if (engagement?.plan && !engagement.manual && player.assist === 'partial') {
+      // Bouger le stick après l'appui, avant la fenêtre de visée, coupe l'assistance pour ce coup.
+      // Garder la direction tenue en appuyant (en pleine course, par exemple) ne la coupe pas.
+      const forward = cmd.stick.forward - engagement.pressStick.forward;
+      const right = cmd.stick.right - engagement.pressStick.right;
+      const touched = Math.sqrt(forward * forward + right * right) >= r.manualThreshold;
+      if (touched && (engagement.plan.tick - this.tick) * SIM_DT > r.aimWindow) engagement.manual = true;
+    }
 
     // Course assistée vers le point prévu ; sinon, le stick déplace le joueur.
     let desired: Vec3;
     const t = this.profile.player;
-    if (engagement) {
+    if (engagement && !engagement.manual) {
       const target = engagement.plan?.stand;
       const gap = target ? flatDistance(target, player.pos) : 0;
       // Vitesse qui permet encore de s'arrêter pile sur le point.
@@ -254,23 +287,38 @@ export class Duel {
     this.prevBallPos = contact;
     this.phase = 'rally';
     this.phaseTick = this.tick;
-    this.hit(index, kind, contact, cmd.stick, 0, false, true);
+    this.hit(index, kind, contact, cmd.stick, 0, false, true, false);
   }
 
-  /** Frappe du joueur `index` si son coup armé arrive à l'impact et que la balle est à portée. */
+  /**
+   * Frappe du joueur `index` si son coup armé arrive à l'impact et que la balle est à portée.
+   * En course assistée, l'impact a lieu au pas prévu ; en placement manuel, dès que la balle est
+   * jouable à portée : le joueur qui se place lui-même peut frapper plus tôt.
+   */
   private tryHit(index: 0 | 1): void {
     const player = this.players[index];
-    const plan = player.engagement?.plan;
+    const engagement = player.engagement;
     const ball = this.ball;
-    if (!plan || !ball || ball.out || !this.isReceiving(index) || this.tick < plan.tick) return;
+    if (!engagement || !ball || ball.out || !this.isReceiving(index)) return;
     const r = this.profile.rally;
+    const plan = engagement.plan;
     const inReach = flatDistance(ball.pos, player.pos) <= r.reach && ball.pos.y >= r.hitLow && ball.pos.y <= r.hitHigh;
-    if (inReach) {
-      const engagement = player.engagement!;
+    const hitNow = (volley: boolean, manual: boolean): void => {
       // La charge commence à l'appui, mais pas avant que la balle parte vers le joueur.
       const chargeStart = Math.max(engagement.pressTick, this.lastHitTick());
       const charge = Math.min(1, ((this.tick - chargeStart) * SIM_DT) / r.chargeTime);
-      this.hit(index, engagement.kind, ball.pos, player.stick, charge, plan.volley, false);
+      this.hit(index, engagement.kind, ball.pos, player.stick, charge, volley, false, manual);
+    };
+    if (engagement.manual) {
+      // Balle jouable : dans le camp du joueur, après le rebond, ou en volée près du filet.
+      const volley = this.bounces === 0;
+      const playable = ball.pos.z * player.side > 0 && (!volley || Math.abs(player.pos.z) < r.volleyZone);
+      if (inReach && playable) hitNow(volley, true);
+      return;
+    }
+    if (!plan || this.tick < plan.tick) return;
+    if (inReach) {
+      hitNow(plan.volley, false);
     } else if (this.tick > plan.tick + HIT_WINDOW / SIM_DT) {
       // Raté : le joueur peut réarmer, la course assistée recalculera un point.
       player.engagement = null;
@@ -285,9 +333,11 @@ export class Duel {
     charge: number,
     volley: boolean,
     serve: boolean,
+    manual: boolean,
   ): void {
     const player = this.players[index];
-    const target = aimTarget(kind, player.side, stick, charge, this.profile);
+    const bonus = manual ? this.profile.rally.manualAimBonus : 1;
+    const target = aimTarget(kind, player.side, stick, charge, this.profile, bonus);
     const solved = solveShot(kind, contact, target, charge, this.profile);
     const ball = this.ball!;
     ball.vel = solved.vel;
@@ -298,7 +348,17 @@ export class Duel {
     this.bounces = 0;
     this.touchedNet = false;
     this.hits++;
-    this.shot = player.lastHit = { player: index, kind, charge, contact, target, speed: length(solved.vel), volley, serve };
+    this.shot = player.lastHit = {
+      player: index,
+      kind,
+      charge,
+      contact,
+      target,
+      speed: length(solved.vel),
+      volley,
+      serve,
+      manual,
+    };
   }
 
   /** Règles du padel appliquées aux contacts du pas (sans service ni score à cette étape). */

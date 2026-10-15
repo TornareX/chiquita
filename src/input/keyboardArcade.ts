@@ -11,6 +11,8 @@ interface KeyLayout {
   left: string;
   right: string;
   shots: readonly [string, ShotKind][];
+  /** Changement d'assistance. */
+  assist: string;
 }
 
 export const KEY_LAYOUTS: readonly [KeyLayout, KeyLayout] = [
@@ -24,6 +26,7 @@ export const KEY_LAYOUTS: readonly [KeyLayout, KeyLayout] = [
       ['KeyK', 'slice'],
       ['KeyL', 'lob'],
     ],
+    assist: 'KeyU',
   },
   {
     up: 'ArrowUp',
@@ -39,6 +42,7 @@ export const KEY_LAYOUTS: readonly [KeyLayout, KeyLayout] = [
       ['Period', 'slice'],
       ['Slash', 'lob'],
     ],
+    assist: 'Numpad0',
   },
 ];
 
@@ -62,7 +66,8 @@ export function createKeyboardPads(): KeyboardPads {
         (held.has(positive) ? 1 : 0) - (held.has(negative) ? 1 : 0);
       const shot = layout.shots.find(([code]) => held.has(code))?.[1] ?? null;
       const stick = { up: axis(layout.up, layout.down), right: axis(layout.right, layout.left) };
-      return stick.up === 0 && stick.right === 0 && !shot ? IDLE_PAD : { stick, shot };
+      const assistButton = held.has(layout.assist);
+      return stick.up === 0 && stick.right === 0 && !shot && !assistButton ? IDLE_PAD : { stick, shot, assistButton };
     },
   };
 }

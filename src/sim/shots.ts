@@ -34,12 +34,14 @@ export function aimTarget(
   aim: ArcadeCommands['stick'],
   charge: number,
   profile: PhysicsProfile,
+  /** Multiplicateur de la plage latérale (récompense du placement manuel). */
+  widthFactor = 1,
 ): Vec3 {
   const t = shotTuning(kind, profile);
   const r = profile.rally;
   const forward = clamp(aim.forward, -1, 1);
   const depth = forward >= 0 ? mix(t.depthNeutral, t.depthLong, forward) : mix(t.depthNeutral, t.depthShort, -forward);
-  const width = mix(r.aimWidthMin, r.aimWidthMax, charge);
+  const width = mix(r.aimWidthMin, r.aimWidthMax, charge) * widthFactor;
   const x = clamp(clamp(aim.right, -1, 1) * width * rightFor(side).x, -(HALF_WIDTH - 0.6), HALF_WIDTH - 0.6);
   return vec3(x, BALL_RADIUS, -side * depth);
 }

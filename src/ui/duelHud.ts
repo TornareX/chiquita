@@ -1,4 +1,4 @@
-import type { Duel, PointReason } from '../sim/duel';
+import type { AssistLevel, Duel, PointReason } from '../sim/duel';
 
 export interface DuelHud {
   /** `sources` : d'où viennent les commandes de chaque joueur (« Manette 1 », « Clavier »…). */
@@ -6,6 +6,12 @@ export interface DuelHud {
 }
 
 const NAMES = ['Bleu', 'Rouge'] as const;
+
+const ASSIST_LABELS: Record<AssistLevel, string> = {
+  full: 'course assistée',
+  partial: 'assistance partielle',
+  off: 'placement manuel',
+};
 
 const REASONS: Record<PointReason, string> = {
   net: 'filet',
@@ -36,7 +42,8 @@ export function createDuelHud(): DuelHud {
   help.innerHTML =
     'A coup normal · X coupé · Y lob : appuie tôt pour charger<br>' +
     'Stick : se placer, puis viser au moment de l’impact (haut = profond)<br>' +
-    'Clavier : ZQSD + J K L (bleu), flèches + 1 2 3 du pavé ou , ; : (rouge)';
+    'Clavier : ZQSD + J K L (bleu), flèches + 1 2 3 du pavé ou , ; : (rouge)<br>' +
+    'Assistance : bouton Affichage, U (bleu) ou 0 du pavé (rouge)';
 
   return {
     update(duel: Duel, sources: readonly [string, string]): void {
@@ -44,7 +51,11 @@ export function createDuelHud(): DuelHud {
         `Échange : ${duel.hits} coup${duel.hits > 1 ? 's' : ''}<br>` +
         `<span style="font-size:13px;font-weight:400">Record : ${duel.bestRally}</span>`;
       players.innerHTML = sources
-        .map((source, i) => `<span style="color:${i === 0 ? '#6fb2ff' : '#ff8a94'}">●</span> ${NAMES[i]} : ${source}`)
+        .map(
+          (source, i) =>
+            `<span style="color:${i === 0 ? '#6fb2ff' : '#ff8a94'}">●</span> ${NAMES[i]} : ${source} · ` +
+            ASSIST_LABELS[duel.players[i]!.assist],
+        )
         .join('<br>');
 
       if (duel.phase === 'serve') {

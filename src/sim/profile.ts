@@ -143,6 +143,15 @@ export interface RallyTuning {
   recoverTime: number;
   /** Une volée n'est proposée que si le joueur est à moins de cette distance du filet (m). */
   volleyZone: number;
+  /**
+   * Assistance partielle : toucher au stick plus de `aimWindow` secondes avant l'impact prévu coupe
+   * la course assistée (placement manuel) ; dans cette fenêtre, le stick ne fait que viser.
+   */
+  aimWindow: number;
+  /** Écart du stick par rapport à sa position à l'appui qui compte comme « toucher » (0..1). */
+  manualThreshold: number;
+  /** Récompense du placement manuel : plage latérale de visée multipliée par ce facteur. */
+  manualAimBonus: number;
   normal: ShotTypeTuning;
   slice: ShotTypeTuning;
   lob: ShotTypeTuning;
@@ -252,6 +261,9 @@ export const REALISTIC: PhysicsProfile = {
     arriveMargin: 0.06,
     recoverTime: 0.3,
     volleyZone: 4.5,
+    aimWindow: 0.3,
+    manualThreshold: 0.35,
+    manualAimBonus: 1.25,
     normal: {
       speedMin: 16,
       speedMax: 24,
@@ -320,6 +332,8 @@ export const ARCADE: PhysicsProfile = {
     ...REALISTIC.rally,
     chargeTime: 0.55, // [à calibrer VT4 : durée de charge]
     reach: 1.25, // [à calibrer VT4 : portée]
+    aimWindow: 0.3, // [à calibrer VT4 : quand le stick vise-t-il au lieu de déplacer ?]
+    manualAimBonus: 1.25, // [à calibrer VT4]
     normal: { ...REALISTIC.rally.normal, speedMin: 11, speedMax: 17 }, // [à calibrer VT4 : vitesses de balle]
     slice: { ...REALISTIC.rally.slice, speedMin: 9.5, speedMax: 13 }, // [à calibrer VT4]
     lob: { ...REALISTIC.rally.lob, flightTimeMin: 1.9, flightTimeMax: 2.1 }, // [à calibrer VT4 : temps de vol]

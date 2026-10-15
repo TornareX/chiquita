@@ -4,9 +4,11 @@ import type { ArcadeCommands, ShotKind } from '../sim/commands';
 export interface PadState {
   stick: { up: number; right: number };
   shot: ShotKind | null;
+  /** Bouton de changement d'assistance maintenu (Affichage / Select sur la manette). */
+  assistButton: boolean;
 }
 
-export const IDLE_PAD: PadState = { stick: { up: 0, right: 0 }, shot: null };
+export const IDLE_PAD: PadState = { stick: { up: 0, right: 0 }, shot: null, assistButton: false };
 
 /** Zone morte radiale du stick. [à calibrer] */
 const DEAD_ZONE = 0.22;
@@ -39,7 +41,7 @@ export function readGamepad(pad: Gamepad): PadState {
   if (button(14)) x = -1;
   if (button(15)) x = 1;
   const shot = SHOT_BUTTONS.find(([i]) => button(i))?.[1] ?? null;
-  return { stick: { up: y, right: x }, shot };
+  return { stick: { up: y, right: x }, shot, assistButton: button(8) };
 }
 
 /** Manettes branchées, dans l'ordre de leur index. */
@@ -61,5 +63,9 @@ export function toCommands(state: PadState, nearSide: boolean, ownView = false):
 /** Fusionne deux sources (manette et clavier) : le stick le plus poussé, le premier bouton. */
 export function mergePads(a: PadState, b: PadState): PadState {
   const strength = (s: PadState): number => Math.abs(s.stick.up) + Math.abs(s.stick.right);
-  return { stick: strength(a) >= strength(b) ? a.stick : b.stick, shot: a.shot ?? b.shot };
+  return {
+    stick: strength(a) >= strength(b) ? a.stick : b.stick,
+    shot: a.shot ?? b.shot,
+    assistButton: a.assistButton || b.assistButton,
+  };
 }
