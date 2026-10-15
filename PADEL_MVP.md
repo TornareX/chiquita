@@ -1,5 +1,10 @@
 # Padel Trainer — Spécification du MVP
 
+> **Direction revue le 16/10/2026 : voir `GAME_DESIGN.md`.** Le jeu devient un padel arcade
+> 2 contre 2 en troisième personne, à la manette. Ce document reste la référence pour la
+> physique, les règles FIP et l'architecture ; sa vision « première personne face à la machine »
+> est abandonnée.
+>
 > Document de référence pour développer le MVP avec Claude Code.
 > À placer à la racine du dépôt. Les valeurs marquées **[à calibrer]** sont des points de départ, à ajuster en jouant.
 
