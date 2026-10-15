@@ -9,6 +9,8 @@ export interface Prediction {
   points: Vec3[];
   /** Prochain point de rebond au sol, s'il y en a un dans l'horizon de prédiction. */
   bounce: Vec3 | null;
+  /** Numéro du pas (à partir de 1) où a lieu ce premier rebond. */
+  bounceStep: number | null;
 }
 
 /**
@@ -23,7 +25,7 @@ export function predictBall(
   stride = 8,
 ): Prediction {
   const copy: Ball = { ...ball };
-  const prediction: Prediction = { points: [], bounce: null };
+  const prediction: Prediction = { points: [], bounce: null, bounceStep: null };
   const contacts: Contact[] = [];
   let grounds = 0;
   const steps = Math.round(seconds / SIM_DT);
@@ -33,7 +35,10 @@ export function predictBall(
     for (const contact of contacts) {
       if (contact.surface !== 'ground') continue;
       grounds++;
-      prediction.bounce ??= contact.pos;
+      if (!prediction.bounce) {
+        prediction.bounce = contact.pos;
+        prediction.bounceStep = i;
+      }
     }
     if (i % stride === 0) prediction.points.push(copy.pos);
   }

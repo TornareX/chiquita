@@ -105,10 +105,54 @@ export interface RacketTuning {
   perfectQuality: number;
 }
 
+/** Réglages d'un coup arcade (bouton A, X ou Y). Vitesses en m/s, hauteurs en m. */
+export interface ShotTypeTuning {
+  /** Vitesse horizontale maximale : sans charge, puis avec charge complète. */
+  speedMin: number;
+  speedMax: number;
+  /** Passage minimal au-dessus du filet. */
+  clearance: number;
+  /** Temps de vol imposé (s), sans charge puis avec charge complète ; 0 = déduit de la vitesse (coups tendus). */
+  flightTimeMin: number;
+  flightTimeMax: number;
+  /** Profondeur visée, en distance au filet : stick vers soi, au neutre, stick vers l'avant. */
+  depthShort: number;
+  depthNeutral: number;
+  depthLong: number;
+  /** Effet : fraction de la vitesse convertie en rotation, positif = lift, négatif = slice. */
+  spin: number;
+}
+
+/** Échange arcade : course assistée et coups à boutons (GAME_DESIGN.md §4). */
+export interface RallyTuning {
+  /** Durée d'appui avant l'impact pour une charge complète (s). */
+  chargeTime: number;
+  /** Écart latéral de la cible au stick à fond : sans charge, puis avec charge complète (m). */
+  aimWidthMin: number;
+  aimWidthMax: number;
+  /** Distance horizontale maximale entre le joueur et la balle au moment de la frappe (m). */
+  reach: number;
+  /** Hauteurs de balle frappables (m). */
+  hitLow: number;
+  hitHigh: number;
+  /** La course assistée place la balle à cette distance sur le côté du joueur (m). */
+  standLateral: number;
+  /** Marge de temps gardée pour arriver avant la balle (s). */
+  arriveMargin: number;
+  /** Après une frappe, le joueur ne peut pas réarmer pendant ce temps (s). */
+  recoverTime: number;
+  /** Une volée n'est proposée que si le joueur est à moins de cette distance du filet (m). */
+  volleyZone: number;
+  normal: ShotTypeTuning;
+  slice: ShotTypeTuning;
+  lob: ShotTypeTuning;
+}
+
 /** Tous les coefficients de la physique, regroupés pour être modifiables à chaud. */
 export interface PhysicsProfile {
   player: PlayerTuning;
   racket: RacketTuning;
+  rally: RallyTuning;
   gravity: number;
   airDensity: number;
   dragCoefficient: number;
@@ -196,6 +240,52 @@ export const REALISTIC: PhysicsProfile = {
     edgeDeviation: 10,
     perfectQuality: 0.85,
   },
+  // Coups arcade à vitesse réelle : sert de référence, le jeu utilise ARCADE. [à calibrer]
+  rally: {
+    chargeTime: 0.6,
+    aimWidthMin: 2.2,
+    aimWidthMax: 3.8,
+    reach: 1.1,
+    hitLow: 0.15,
+    hitHigh: 2.1,
+    standLateral: 0.6,
+    arriveMargin: 0.06,
+    recoverTime: 0.3,
+    volleyZone: 4.5,
+    normal: {
+      speedMin: 16,
+      speedMax: 24,
+      clearance: 0.45,
+      flightTimeMin: 0,
+      flightTimeMax: 0,
+      depthShort: 3.5,
+      depthNeutral: 6.5,
+      depthLong: 8.8,
+      spin: 0.25,
+    },
+    slice: {
+      speedMin: 13,
+      speedMax: 18,
+      clearance: 0.3,
+      flightTimeMin: 0,
+      flightTimeMax: 0,
+      depthShort: 2.5,
+      depthNeutral: 5.5,
+      depthLong: 8.3,
+      spin: -0.3,
+    },
+    lob: {
+      speedMin: 30,
+      speedMax: 30,
+      clearance: 2.5,
+      flightTimeMin: 1.6,
+      flightTimeMax: 1.8,
+      depthShort: 6.5,
+      depthNeutral: 8.2,
+      depthLong: 9.2,
+      spin: 0.12,
+    },
+  },
   gravity: 9.81,
   airDensity: 1.2,
   dragCoefficient: 0.55, // [à calibrer]
@@ -212,3 +302,34 @@ export const REALISTIC: PhysicsProfile = {
   net: { restitution: 0.05, friction: 0.8 },
   tapeSpeedLoss: 0.5, // [à calibrer]
 };
+
+/**
+ * Profil du jeu (GAME_DESIGN.md §6) : on cherche le rythme de Virtua Tennis, pas la simulation.
+ * Balle plus lente en l'air (gravité et vitesses de coup réduites : plus de temps pour lire),
+ * joueurs plus rapides et plus réactifs. Toutes les valeurs ajoutées ici sont [à calibrer VT4].
+ */
+export const ARCADE: PhysicsProfile = {
+  ...REALISTIC,
+  player: {
+    ...REALISTIC.player,
+    maxSpeed: 7.5, // [à calibrer VT4 : vitesse de course]
+    acceleration: 38, // [à calibrer VT4 : accélération]
+    deceleration: 45, // [à calibrer VT4]
+  },
+  rally: {
+    ...REALISTIC.rally,
+    chargeTime: 0.55, // [à calibrer VT4 : durée de charge]
+    reach: 1.25, // [à calibrer VT4 : portée]
+    normal: { ...REALISTIC.rally.normal, speedMin: 11, speedMax: 17 }, // [à calibrer VT4 : vitesses de balle]
+    slice: { ...REALISTIC.rally.slice, speedMin: 9.5, speedMax: 13 }, // [à calibrer VT4]
+    lob: { ...REALISTIC.rally.lob, flightTimeMin: 1.9, flightTimeMax: 2.1 }, // [à calibrer VT4 : temps de vol]
+  },
+  gravity: 8, // [à calibrer VT4 : temps de vol typiques] balle plus « flottante »
+  magnusScale: 0.7, // [à calibrer VT4]
+  // Rebonds plus francs.
+  ground: { ...REALISTIC.ground, restitution: 0.8 }, // [à calibrer VT4]
+  glass: { ...REALISTIC.glass, restitution: 0.7 }, // [à calibrer VT4]
+};
+
+export const PROFILES = { realistic: REALISTIC, arcade: ARCADE } as const;
+export type ProfileName = keyof typeof PROFILES;

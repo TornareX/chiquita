@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('le joueur se déplace au clavier avec inertie et reste dans son camp', async ({ page }) => {
-  await page.goto('/?exercise=none&models=off');
+  await page.goto('/?mode=trainer&exercise=none&models=off');
   await page.waitForFunction(() => window.__sim !== undefined);
   await expect(page.locator('#start-prompt')).toBeVisible();
 

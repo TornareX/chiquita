@@ -17,7 +17,7 @@ async function waitForSimulation(page: Page): Promise<void> {
 
 test('la page charge sans erreur et la simulation avance', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/?models=off');
+  await page.goto('/?mode=trainer&models=off');
   await waitForSimulation(page);
   await page.screenshot({ path: 'screenshots/02-terrain.png' });
   expect(errors).toEqual([]);
@@ -25,7 +25,7 @@ test('la page charge sans erreur et la simulation avance', async ({ page }) => {
 
 test("la vue d'ensemble du terrain s'affiche sans erreur", async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('/?cam=overview&models=off');
+  await page.goto('/?mode=trainer&cam=overview&models=off');
   await waitForSimulation(page);
   await page.screenshot({ path: 'screenshots/02-terrain-vue-ensemble.png' });
   expect(errors).toEqual([]);

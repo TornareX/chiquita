@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('un swing calé renvoie la balle dans le camp adverse', async ({ page }) => {
-  await page.goto('/?exercise=none&models=off');
+  await page.goto('/?mode=trainer&exercise=none&models=off');
   await page.waitForFunction(() => window.__sim !== undefined);
 
   // Même scénario que tests/sim/racket.test.ts : balle sur le coup droit, préparation de 0,25 s,

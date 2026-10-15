@@ -22,3 +22,20 @@ export const NEUTRAL_COMMANDS: PlayerCommands = {
   prepare: false,
   softShot: false,
 };
+
+/** Boutons de coup arcade (GAME_DESIGN.md §4) : A = normal (lift), X = coupé, Y = lob. */
+export type ShotKind = 'normal' | 'slice' | 'lob';
+
+/**
+ * Commandes d'un joueur de l'échange arcade pour un pas de simulation, quelle que soit la source
+ * (manette, clavier, IA, réseau). Les axes sont relatifs au joueur : `forward` vers le filet,
+ * `right` vers sa droite ; la conversion depuis l'écran se fait côté entrée.
+ */
+export interface ArcadeCommands {
+  /** Stick : déplacement hors coup ; pendant un coup, direction (`right`) et profondeur (`forward`). Axes dans [-1, 1]. */
+  stick: { forward: number; right: number };
+  /** Bouton de coup maintenu, ou `null`. Seul l'appui (front montant) déclenche un coup. */
+  shot: ShotKind | null;
+}
+
+export const NEUTRAL_ARCADE: ArcadeCommands = { stick: { forward: 0, right: 0 }, shot: null };
