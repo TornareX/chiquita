@@ -1,6 +1,6 @@
 import { NEUTRAL_ARCADE, type ArcadeCommands, type ShotKind } from './commands';
 import { SIM_DT } from './constants';
-import { HOME_DEPTH, type Duel } from './duel';
+import { HOME_DEPTH, NET_DEPTH, type Duel } from './duel';
 import { Prng } from './prng';
 import { forwardFor, rightFor } from './shots';
 
@@ -81,8 +81,13 @@ export class Bot {
   private pressedFor: number | null = null;
   private kind: ShotKind = 'normal';
   private stick = { forward: 0, right: 0 };
+  /** Direction visée s'il prend la balle de volée : courte et croisée, pour conclure. */
+  private volleyStick = { forward: 0, right: 0 };
   /** Écart de relâcher tiré pour le coup en cours (s). */
   private releaseOffset = 0;
+  /** Dernière frappe prise en compte pour choisir sa position, et position choisie : au filet ou au fond. */
+  private seenHitTick = -Infinity;
+  private atNet = false;
 
   constructor(
     private readonly index: 0 | 1,
@@ -112,6 +117,9 @@ export class Bot {
         forward: clamp(this.prng.range(0.2, 1) * aim),
         right: clamp(right * this.prng.range(0.6, 1) * aim),
       };
+      this.volleyStick = { forward: clamp(this.prng.range(-0.8, 0.2) * aim), right: clamp(right * aim) };
+    } else {
+      this.volleyStick = this.stick;
     }
     const { release } = this.options;
     this.releaseOffset = release ? release.offset + this.prng.range(-1, 1) * release.spread : 0;
@@ -126,6 +134,16 @@ export class Bot {
     const impact = duel.phase === 'toss' ? duel.toss?.idealTick : me.engagement?.plan?.tick;
     if (!this.options.release || impact === undefined || me.heldShot === null) return null;
     return duel.tick < impact + Math.round(this.releaseOffset / SIM_DT) ? me.heldShot : null;
+  }
+
+  /**
+   * Après sa frappe, monte-t-il au filet ? Comme au padel : après un service, un lob, une volée ou une
+   * frappe parfaite qui met l'adversaire en difficulté. Après un coup défensif au fond, il reste derrière.
+   */
+  private netAfter(duel: Duel): boolean {
+    const hit = duel.players[this.index].lastHit;
+    if (!hit) return false;
+    return hit.serve || hit.kind === 'lob' || hit.volley || hit.perfect;
   }
 
   commands(duel: Duel): ArcadeCommands {
@@ -170,7 +188,8 @@ export class Bot {
         }
         // Visée seulement dans la fenêtre d'avant l'impact : plus tôt, elle couperait l'assistance partielle.
         const aiming = plan !== null && (plan.tick - duel.tick) * SIM_DT <= duel.profile.rally.aimWindow;
-        return { stick: aiming ? this.stick : { forward: 0, right: 0 }, shot: this.holding(duel) };
+        const stick = plan?.volley ? this.volleyStick : this.stick;
+        return { stick: aiming ? stick : { forward: 0, right: 0 }, shot: this.holding(duel) };
       }
       if (duel.tick - opponentHit >= this.options.reaction / SIM_DT) {
         if (this.pressedFor === null || this.pressedFor < opponentHit) this.chooseShot(duel);
@@ -180,9 +199,13 @@ export class Bot {
       return NEUTRAL_ARCADE;
     }
 
-    // Hors coup : retour à la position d'attente, au centre.
+    // Hors coup : retour à la position d'attente, au centre, au fond ou au filet.
+    if (me.lastHitTick !== this.seenHitTick) {
+      this.seenHitTick = me.lastHitTick;
+      this.atNet = this.options.tactics && this.netAfter(duel);
+    }
     const dx = 0 - me.pos.x;
-    const dz = me.side * HOME_DEPTH - me.pos.z;
+    const dz = me.side * (this.atNet ? NET_DEPTH : HOME_DEPTH) - me.pos.z;
     const axis = (delta: number): number => (Math.abs(delta) < 0.15 ? 0 : Math.max(-1, Math.min(1, delta)));
     const f = forwardFor(me.side);
     const r = rightFor(me.side);

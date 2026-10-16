@@ -130,8 +130,10 @@ const DEAD_TIME = 1.4;
 const FAULT_TIME = 1;
 /** Un échange sans frappe pendant ce temps est arrêté (balle coincée). */
 const STALL_TIME = 8;
-/** Position d'attente et de service, en distance au filet (m). */
-export const HOME_DEPTH = 7.5;
+/** Position d'attente en défense, en distance au filet (m) : 1,5 m devant la vitre du fond. */
+export const HOME_DEPTH = 8.5;
+/** Position d'attaque au filet, en distance au filet (m). */
+export const NET_DEPTH = 3.5;
 const SERVE_HEIGHT = 0.95;
 
 function createDuelPlayer(side: CourtSide): DuelPlayer {
@@ -173,6 +175,8 @@ export class Duel {
   /** Rebonds au sol dans le camp du receveur depuis la dernière frappe. */
   bounces = 0;
   touchedNet = false;
+  /** La balle a touché une vitre depuis la dernière frappe. */
+  touchedGlass = false;
   /** Coups dans l'échange en cours, service compris. */
   hits = 0;
   /** Plus long échange depuis le début. */
@@ -504,7 +508,7 @@ export class Duel {
     if (!heightOk || distance > r.reach * (sinceReady > 0 ? r.lateReach : 1)) return this.whiff(index);
     const timing = (engagement.releaseTick - engagement.readyTick) * SIM_DT;
     const perfect = timing >= -r.perfectBefore && timing <= r.perfectAfter;
-    const bonus = engagement.manual ? r.manualAimBonus : 1;
+    const bonus = (engagement.manual ? r.manualAimBonus : 1) * (volley ? r.volleyWidth : 1);
     const aimed = aimTarget(engagement.kind, player.side, player.stick, perfect, this.profile, bonus);
     const target = lateDrift(aimed, player.side, timing, this.profile);
     this.hit(index, engagement.kind, ball.pos, target, perfect, timing, volley, false, engagement.manual);
@@ -530,7 +534,9 @@ export class Duel {
     manual: boolean,
   ): void {
     const player = this.players[index];
-    const solved = solveShot(kind, contact, target, perfect, this.profile);
+    const r = this.profile.rally;
+    const speedFactor = kind === 'lob' ? 1 : volley ? r.volleySpeed : this.touchedGlass ? r.glassSpeed : 1;
+    const solved = solveShot(kind, contact, target, perfect, this.profile, speedFactor);
     const ball = this.ball!;
     ball.vel = solved.vel;
     ball.spin = solved.spin;
@@ -539,6 +545,7 @@ export class Duel {
     this.lastHitter = index;
     this.bounces = 0;
     this.touchedNet = false;
+    this.touchedGlass = false;
     this.hits++;
     for (const other of this.players) other.whiffed = false;
     this.shot = player.lastHit = {
@@ -599,6 +606,7 @@ export class Duel {
         case 'tape':
           break;
         case 'glass':
+          this.touchedGlass = true;
           // Sa propre vitre est permise ; celle d'en face seulement après le rebond.
           if (!hitterHalf && this.bounces === 0) return this.endPoint(receiver, 'opponent-wall');
           break;

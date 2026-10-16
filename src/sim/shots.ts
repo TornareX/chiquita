@@ -100,6 +100,8 @@ export function solveShot(
   target: Vec3,
   perfect: boolean,
   profile: PhysicsProfile,
+  /** Multiplicateur de la vitesse du coup (volée). */
+  speedFactor = 1,
 ): SolvedShot {
   const t = shotTuning(kind, profile);
   const g = profile.gravity;
@@ -115,7 +117,7 @@ export function solveShot(
   if (t.flightTime > 0) {
     flightTime = perfect ? t.flightTimePerfect : t.flightTime;
   } else {
-    const fastest = distance / (perfect ? t.speedPerfect : t.speed);
+    const fastest = distance / ((perfect ? t.speedPerfect : t.speed) * speedFactor);
     // Parabole sans air : hauteur au filet = y0 + (yL - y0)·f + g·T²·f(1-f)/2.
     const clearance = t.clearance * (perfect ? profile.rally.perfectClearance : 1);
     const rise = netTop + clearance - contact.y - (target.y - contact.y) * f;

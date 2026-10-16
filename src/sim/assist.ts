@@ -42,10 +42,11 @@ export function clampToHalf(pos: Vec3, side: CourtSide, margin: number): Vec3 {
 }
 
 /**
- * Course assistée (GAME_DESIGN.md §4) : rejoue la trajectoire avec `predictBall` et choisit où
+ * Course assistée (GAME_DESIGN.md §4-5) : rejoue la trajectoire avec `predictBall` et choisit où
  * frapper dans le camp du joueur. Préférence : une balle après rebond, à hauteur de hanche, le plus
- * tôt possible ; une volée seulement si le joueur est déjà près du filet. Si rien n'est atteignable,
- * le point le moins en retard est retourné, marqué `reachable: false`.
+ * tôt possible ; une volée seulement si le joueur est déjà près du filet. Une balle qui va jusqu'à
+ * la vitre se joue après la vitre, comme au padel, sauf si on peut la prendre bien devant.
+ * Si rien n'est atteignable, le point le moins en retard est retourné, marqué `reachable: false`.
  */
 export function planIntercept(
   ball: Ball,
@@ -56,7 +57,7 @@ export function planIntercept(
 ): Intercept | null {
   const r = profile.rally;
   const radius = profile.player.radius;
-  const { points, bounce, bounceStep } = predictBall(ball, profile, 5, 1);
+  const { points, bounce, bounceStep, glassStep } = predictBall(ball, profile, 5, 1);
   const bouncesHere = bounce !== null && bounce.z * side > 0;
   const nearNet = Math.abs(playerPos.z) < r.volleyZone;
   const right = rightFor(side);
@@ -70,6 +71,10 @@ export function planIntercept(
     if (p.y < r.hitLow || p.y > r.hitHigh) continue;
     const volley = bounceStep === null || step <= bounceStep;
     if (volley ? !nearNet || Math.abs(p.z) > r.volleyZone + 1 : !bouncesHere) continue;
+    const afterGlass = glassStep !== null && step > glassStep;
+    // Avant la vitre, coincé contre elle : on la laisse passer. Après, on attend qu'elle s'en décolle.
+    const room = HALF_LENGTH - Math.abs(p.z);
+    if (!volley && glassStep !== null && room < (afterGlass ? r.glassGap : r.glassRoom)) continue;
 
     // Coup droit ou revers : le côté qui demande le moins de course.
     const forehand = clampToHalf(addScaled(p, right, -r.standLateral), side, radius);
@@ -91,7 +96,7 @@ export function planIntercept(
       if (!fallback || late < fallback.late) fallback = { late, intercept };
       continue;
     }
-    const cost = (volley ? -1 : Math.abs(p.y - 0.95)) + 0.25 * time;
+    const cost = (volley ? -1 : Math.abs(p.y - 0.95)) + 0.25 * time - (afterGlass ? r.glassBonus : 0);
     if (!best || cost < best.cost) best = { cost, intercept };
   }
   return best?.intercept ?? fallback?.intercept ?? null;

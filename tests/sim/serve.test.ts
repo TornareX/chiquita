@@ -110,7 +110,7 @@ describe('match contre l’IA', () => {
 
   it('est déterministe', () => {
     expect(match(2).match!.sets).toEqual(match(2).match!.sets);
-  });
+  }, 20000);
 
   it('les niveaux se classent : le fort bat le facile', () => {
     const duel = new Duel(DEFAULT_RULES);

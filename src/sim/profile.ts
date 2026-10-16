@@ -162,6 +162,23 @@ export interface RallyTuning {
   /** Une volée n'est proposée que si le joueur est à moins de cette distance du filet (m). */
   volleyZone: number;
   /**
+   * Balle qui va jusqu'à la vitre : la course assistée ne la prend avant que si le point d'impact
+   * laisse au moins cette place devant la vitre (m) ; plus près, le joueur la laisse passer.
+   */
+  glassRoom: number;
+  /** Écart minimal entre la balle et la vitre du fond au point d'impact, après la vitre (m). */
+  glassGap: number;
+  /** Préférence de la course assistée pour jouer après la vitre (même unité que le coût : ~s × 4). */
+  glassBonus: number;
+  /**
+   * Volée (coup normal ou coupé pris avant le rebond) : vitesse multipliée par `volleySpeed` (balle
+   * proche du filet, frappée sèche) et plage latérale de visée par `volleyWidth` (angles du filet).
+   */
+  volleySpeed: number;
+  volleyWidth: number;
+  /** Coup normal ou coupé joué après une vitre : vitesse multipliée par ce facteur (coup défensif). */
+  glassSpeed: number;
+  /**
    * Assistance partielle : toucher au stick plus de `aimWindow` secondes avant l'impact prévu coupe
    * la course assistée (placement manuel) ; dans cette fenêtre, le stick ne fait que viser.
    */
@@ -301,6 +318,12 @@ export const REALISTIC: PhysicsProfile = {
     arriveMargin: 0.06,
     recoverTime: 0.3,
     volleyZone: 4.5,
+    glassRoom: 1.8,
+    glassGap: 0.6,
+    glassBonus: 0.3,
+    volleySpeed: 1.3,
+    volleyWidth: 1.3,
+    glassSpeed: 0.85,
     aimWindow: 0.3,
     manualThreshold: 0.35,
     manualAimBonus: 1.25,
@@ -385,17 +408,25 @@ export const ARCADE: PhysicsProfile = {
     perfectBefore: 0.07,
     perfectAfter: 0.05,
     reach: 1.25, // [à calibrer VT4 : portée]
+    // Jeu par les vitres (calé IA contre IA : ~8 coups par point, 1/3 de coups gagnants, 2/3 de
+    // fautes, comme chez les pros) [à calibrer en jouant] :
+    lateDriftLateral: 1.5, // retard moins puni : la faute vient d'un coup visé profond et relâché tard
+    lateDriftDepth: 2.6, // en fin de fenêtre, même un coup au neutre (7,5 m) sort
+    volleySpeed: 1.45, // la volée conclut : c'est au filet que se gagnent les points
+    glassSpeed: 0.8, // après la vitre, on défend : balle plus lente, attaquable au filet
     aimWindow: 0.3, // [à calibrer VT4 : quand le stick vise-t-il au lieu de déplacer ?]
     manualAimBonus: 1.25, // [à calibrer VT4]
-    normal: { ...REALISTIC.rally.normal, speed: 15.5, speedPerfect: 18.5 }, // [à calibrer VT4 : vitesses de balle]
-    slice: { ...REALISTIC.rally.slice, speed: 11.5, speedPerfect: 13.5 }, // [à calibrer VT4]
+    // Sans direction, le coup va chercher la vitre : au padel, la balle courte se fait punir. [à calibrer]
+    normal: { ...REALISTIC.rally.normal, speed: 15.5, speedPerfect: 18.5, depthNeutral: 7.5 }, // [à calibrer VT4 : vitesses de balle]
+    slice: { ...REALISTIC.rally.slice, speed: 11.5, speedPerfect: 13.5, depthNeutral: 6.5 }, // [à calibrer VT4]
     lob: { ...REALISTIC.rally.lob, flightTime: 2.05, flightTimePerfect: 1.9 }, // [à calibrer VT4 : temps de vol]
   },
   gravity: 8, // [à calibrer VT4 : temps de vol typiques] balle plus « flottante »
   magnusScale: 0.7, // [à calibrer VT4]
   // Rebonds plus francs.
   ground: { ...REALISTIC.ground, restitution: 0.8 }, // [à calibrer VT4]
-  glass: { ...REALISTIC.glass, restitution: 0.7 }, // [à calibrer VT4]
+  // Vitre moins vive que le sol : la balle revient de 2 à 4 m, le défenseur joue près de la vitre.
+  glass: { ...REALISTIC.glass, restitution: 0.55 }, // [à calibrer en jouant]
 };
 
 export const PROFILES = { realistic: REALISTIC, arcade: ARCADE } as const;
