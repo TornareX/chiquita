@@ -6,7 +6,8 @@ import { HALF_LENGTH } from '../../src/sim/constants';
 import { Duel, type AssistLevel, type DuelShot, type PointResult } from '../../src/sim/duel';
 import { ARCADE } from '../../src/sim/profile';
 import { aimTarget, lateDrift } from '../../src/sim/shots';
-import type { Vec3 } from '../../src/sim/vec3';
+import { vec3, type Vec3 } from '../../src/sim/vec3';
+import { createBall } from '../../src/sim/ball';
 
 /**
  * Fait jouer deux joueurs automatiques pendant `seconds` secondes simulées, via les mêmes commandes
@@ -87,7 +88,8 @@ describe('assistance partielle', () => {
     while (duel.phase !== 'rally') duel.step();
     duel.step();
     duel.step([NEUTRAL_ARCADE, { stick: heldAtPress, shot: 'normal' }]);
-    for (let i = 1; i < 0.3 / SIM_DT; i++) duel.step([NEUTRAL_ARCADE, { stick: stick(i), shot: null }]);
+    // Bouton maintenu : la frappe ne part qu'au relâcher.
+    for (let i = 1; i < 0.3 / SIM_DT; i++) duel.step([NEUTRAL_ARCADE, { stick: stick(i), shot: 'normal' }]);
     return duel.players[1].engagement;
   }
 
@@ -166,5 +168,74 @@ describe('fenêtre de timing : maintenir puis relâcher', () => {
     const perfect = rally.filter((s) => s.perfect).length;
     expect(perfect).toBeGreaterThan(0);
     expect(perfect).toBeLessThan(rally.length);
+  });
+});
+
+describe('frappe au relâcher et assistance aimant', () => {
+  /** Échange en cours : le joueur 0 vient de frapper `ball`, le joueur 1 attend en `pos`. */
+  function rally(pos: Vec3, ballPos: Vec3, ballVel: Vec3, assist: AssistLevel = 'magnet'): Duel {
+    const duel = new Duel();
+    duel.phase = 'rally';
+    duel.lastHitter = 0;
+    duel.hits = 2;
+    duel.players[0].lastHitTick = duel.tick;
+    duel.players[1].pos = duel.players[1].prevPos = pos;
+    duel.players[1].assist = assist;
+    duel.ball = createBall(ballPos, ballVel);
+    return duel;
+  }
+  const hold = (stick = { forward: 0, right: 0 }): [ArcadeCommands, ArcadeCommands] => [NEUTRAL_ARCADE, { stick, shot: 'normal' }];
+  const release: [ArcadeCommands, ArcadeCommands] = [NEUTRAL_ARCADE, NEUTRAL_ARCADE];
+
+  it('la frappe part au relâcher : volée prise quand le joueur veut', () => {
+    const duel = rally(vec3(0, 0, 2.5), vec3(0.6, 1.2, -3), vec3(0, 0.5, 12));
+    while (duel.ball!.pos.z < 1.9) duel.step(hold());
+    duel.step(release);
+    expect(duel.shot).not.toBeNull();
+    expect(duel.shot!.volley).toBe(true);
+    expect(duel.shot!.contact.z).toBeLessThan(2);
+  });
+
+  it('relâcher trop tôt : coup dans le vide, puis on peut réarmer', () => {
+    const duel = rally(vec3(0, 0, 2.5), vec3(0.6, 1.2, -6), vec3(0, 0.5, 8));
+    duel.step(hold());
+    duel.step(release);
+    for (let i = 0; i < 0.2 / SIM_DT; i++) duel.step(release);
+    expect(duel.players[1].engagement).toBeNull();
+    expect(duel.players[1].lastWhiffTick).toBeGreaterThan(0);
+    expect(duel.shot).toBeNull();
+    for (let i = 0; i < ARCADE.rally.recoverTime / SIM_DT; i++) duel.step(release);
+    duel.step(hold());
+    expect(duel.players[1].engagement).not.toBeNull();
+  });
+
+  it('maintenu, sans relâcher : pas de frappe, la balle passe', () => {
+    const duel = rally(vec3(0, 0, 2.5), vec3(0.6, 1.2, -3), vec3(0, 0.5, 12));
+    for (let i = 0; i < 0.8 / SIM_DT && duel.phase === 'rally'; i++) duel.step(hold());
+    expect(duel.players[1].lastHitTick).toBe(-Infinity);
+  });
+
+  // Balle profonde du côté opposé au joueur : le point d'impact est loin de lui.
+  const far = (assist: AssistLevel): Duel => rally(vec3(-3, 0, 8.5), vec3(2, 1.2, -8), vec3(0.5, 3, 15), assist);
+
+  it('aimant : loin du point d’impact, sans stick, le joueur ne bouge pas', () => {
+    const duel = far('magnet');
+    for (let i = 0; i < 0.3 / SIM_DT; i++) duel.step(hold());
+    expect(duel.players[1].engagement?.plan).toBeTruthy();
+    expect(duel.players[1].pos.x).toBeCloseTo(-3, 6);
+    // Course assistée complète : il serait déjà parti.
+    const full = far('full');
+    for (let i = 0; i < 0.3 / SIM_DT; i++) full.step(hold());
+    expect(full.players[1].pos.x).toBeGreaterThan(-2);
+  });
+
+  it('aimant : aller au-devant de la balle la fait prendre plus tôt', () => {
+    const plannedTick = (forward: number): number => {
+      const duel = far('magnet');
+      // Il court vers la balle (à sa droite), en avançant vers le filet ou en reculant.
+      for (let i = 0; i < 0.35 / SIM_DT; i++) duel.step(hold({ forward, right: 1 }));
+      return duel.players[1].engagement!.plan!.tick;
+    };
+    expect(plannedTick(1)).toBeLessThan(plannedTick(-1));
   });
 });

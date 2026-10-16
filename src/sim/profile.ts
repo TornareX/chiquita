@@ -127,15 +127,19 @@ export interface ShotTypeTuning {
 export interface RallyTuning {
   /**
    * Fenêtre de timing (GAME_DESIGN.md §4 et §13) : le bouton maintenu prépare le coup, le relâcher
-   * le déclenche. Relâcher entre `perfectBefore` avant et `perfectAfter` après le moment d'impact
-   * donne une frappe parfaite ; plus tôt, un coup normal joué à l'impact ; plus tard que
-   * `lateWindow` après l'impact, le coup est raté (faute de retard). Durées en s.
+   * le déclenche aussitôt. Frappée entre `perfectBefore` avant et `perfectAfter` après le passage de
+   * la balle au point idéal : frappe parfaite ; plus tôt, coup normal ; plus tard, coup en retard,
+   * jusqu'à `lateWindow` où la balle a passé le joueur. Durées en s.
    */
   perfectBefore: number;
   perfectAfter: number;
   lateWindow: number;
   /** Pendant la fenêtre de retard, la portée est multipliée par ce facteur (la balle a dépassé le joueur). */
   lateReach: number;
+  /** Après le relâcher, la raquette reste active ce temps (s) : sans balle à portée, coup dans le vide. */
+  swingWindow: number;
+  /** Frappe parfaite seulement si la balle passe à moins de cette distance du point idéal (m). */
+  sweetSpot: number;
   /**
    * Frappe en retard (après la sous-fenêtre parfaite) : la cible s'écarte vers l'extérieur et vers le
    * fond, proportionnellement au retard, jusqu'à ces distances en fin de fenêtre (m). Un coup visé
@@ -166,6 +170,10 @@ export interface RallyTuning {
    * laisse au moins cette place devant la vitre (m) ; plus près, le joueur la laisse passer.
    */
   glassRoom: number;
+  /** Assistance « aimant » : la course assistée ne prend la main qu'à cette distance du point d'impact (m). */
+  magnetRadius: number;
+  /** Aimant : préférence pour le point d'impact le plus proche du joueur (coût par mètre à courir). */
+  magnetNear: number;
   /** Écart minimal entre la balle et la vitre du fond au point d'impact, après la vitre (m). */
   glassGap: number;
   /** Préférence de la course assistée pour jouer après la vitre (même unité que le coût : ~s × 4). */
@@ -306,6 +314,8 @@ export const REALISTIC: PhysicsProfile = {
     perfectAfter: 0.05,
     lateWindow: 0.12,
     lateReach: 1.6,
+    swingWindow: 0.15,
+    sweetSpot: 0.45,
     lateDriftLateral: 2.5,
     lateDriftDepth: 4.5,
     perfectClearance: 0.6,
@@ -319,6 +329,8 @@ export const REALISTIC: PhysicsProfile = {
     recoverTime: 0.3,
     volleyZone: 4.5,
     glassRoom: 1.8,
+    magnetRadius: 1.5,
+    magnetNear: 0.6,
     glassGap: 0.6,
     glassBonus: 0.3,
     volleySpeed: 1.3,

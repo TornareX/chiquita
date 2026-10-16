@@ -17,7 +17,7 @@ export interface Prediction {
 
 /**
  * Prédit la trajectoire de la balle en rejouant la même physique sur une copie.
- * S'arrête au deuxième rebond au sol ou après `seconds` secondes.
+ * S'arrête au deuxième rebond au sol (au prochain si `bounced`) ou après `seconds` secondes.
  */
 export function predictBall(
   ball: Ball,
@@ -25,17 +25,19 @@ export function predictBall(
   seconds = 3,
   /** Un point tous les `stride` pas de simulation. */
   stride = 8,
+  /** La balle a déjà rebondi : le prochain rebond au sol est le dernier. */
+  bounced = false,
 ): Prediction {
   const copy: Ball = { ...ball };
   const prediction: Prediction = { points: [], bounce: null, bounceStep: null, glassStep: null };
   const contacts: Contact[] = [];
-  let grounds = 0;
+  let grounds = bounced ? 1 : 0;
   const steps = Math.round(seconds / SIM_DT);
   for (let i = 1; i <= steps && grounds < 2; i++) {
     contacts.length = 0;
     stepBall(copy, SIM_DT, profile, contacts);
     for (const contact of contacts) {
-      if (contact.surface === 'glass' && prediction.bounce && prediction.glassStep === null) prediction.glassStep = i;
+      if (contact.surface === 'glass' && (prediction.bounce || bounced) && prediction.glassStep === null) prediction.glassStep = i;
       if (contact.surface !== 'ground') continue;
       grounds++;
       if (!prediction.bounce) {

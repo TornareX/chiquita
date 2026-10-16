@@ -19,11 +19,11 @@ export interface BotOptions {
   /** Amplitude maximale de visée au stick (0..1). */
   aim: number;
   /**
-   * Relâcher du bouton. `null` : il tape (appui bref), le coup part normal à l'impact. Sinon, il
-   * maintient et relâche à `offset` secondes du moment d'impact prévu (négatif = avant), avec une
-   * erreur tirée uniformément dans ±`spread` : c'est sa précision de timing.
+   * Relâcher du bouton : il maintient et relâche à `offset` secondes du moment d'impact prévu
+   * (négatif = avant), avec une erreur tirée uniformément dans ±`spread` : c'est sa précision de timing.
+   * La frappe part au relâcher : trop tôt, coup dans le vide ; un peu tôt, coup normal.
    */
-  release: { offset: number; spread: number } | null;
+  release: { offset: number; spread: number };
   /**
    * Se place lui-même au stick pendant la préparation (assistance partielle ou désactivée) au lieu de
    * laisser la course assistée faire. Sinon, il ne touche au stick que pour viser, juste avant l'impact.
@@ -41,7 +41,8 @@ export const DEFAULT_BOT: BotOptions = {
   normalShare: 0.7,
   sliceShare: 0.15,
   aim: 0.7,
-  release: null,
+  // Un peu en avance : la balle entre à portée pendant le geste, coup normal sûr.
+  release: { offset: -0.08, spread: 0 },
   manualPlacement: false,
   tactics: false,
 };
@@ -122,7 +123,7 @@ export class Bot {
       this.volleyStick = this.stick;
     }
     const { release } = this.options;
-    this.releaseOffset = release ? release.offset + this.prng.range(-1, 1) * release.spread : 0;
+    this.releaseOffset = release.offset + this.prng.range(-1, 1) * release.spread;
   }
 
   /**
@@ -132,7 +133,9 @@ export class Bot {
   private holding(duel: Duel): ShotKind | null {
     const me = duel.players[this.index];
     const impact = duel.phase === 'toss' ? duel.toss?.idealTick : me.engagement?.plan?.tick;
-    if (!this.options.release || impact === undefined || me.heldShot === null) return null;
+    if (me.heldShot === null) return null;
+    // Moment d'impact pas encore connu : il garde le bouton.
+    if (impact === undefined) return me.heldShot;
     return duel.tick < impact + Math.round(this.releaseOffset / SIM_DT) ? me.heldShot : null;
   }
 
@@ -169,11 +172,18 @@ export class Bot {
       const engagement = me.engagement;
       if (engagement) {
         const plan = engagement.plan;
-        if (this.options.manualPlacement && plan) {
-          // Il lit la trajectoire comme un humain et court lui-même vers le point d'impact.
-          const dx = plan.stand.x - me.pos.x;
-          const dz = plan.stand.z - me.pos.z;
-          const distance = Math.sqrt(dx * dx + dz * dz);
+        // Visée seulement dans la fenêtre d'avant l'impact : plus tôt, elle couperait l'assistance partielle.
+        const aiming = plan !== null && (plan.tick - duel.tick) * SIM_DT <= duel.profile.rally.aimWindow;
+        const dx = plan ? plan.stand.x - me.pos.x : 0;
+        const dz = plan ? plan.stand.z - me.pos.z : 0;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        // Il court lui-même : placement manuel, ou aimant tant qu'il est loin du point d'impact (même
+        // pendant la fenêtre de visée : hors de l'aimant, il ne viserait que dans le vide).
+        const runs =
+          plan !== null &&
+          (this.options.manualPlacement || (me.assist === 'magnet' && distance > duel.profile.rally.magnetRadius));
+        if (runs) {
+          // Il lit la trajectoire comme un humain et court vers le point d'impact.
           if (distance < 0.05) return { stick: { forward: 0, right: 0 }, shot: this.holding(duel) };
           const t = duel.profile.player;
           // Assez vite pour arriver, assez lentement pour freiner à temps.
@@ -186,8 +196,6 @@ export class Bot {
           };
           return { stick, shot: this.holding(duel) };
         }
-        // Visée seulement dans la fenêtre d'avant l'impact : plus tôt, elle couperait l'assistance partielle.
-        const aiming = plan !== null && (plan.tick - duel.tick) * SIM_DT <= duel.profile.rally.aimWindow;
         const stick = plan?.volley ? this.volleyStick : this.stick;
         return { stick: aiming ? stick : { forward: 0, right: 0 }, shot: this.holding(duel) };
       }

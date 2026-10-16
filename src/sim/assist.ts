@@ -5,6 +5,9 @@ import type { PhysicsProfile } from './profile';
 import { rightFor, type CourtSide } from './shots';
 import { addScaled, vec3, type Vec3 } from './vec3';
 
+/** Marge de hauteur (m) gardée par la course assistée sous les hauteurs frappables limites. */
+const PLAN_MARGIN = 0.1;
+
 /** Point d'impact choisi par la course assistée. */
 export interface Intercept {
   /** Pas de simulation (compteur absolu) où la balle sera au point de contact. */
@@ -54,11 +57,15 @@ export function planIntercept(
   side: CourtSide,
   tick: number,
   profile: PhysicsProfile,
+  /** Coût par mètre à courir : favorise le point le plus proche du joueur (assistance aimant). */
+  nearWeight = 0,
+  /** La balle a déjà rebondi dans le camp du joueur : plus de volée, et le prochain rebond est le dernier. */
+  bounced = false,
 ): Intercept | null {
   const r = profile.rally;
   const radius = profile.player.radius;
-  const { points, bounce, bounceStep, glassStep } = predictBall(ball, profile, 5, 1);
-  const bouncesHere = bounce !== null && bounce.z * side > 0;
+  const { points, bounce, bounceStep, glassStep } = predictBall(ball, profile, 5, 1, bounced);
+  const bouncesHere = bounced || (bounce !== null && bounce.z * side > 0);
   const nearNet = Math.abs(playerPos.z) < r.volleyZone;
   const right = rightFor(side);
 
@@ -68,8 +75,9 @@ export function planIntercept(
     const p = points[i]!;
     const step = i + 1;
     if (p.z * side < 0.4 || Math.abs(p.z) > HALF_LENGTH - 0.2 || Math.abs(p.x) > HALF_WIDTH - 0.15) continue;
-    if (p.y < r.hitLow || p.y > r.hitHigh) continue;
-    const volley = bounceStep === null || step <= bounceStep;
+    // Marge sous les hauteurs limites : un relâcher un peu décalé doit encore trouver la balle.
+    if (p.y < r.hitLow + PLAN_MARGIN || p.y > r.hitHigh - PLAN_MARGIN) continue;
+    const volley = !bounced && (bounceStep === null || step <= bounceStep);
     if (volley ? !nearNet || Math.abs(p.z) > r.volleyZone + 1 : !bouncesHere) continue;
     const afterGlass = glassStep !== null && step > glassStep;
     // Avant la vitre, coincé contre elle : on la laisse passer. Après, on attend qu'elle s'en décolle.
@@ -96,7 +104,7 @@ export function planIntercept(
       if (!fallback || late < fallback.late) fallback = { late, intercept };
       continue;
     }
-    const cost = (volley ? -1 : Math.abs(p.y - 0.95)) + 0.25 * time - (afterGlass ? r.glassBonus : 0);
+    const cost = (volley ? -1 : Math.abs(p.y - 0.95)) + 0.25 * time - (afterGlass ? r.glassBonus : 0) + nearWeight * distanceTo(stand);
     if (!best || cost < best.cost) best = { cost, intercept };
   }
   return best?.intercept ?? fallback?.intercept ?? null;

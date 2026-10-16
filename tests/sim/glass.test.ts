@@ -23,9 +23,13 @@ function play(seconds: number, seed: number, a: BotOptions, b: BotOptions) {
   const winnerReasons: PointReason[] = ['second-bounce', 'not-returned'];
   while (duel.time < seconds) {
     if (duel.phase === 'over') duel.restart();
+    // Coup dans le vide sur une balle atteignable : faute. Sur une balle hors d'atteinte : coup gagnant.
+    const reachable = duel.players.map((p) => p.engagement?.plan?.reachable ?? true);
     duel.step([bots[0].commands(duel), bots[1].commands(duel)]);
     for (const c of duel.contacts) if (c.surface === 'glass') glass = true;
-    for (const p of duel.players) if (p.lastWhiffTick === duel.tick - 1) whiffed = true;
+    duel.players.forEach((p, i) => {
+      if (p.lastWhiffTick === duel.tick - 1 && reachable[i]) whiffed = true;
+    });
     const shot = duel.shot;
     if (shot) {
       if (!shot.serve && Math.abs(shot.contact.z) > 7) {
@@ -40,7 +44,7 @@ function play(seconds: number, seed: number, a: BotOptions, b: BotOptions) {
       stats.points++;
       stats.hits += result.hits;
       stats.wins[result.winner]!++;
-      // Coup gagnant : l'adversaire n'a pas pu la renvoyer, sans avoir raté sa frappe.
+      // Coup gagnant : l'adversaire n'a pas pu la renvoyer, sans avoir raté une balle à sa portée.
       if (winnerReasons.includes(result.reason) && !whiffed) stats.winners++;
       whiffed = false;
     }
@@ -77,7 +81,8 @@ describe('jeu par les vitres', () => {
     expect(perPoint).toBeLessThan(14);
     expect(s.winners / s.points).toBeGreaterThan(0.15);
     expect(s.winners / s.points).toBeLessThan(0.6);
-    expect(s.afterGlass / s.backShots).toBeGreaterThan(0.7);
+    // Le joueur choisit : au fond, la plupart des balles se jouent quand même après la vitre.
+    expect(s.afterGlass / s.backShots).toBeGreaterThan(0.6);
     expect(s.volleys).toBeGreaterThan(s.points);
   }, 30000);
 

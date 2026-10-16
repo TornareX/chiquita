@@ -11,6 +11,7 @@ const NAMES = ['Bleu', 'Rouge'] as const;
 const FEEDBACK_TIME = 0.9;
 
 const ASSIST_LABELS: Record<AssistLevel, string> = {
+  magnet: 'aimant',
   full: 'course assistée',
   partial: 'assistance partielle',
   off: 'placement manuel',
@@ -108,7 +109,7 @@ export function createDuelHud(): DuelHud {
       // Retour sur la dernière frappe ou le dernier coup raté, pendant un court instant.
       const recent = (tick: number): boolean => (duel.tick - tick) * SIM_DT < FEEDBACK_TIME;
       const notes = duel.players.map((player, i) => {
-        if (recent(player.lastWhiffTick)) return `<span style="color:#ffb35c">${NAMES[i]} : trop tard !</span>`;
+        if (recent(player.lastWhiffTick)) return `<span style="color:#ffb35c">${NAMES[i]} : dans le vide !</span>`;
         if (player.lastHit?.perfect && recent(player.lastHitTick)) return `<span style="color:#fff">${NAMES[i]} : parfait !</span>`;
         return '';
       });

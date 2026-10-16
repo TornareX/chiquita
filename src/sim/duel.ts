@@ -12,16 +12,20 @@ import { addScaled, length, vec3, type Vec3 } from './vec3';
 /**
  * Assistance de course, réglable par joueur (GAME_DESIGN.md §6) :
  * - `full` : à l'appui, le joueur court seul au point d'impact ; le stick ne fait que viser ;
- * - `partial` : pareil, mais toucher au stick tôt pendant la préparation reprend la main (placement manuel) ;
+ * - `magnet` (par défaut) : le joueur court lui-même au stick ; la course assistée ne fait que les
+ *   derniers pas (`magnetRadius`). Le point d'impact suit sa position : aller au-devant de la balle la
+ *   fait prendre plus tôt (avant la vitre, de volée) ;
+ * - `partial` : comme `full`, mais toucher au stick tôt pendant la préparation reprend la main (placement manuel) ;
  * - `off` : le joueur se place toujours lui-même ; la frappe part dès que la balle est à portée.
  */
-export type AssistLevel = 'full' | 'partial' | 'off';
-export const ASSIST_LEVELS: readonly AssistLevel[] = ['full', 'partial', 'off'];
+export type AssistLevel = 'magnet' | 'full' | 'partial' | 'off';
+export const ASSIST_LEVELS: readonly AssistLevel[] = ['magnet', 'full', 'partial', 'off'];
+/** En mode aimant, le point d'impact est recalculé tous les ce nombre de pas, d'après la position du joueur. */
+const REPLAN_TICKS = 12;
 
 /**
  * Coup en cours : préparé tant que le bouton est maintenu, déclenché au relâcher (GAME_DESIGN.md §4).
- * Relâché tôt, il part au moment d'impact ; relâché autour de l'impact, frappe parfaite ; maintenu
- * trop longtemps après, il est raté.
+ * La frappe part au relâcher (voir `tryHit`).
  */
 export interface Engagement {
   kind: ShotKind;
@@ -29,8 +33,6 @@ export interface Engagement {
   pressTick: number;
   /** Pas où le bouton a été relâché, `null` tant qu'il est maintenu. */
   releaseTick: number | null;
-  /** Premier pas où la balle était frappable (moment d'impact), `null` avant. */
-  readyTick: number | null;
   /** Point d'impact visé par la course assistée, une fois la balle en route vers le joueur. */
   plan: Intercept | null;
   /** Le joueur se place lui-même pour ce coup : pas de course assistée, meilleurs angles. */
@@ -53,10 +55,8 @@ export interface DuelPlayer {
   /** Pas de la dernière frappe (animation, récupération). */
   lastHitTick: number;
   lastHit: DuelShot | null;
-  /** Pas du dernier coup raté par maintien trop long (faute de retard). */
+  /** Pas du dernier coup dans le vide (relâché sans balle à portée). */
   lastWhiffTick: number;
-  /** A raté la balle en cours : ne peut plus la reprendre. */
-  whiffed: boolean;
   assist: AssistLevel;
 }
 
@@ -136,6 +136,27 @@ export const HOME_DEPTH = 8.5;
 export const NET_DEPTH = 3.5;
 const SERVE_HEIGHT = 0.95;
 
+/**
+ * Timing d'une frappe, lu sur la trajectoire : temps (s) écoulé depuis le passage de la balle au plus
+ * près du point idéal, à `lateral` m sur le côté du joueur (coup droit ou revers, le plus proche).
+ * Négatif : la balle n'y est pas encore. `miss` : distance horizontale de ce passage au point idéal (m).
+ */
+export function contactTiming(ball: Ball, player: DuelPlayer, lateral: number): { timing: number; miss: number } {
+  const right = rightFor(player.side);
+  const { x: vx, z: vz } = ball.vel;
+  // Balle presque verticale : vitesse plancher, le timing reste borné.
+  const speed2 = Math.max(vx * vx + vz * vz, 2.25);
+  let best = { timing: Infinity, miss: Infinity };
+  for (const sign of [1, -1]) {
+    const rx = ball.pos.x - (player.pos.x + right.x * lateral * sign);
+    const rz = ball.pos.z - player.pos.z;
+    const timing = (rx * vx + rz * vz) / speed2;
+    const miss = Math.sqrt((rx - timing * vx) ** 2 + (rz - timing * vz) ** 2);
+    if (miss < best.miss) best = { timing, miss };
+  }
+  return best;
+}
+
 function createDuelPlayer(side: CourtSide): DuelPlayer {
   const pos = vec3(0, 0, side * HOME_DEPTH);
   return {
@@ -149,8 +170,7 @@ function createDuelPlayer(side: CourtSide): DuelPlayer {
     lastHitTick: -Infinity,
     lastHit: null,
     lastWhiffTick: -Infinity,
-    whiffed: false,
-    assist: 'full',
+    assist: 'magnet',
   };
 }
 
@@ -292,10 +312,7 @@ export class Duel {
     this.prevBallPos = null;
     this.lastHitter = null;
     this.hits = 0;
-    for (const player of this.players) {
-      player.engagement = null;
-      player.whiffed = false;
-    }
+    for (const player of this.players) player.engagement = null;
   }
 
   private endPoint(winner: 0 | 1, reason: PointReason): void {
@@ -344,8 +361,7 @@ export class Duel {
     if (
       pressed &&
       (this.phase === 'rally' || this.phase === 'toss') &&
-      !player.whiffed &&
-      this.tick - player.lastHitTick >= r.recoverTime / SIM_DT
+      this.tick - Math.max(player.lastHitTick, player.lastWhiffTick) >= r.recoverTime / SIM_DT
     ) {
       // Appuyer à nouveau pendant la préparation change le type de coup, et se remet à préparer.
       if (player.engagement) {
@@ -356,7 +372,6 @@ export class Duel {
           kind: pressed,
           pressTick: this.tick,
           releaseTick: null,
-          readyTick: null,
           plan: null,
           manual: player.assist === 'off',
           pressStick: cmd.stick,
@@ -365,8 +380,28 @@ export class Duel {
     }
 
     const engagement = player.engagement;
-    if (engagement && !engagement.plan && this.isReceiving(index) && this.ball) {
-      engagement.plan = planIntercept(this.ball, player.pos, player.side, this.tick, this.profile);
+    const magnet = player.assist === 'magnet';
+    if (engagement && this.isReceiving(index) && this.ball) {
+      const plan = engagement.plan;
+      // Aimant : tant que l'impact n'est pas imminent, le point choisi suit le joueur qui court.
+      // Point hors d'atteinte (lob par-dessus un joueur au filet) : recalculé en chemin, tous modes.
+      const replan =
+        plan !== null &&
+        (magnet || !plan.reachable) &&
+        engagement.releaseTick === null &&
+        (plan.tick - this.tick) * SIM_DT > r.aimWindow &&
+        (this.tick - engagement.pressTick) % REPLAN_TICKS === 0;
+      if (!plan || replan) {
+        engagement.plan = planIntercept(
+          this.ball,
+          player.pos,
+          player.side,
+          this.tick,
+          this.profile,
+          magnet ? r.magnetNear : 0,
+          this.bounces > 0,
+        );
+      }
     }
     if (engagement?.plan && !engagement.manual && player.assist === 'partial') {
       // Bouger le stick après l'appui, avant la fenêtre de visée, coupe l'assistance pour ce coup.
@@ -380,9 +415,10 @@ export class Duel {
     // Course assistée vers le point prévu ; sinon, le stick déplace le joueur.
     let desired: Vec3;
     const t = this.profile.player;
-    if (engagement && !engagement.manual) {
-      const target = engagement.plan?.stand;
-      const gap = target ? flatDistance(target, player.pos) : 0;
+    const target = engagement?.plan?.stand;
+    const gap = target ? flatDistance(target, player.pos) : 0;
+    // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
+    if (engagement && !engagement.manual && (!magnet || (target && gap <= r.magnetRadius))) {
       // Vitesse qui permet encore de s'arrêter pile sur le point.
       const speed = Math.min(t.maxSpeed, Math.sqrt(2 * t.deceleration * gap));
       desired =
@@ -406,11 +442,11 @@ export class Duel {
     // Inertie : la vitesse se rapproche de la cible à accélération bornée.
     const dx = desired.x - player.vel.x;
     const dz = desired.z - player.vel.z;
-    const gap = Math.sqrt(dx * dx + dz * dz);
+    const change = Math.sqrt(dx * dx + dz * dz);
     const speeding = length(desired) >= length(player.vel);
     const maxChange = (speeding ? t.acceleration : t.deceleration) * SIM_DT;
     let vel = desired;
-    if (gap > maxChange) vel = vec3(player.vel.x + (dx / gap) * maxChange, 0, player.vel.z + (dz / gap) * maxChange);
+    if (change > maxChange) vel = vec3(player.vel.x + (dx / change) * maxChange, 0, player.vel.z + (dz / change) * maxChange);
 
     const moved = clampToHalf(addScaled(player.pos, vel, SIM_DT), player.side, t.radius);
     // Contre un mur ou le filet, la vitesse dans cette direction tombe à zéro.
@@ -466,59 +502,46 @@ export class Duel {
   }
 
   /**
-   * Frappe du joueur `index`, selon la fenêtre de timing. Le moment d'impact est le premier pas où
-   * la balle est frappable : en course assistée, au pas prévu ; en placement manuel, dès que la balle
-   * est jouable à portée (le joueur qui se place lui-même peut frapper plus tôt). Relâché avant, le
-   * coup part à ce moment ; relâché après, il part au relâcher, tant que la fenêtre de retard court.
+   * Frappe au relâcher (GAME_DESIGN.md §4) : la raquette part quand le bouton est relâché et reste
+   * active `swingWindow` secondes. La balle est frappée au premier pas où elle est jouable à portée,
+   * de volée ou après rebond, partout dans le camp du joueur. Si elle ne vient pas, coup dans le
+   * vide : le joueur peut réarmer. Le timing se lit sur la balle : l'écart entre ce pas et son
+   * passage au point idéal (à côté du joueur). En avance : coup normal ; autour : frappe parfaite ;
+   * en retard : la balle part plus large et plus long ; au-delà de `lateWindow`, elle a passé le joueur.
    */
   private tryHit(index: 0 | 1): void {
     const player = this.players[index];
     const engagement = player.engagement;
     const ball = this.ball;
-    if (!engagement || !ball || ball.out || !this.isReceiving(index)) return;
-    // Le service doit rebondir avant d'être renvoyé.
-    if (this.hits === 1 && this.bounces === 0) return;
+    if (!engagement || engagement.releaseTick === null || !ball || !this.isReceiving(index)) return;
     const r = this.profile.rally;
-    const distance = flatDistance(ball.pos, player.pos);
+    const { timing, miss } = contactTiming(ball, player, r.standLateral);
     const heightOk = ball.pos.y >= r.hitLow && ball.pos.y <= r.hitHigh;
-    const plan = engagement.plan;
-    let volley: boolean;
-    if (engagement.manual) {
-      // Balle jouable : dans le camp du joueur, après le rebond, ou en volée près du filet.
-      volley = this.bounces === 0;
-      const playable = ball.pos.z * player.side > 0 && (!volley || Math.abs(player.pos.z) < r.volleyZone);
-      if (engagement.readyTick === null && !(playable && heightOk && distance <= r.reach)) return;
-    } else {
-      if (!plan || this.tick < plan.tick) return;
-      volley = plan.volley;
-      if (engagement.readyTick === null && !(heightOk && distance <= r.reach)) {
-        // Hors de portée au pas prévu : le joueur peut réarmer, la course assistée recalculera un point.
-        if (this.tick > plan.tick + r.lateWindow / SIM_DT) player.engagement = null;
-        return;
-      }
-    }
-    engagement.readyTick ??= this.tick;
-
-    const sinceReady = (this.tick - engagement.readyTick) * SIM_DT;
-    if (engagement.releaseTick === null) {
-      if (sinceReady > r.lateWindow) this.whiff(index);
+    const reach = r.reach * (timing > 0 ? r.lateReach : 1);
+    const playable =
+      !ball.out &&
+      // Le service doit rebondir avant d'être renvoyé.
+      !(this.hits === 1 && this.bounces === 0) &&
+      ball.pos.z * player.side > 0 &&
+      heightOk &&
+      flatDistance(ball.pos, player.pos) <= reach &&
+      timing <= r.lateWindow;
+    if (!playable) {
+      if ((this.tick - engagement.releaseTick) * SIM_DT >= r.swingWindow) this.whiff(index);
       return;
     }
-    // En retard, la balle a dépassé le joueur : un peu plus de portée pour la rattraper.
-    if (!heightOk || distance > r.reach * (sinceReady > 0 ? r.lateReach : 1)) return this.whiff(index);
-    const timing = (engagement.releaseTick - engagement.readyTick) * SIM_DT;
-    const perfect = timing >= -r.perfectBefore && timing <= r.perfectAfter;
+    const volley = this.bounces === 0;
+    const perfect = timing >= -r.perfectBefore && timing <= r.perfectAfter && miss <= r.sweetSpot;
     const bonus = (engagement.manual ? r.manualAimBonus : 1) * (volley ? r.volleyWidth : 1);
     const aimed = aimTarget(engagement.kind, player.side, player.stick, perfect, this.profile, bonus);
     const target = lateDrift(aimed, player.side, timing, this.profile);
     this.hit(index, engagement.kind, ball.pos, target, perfect, timing, volley, false, engagement.manual);
   }
 
-  /** Coup raté par maintien trop long : la balle passe, le joueur ne peut plus la reprendre. */
+  /** Coup dans le vide : relâché sans balle à portée. Le joueur peut réarmer. */
   private whiff(index: 0 | 1): void {
     const player = this.players[index];
     player.engagement = null;
-    player.whiffed = true;
     player.lastWhiffTick = this.tick;
   }
 
@@ -547,7 +570,6 @@ export class Duel {
     this.touchedNet = false;
     this.touchedGlass = false;
     this.hits++;
-    for (const other of this.players) other.whiffed = false;
     this.shot = player.lastHit = {
       player: index,
       kind,
