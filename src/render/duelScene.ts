@@ -57,12 +57,19 @@ function clipNearWall(court: THREE.Object3D): void {
 interface PlayerView {
   object: THREE.Group;
   racket: THREE.Group;
-  /** Anneau au sol : visible pendant la charge, il se remplit avec elle. */
-  chargeRing: THREE.Mesh;
-  chargeMaterial: THREE.MeshBasicMaterial;
+  /**
+   * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
+   * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
+   */
+  timingRing: THREE.Mesh;
+  timingMaterial: THREE.MeshBasicMaterial;
   /** Point où la course assistée emmène le joueur. */
   standMarker: THREE.Mesh;
+  color: number;
 }
+
+/** L'anneau commence à se resserrer ce temps avant l'impact (s). */
+const RING_LEAD = 0.6;
 
 function createPlayerView(color: number): PlayerView {
   const object = new THREE.Group();
@@ -93,19 +100,19 @@ function createPlayerView(color: number): PlayerView {
   pivot.position.set(0, 1.0, 0);
   pivot.add(racket);
 
-  const chargeMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false });
-  const chargeRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40), chargeMaterial);
-  chargeRing.rotation.x = -Math.PI / 2;
-  chargeRing.position.y = 0.012;
+  const timingMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false });
+  const timingRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40), timingMaterial);
+  timingRing.rotation.x = -Math.PI / 2;
+  timingRing.position.y = 0.012;
 
-  object.add(body, head, shadow, pivot, chargeRing);
+  object.add(body, head, shadow, pivot, timingRing);
 
   const standMarker = new THREE.Mesh(
     new THREE.RingGeometry(0.12, 0.18, 24),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false }),
   );
   standMarker.rotation.x = -Math.PI / 2;
-  return { object, racket: pivot, chargeRing, chargeMaterial, standMarker };
+  return { object, racket: pivot, timingRing, timingMaterial, standMarker, color };
 }
 
 /** Balle, ombre bien marquée et trait de hauteur : les repères de profondeur vus de loin. */
@@ -219,15 +226,20 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     view.racket.position.x = -0.35;
     view.racket.rotation.y = swing < 1 ? -Math.PI * 0.85 + swing * Math.PI * 1.4 : engaged ? -Math.PI * 0.8 : -0.4;
 
-    view.chargeRing.visible = engaged;
+    const engagement = player.engagement;
+    view.timingRing.visible = engagement !== null && engagement.releaseTick === null;
     view.standMarker.visible = false;
-    if (player.engagement) {
-      const start = Math.max(player.engagement.pressTick, duel.players[player.side < 0 ? 1 : 0].lastHitTick);
-      const charge = Math.min(1, Math.max(0, ((duel.tick - start) * SIM_DT) / duel.profile.rally.chargeTime));
-      view.chargeRing.scale.setScalar(0.6 + 0.6 * charge);
-      view.chargeMaterial.opacity = 0.35 + 0.6 * charge;
+    if (engagement) {
+      const r = duel.profile.rally;
+      const plan = engagement.manual ? null : engagement.plan;
+      // Temps restant avant l'impact prévu ; sans point prévu, l'anneau reste à mi-chemin.
+      const remaining = plan ? (plan.tick - duel.tick - alpha) * SIM_DT : RING_LEAD / 2;
+      view.timingRing.scale.setScalar(1 + Math.min(1, Math.max(0, remaining / RING_LEAD)) * 1.2);
+      const inPerfect = plan !== null && remaining <= r.perfectBefore && remaining >= -r.perfectAfter;
+      view.timingMaterial.opacity = inPerfect ? 1 : 0.45;
+      view.timingMaterial.color.set(inPerfect ? 0xffffff : view.color);
       // En placement manuel, pas de point d'arrivée : le joueur se place lui-même.
-      const stand = player.engagement.manual ? undefined : player.engagement.plan?.stand;
+      const stand = plan?.stand;
       if (stand) {
         view.standMarker.position.set(stand.x, 0.011, stand.z);
         view.standMarker.visible = true;

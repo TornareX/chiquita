@@ -66,7 +66,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     return [read(0), read(1)];
   };
 
-  /** Micro-pause sur un coup pleinement chargé : fin de la pause, en temps réel (ms). */
+  /** Micro-pause sur une frappe parfaite : fin de la pause, en temps réel (ms). */
   let hitstopUntil = 0;
   const loop = new FixedStepLoop(SIM_DT, () => {
     duel.step(sample());
@@ -74,15 +74,15 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     if (duel.shot) {
       const { shot } = duel;
       sounds.shot({
-        quality: 0.55 + 0.45 * shot.charge,
-        perfect: shot.charge >= 1,
+        quality: shot.perfect ? 1 : 0.7,
+        perfect: shot.perfect,
         speed: shot.speed,
         timing: 0,
         side: 1,
         soft: false,
         contact: shot.contact,
       });
-      if (shot.charge >= 1) {
+      if (shot.perfect) {
         hitstopUntil = performance.now() + 40; // [à calibrer VT4]
         view.shake(0.5);
       }

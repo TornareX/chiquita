@@ -1,3 +1,4 @@
+import { SIM_DT } from '../sim/constants';
 import type { AssistLevel, Duel, PointReason } from '../sim/duel';
 
 export interface DuelHud {
@@ -6,6 +7,8 @@ export interface DuelHud {
 }
 
 const NAMES = ['Bleu', 'Rouge'] as const;
+/** Durée d'affichage du retour « parfait ! » / « trop tard ! » (s). */
+const FEEDBACK_TIME = 0.9;
 
 const ASSIST_LABELS: Record<AssistLevel, string> = {
   full: 'course assistée',
@@ -37,10 +40,11 @@ function element(id: string, css: string): HTMLDivElement {
 export function createDuelHud(): DuelHud {
   const rally = element('rally', 'top:14px;left:50%;transform:translateX(-50%);font-size:22px;font-weight:600;text-align:center');
   const message = element('point', 'top:16%;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600');
+  const feedback = element('feedback', 'top:24%;left:50%;transform:translateX(-50%);font-size:20px;font-weight:700');
   const players = element('players', 'bottom:14px;left:18px;font-size:13px');
   const help = element('help', 'bottom:14px;right:18px;font-size:13px;text-align:right;color:#c9d3db');
   help.innerHTML =
-    'A coup normal · X coupé · Y lob : appuie tôt pour charger<br>' +
+    'A coup normal · X coupé · Y lob : maintiens, relâche quand l’anneau se referme<br>' +
     'Stick : se placer, puis viser au moment de l’impact (haut = profond)<br>' +
     'Clavier : ZQSD + J K L (bleu), flèches + 1 2 3 du pavé ou , ; : (rouge)<br>' +
     'Assistance : bouton Affichage, U (bleu) ou 0 du pavé (rouge)';
@@ -57,6 +61,15 @@ export function createDuelHud(): DuelHud {
             ASSIST_LABELS[duel.players[i]!.assist],
         )
         .join('<br>');
+
+      // Retour sur la dernière frappe ou le dernier coup raté, pendant un court instant.
+      const recent = (tick: number): boolean => (duel.tick - tick) * SIM_DT < FEEDBACK_TIME;
+      const notes = duel.players.map((player, i) => {
+        if (recent(player.lastWhiffTick)) return `<span style="color:#ffb35c">${NAMES[i]} : trop tard !</span>`;
+        if (player.lastHit?.perfect && recent(player.lastHitTick)) return `<span style="color:#fff">${NAMES[i]} : parfait !</span>`;
+        return '';
+      });
+      feedback.innerHTML = notes.filter(Boolean).join('<br>');
 
       if (duel.phase === 'serve') {
         message.style.color = '#f2f5f7';

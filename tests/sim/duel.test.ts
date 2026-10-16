@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bot, DEFAULT_BOT, type BotOptions } from '../../src/sim/bot';
 import { NEUTRAL_ARCADE, type ArcadeCommands } from '../../src/sim/commands';
 import { SIM_DT } from '../../src/sim/constants';
-import { Duel, type AssistLevel, type PointResult } from '../../src/sim/duel';
+import { Duel, type AssistLevel, type DuelShot, type PointResult } from '../../src/sim/duel';
 
 /**
  * Fait jouer deux joueurs automatiques pendant `seconds` secondes simulées, via les mêmes commandes
@@ -13,18 +13,22 @@ function play(
   seed: number,
   options: BotOptions = DEFAULT_BOT,
   assist: AssistLevel = 'full',
-): { results: PointResult[]; ongoing: number; manualShots: number } {
+): { results: PointResult[]; ongoing: number; manualShots: number; shots: DuelShot[]; whiffs: number } {
   const duel = new Duel();
   for (const player of duel.players) player.assist = assist;
   let manualShots = 0;
+  let whiffs = 0;
+  const shots: DuelShot[] = [];
   const bots = [new Bot(0, seed, options), new Bot(1, seed + 1, options)] as const;
   const results: PointResult[] = [];
   while (duel.time < seconds) {
     duel.step([bots[0].commands(duel), bots[1].commands(duel)]);
     if (duel.result) results.push(duel.result);
     if (duel.shot?.manual) manualShots++;
+    if (duel.shot) shots.push(duel.shot);
+    for (const player of duel.players) if (player.lastWhiffTick === duel.tick - 1) whiffs++;
   }
-  return { results, ongoing: duel.phase === 'rally' ? duel.hits : 0, manualShots };
+  return { results, ongoing: duel.phase === 'rally' ? duel.hits : 0, manualShots, shots, whiffs };
 }
 
 describe('échange arcade 1 contre 1', () => {
@@ -89,5 +93,51 @@ describe('assistance partielle', () => {
     const engagement = receive(() => held, held);
     expect(engagement?.manual).toBe(false);
     expect(engagement?.plan).not.toBeNull();
+  });
+});
+
+describe('fenêtre de timing : maintenir puis relâcher', () => {
+  const rallyShots = (shots: DuelShot[]): DuelShot[] => shots.filter((shot) => !shot.serve);
+
+  it('appui bref : coup normal, jamais raté', () => {
+    const { shots, whiffs } = play(60, 7);
+    expect(rallyShots(shots).length).toBeGreaterThan(20);
+    expect(rallyShots(shots).every((shot) => !shot.perfect && shot.timing < 0)).toBe(true);
+    expect(whiffs).toBe(0);
+  });
+
+  it('relâcher au moment de l’impact : frappe parfaite, plus rapide', () => {
+    const tap = play(60, 7).shots.filter((s) => !s.serve && s.kind === 'normal');
+    const { shots, results, ongoing } = play(60, 7, { ...DEFAULT_BOT, release: { offset: 0, spread: 0 } });
+    const perfect = rallyShots(shots);
+    expect(perfect.length).toBeGreaterThan(20);
+    expect(perfect.every((shot) => shot.perfect)).toBe(true);
+    const average = (list: DuelShot[]): number => list.reduce((a, s) => a + s.speed, 0) / list.length;
+    expect(average(perfect.filter((s) => s.kind === 'normal'))).toBeGreaterThan(average(tap) * 1.08);
+    // Plus rapides, les frappes parfaites restent jouables par la course assistée.
+    expect(Math.max(ongoing, ...results.map((r) => r.hits))).toBeGreaterThanOrEqual(10);
+  });
+
+  it('relâcher un peu après l’impact : coup normal, dans la fenêtre de retard', () => {
+    const { shots, whiffs } = play(60, 7, { ...DEFAULT_BOT, release: { offset: 0.09, spread: 0 } });
+    const rally = rallyShots(shots);
+    expect(rally.length).toBeGreaterThan(10);
+    expect(rally.every((shot) => !shot.perfect && shot.timing > 0)).toBe(true);
+    expect(whiffs).toBe(0);
+  });
+
+  it('maintenir trop longtemps : coup raté, point perdu, pas de seconde chance', () => {
+    const { shots, whiffs, results } = play(30, 7, { ...DEFAULT_BOT, release: { offset: 0.4, spread: 0 } });
+    expect(rallyShots(shots)).toHaveLength(0);
+    expect(whiffs).toBeGreaterThan(0);
+    expect(results.every((r) => r.hits === 1)).toBe(true);
+  });
+
+  it('un joueur imprécis mélange frappes parfaites et coups normaux', () => {
+    const { shots } = play(120, 21, { ...DEFAULT_BOT, release: { offset: 0, spread: 0.1 } });
+    const rally = rallyShots(shots);
+    const perfect = rally.filter((s) => s.perfect).length;
+    expect(perfect).toBeGreaterThan(0);
+    expect(perfect).toBeLessThan(rally.length);
   });
 });

@@ -107,14 +107,14 @@ export interface RacketTuning {
 
 /** Réglages d'un coup arcade (bouton A, X ou Y). Vitesses en m/s, hauteurs en m. */
 export interface ShotTypeTuning {
-  /** Vitesse horizontale maximale : sans charge, puis avec charge complète. */
-  speedMin: number;
-  speedMax: number;
+  /** Vitesse horizontale maximale : coup normal, puis frappe parfaite. */
+  speed: number;
+  speedPerfect: number;
   /** Passage minimal au-dessus du filet. */
   clearance: number;
-  /** Temps de vol imposé (s), sans charge puis avec charge complète ; 0 = déduit de la vitesse (coups tendus). */
-  flightTimeMin: number;
-  flightTimeMax: number;
+  /** Temps de vol imposé (s), coup normal puis frappe parfaite ; 0 = déduit de la vitesse (coups tendus). */
+  flightTime: number;
+  flightTimePerfect: number;
   /** Profondeur visée, en distance au filet : stick vers soi, au neutre, stick vers l'avant. */
   depthShort: number;
   depthNeutral: number;
@@ -125,11 +125,22 @@ export interface ShotTypeTuning {
 
 /** Échange arcade : course assistée et coups à boutons (GAME_DESIGN.md §4). */
 export interface RallyTuning {
-  /** Durée d'appui avant l'impact pour une charge complète (s). */
-  chargeTime: number;
-  /** Écart latéral de la cible au stick à fond : sans charge, puis avec charge complète (m). */
-  aimWidthMin: number;
-  aimWidthMax: number;
+  /**
+   * Fenêtre de timing (GAME_DESIGN.md §4 et §13) : le bouton maintenu prépare le coup, le relâcher
+   * le déclenche. Relâcher entre `perfectBefore` avant et `perfectAfter` après le moment d'impact
+   * donne une frappe parfaite ; plus tôt, un coup normal joué à l'impact ; plus tard que
+   * `lateWindow` après l'impact, le coup est raté (faute de retard). Durées en s.
+   */
+  perfectBefore: number;
+  perfectAfter: number;
+  lateWindow: number;
+  /** Pendant la fenêtre de retard, la portée est multipliée par ce facteur (la balle a dépassé le joueur). */
+  lateReach: number;
+  /** Frappe parfaite : passage au-dessus du filet multiplié par ce facteur (balle plus tendue). */
+  perfectClearance: number;
+  /** Écart latéral de la cible au stick à fond : coup normal, puis frappe parfaite (m). */
+  aimWidth: number;
+  aimWidthPerfect: number;
   /** Distance horizontale maximale entre le joueur et la balle au moment de la frappe (m). */
   reach: number;
   /** Hauteurs de balle frappables (m). */
@@ -251,9 +262,13 @@ export const REALISTIC: PhysicsProfile = {
   },
   // Coups arcade à vitesse réelle : sert de référence, le jeu utilise ARCADE. [à calibrer]
   rally: {
-    chargeTime: 0.6,
-    aimWidthMin: 2.2,
-    aimWidthMax: 3.8,
+    perfectBefore: 0.07,
+    perfectAfter: 0.05,
+    lateWindow: 0.12,
+    lateReach: 1.6,
+    perfectClearance: 0.6,
+    aimWidth: 3,
+    aimWidthPerfect: 3.8,
     reach: 1.1,
     hitLow: 0.15,
     hitHigh: 2.1,
@@ -265,33 +280,33 @@ export const REALISTIC: PhysicsProfile = {
     manualThreshold: 0.35,
     manualAimBonus: 1.25,
     normal: {
-      speedMin: 16,
-      speedMax: 24,
+      speed: 20,
+      speedPerfect: 24,
       clearance: 0.45,
-      flightTimeMin: 0,
-      flightTimeMax: 0,
+      flightTime: 0,
+      flightTimePerfect: 0,
       depthShort: 3.5,
       depthNeutral: 6.5,
       depthLong: 8.8,
       spin: 0.25,
     },
     slice: {
-      speedMin: 13,
-      speedMax: 18,
+      speed: 15.5,
+      speedPerfect: 18,
       clearance: 0.3,
-      flightTimeMin: 0,
-      flightTimeMax: 0,
+      flightTime: 0,
+      flightTimePerfect: 0,
       depthShort: 2.5,
       depthNeutral: 5.5,
       depthLong: 8.3,
       spin: -0.3,
     },
     lob: {
-      speedMin: 30,
-      speedMax: 30,
+      speed: 30,
+      speedPerfect: 30,
       clearance: 2.5,
-      flightTimeMin: 1.6,
-      flightTimeMax: 1.8,
+      flightTime: 1.75,
+      flightTimePerfect: 1.6,
       depthShort: 6.5,
       depthNeutral: 8.2,
       depthLong: 9.2,
@@ -330,13 +345,15 @@ export const ARCADE: PhysicsProfile = {
   },
   rally: {
     ...REALISTIC.rally,
-    chargeTime: 0.55, // [à calibrer VT4 : durée de charge]
+    // [à calibrer en jouant : VT4 confirme seulement qu'un maintien trop long rate le coup]
+    perfectBefore: 0.07,
+    perfectAfter: 0.05,
     reach: 1.25, // [à calibrer VT4 : portée]
     aimWindow: 0.3, // [à calibrer VT4 : quand le stick vise-t-il au lieu de déplacer ?]
     manualAimBonus: 1.25, // [à calibrer VT4]
-    normal: { ...REALISTIC.rally.normal, speedMin: 11, speedMax: 17 }, // [à calibrer VT4 : vitesses de balle]
-    slice: { ...REALISTIC.rally.slice, speedMin: 9.5, speedMax: 13 }, // [à calibrer VT4]
-    lob: { ...REALISTIC.rally.lob, flightTimeMin: 1.9, flightTimeMax: 2.1 }, // [à calibrer VT4 : temps de vol]
+    normal: { ...REALISTIC.rally.normal, speed: 15.5, speedPerfect: 18.5 }, // [à calibrer VT4 : vitesses de balle]
+    slice: { ...REALISTIC.rally.slice, speed: 11.5, speedPerfect: 13.5 }, // [à calibrer VT4]
+    lob: { ...REALISTIC.rally.lob, flightTime: 2.05, flightTimePerfect: 1.9 }, // [à calibrer VT4 : temps de vol]
   },
   gravity: 8, // [à calibrer VT4 : temps de vol typiques] balle plus « flottante »
   magnusScale: 0.7, // [à calibrer VT4]

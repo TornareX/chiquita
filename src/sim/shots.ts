@@ -26,13 +26,13 @@ export function shotTuning(kind: ShotKind, profile: PhysicsProfile): ShotTypeTun
 
 /**
  * Point de chute visé dans le camp adverse, d'après le stick au moment de l'impact.
- * Sans direction : coup sûr, au centre. La charge élargit la plage latérale (coup plus précis).
+ * Sans direction : coup sûr, au centre. La frappe parfaite élargit la plage latérale (coup plus précis).
  */
 export function aimTarget(
   kind: ShotKind,
   side: CourtSide,
   aim: ArcadeCommands['stick'],
-  charge: number,
+  perfect: boolean,
   profile: PhysicsProfile,
   /** Multiplicateur de la plage latérale (récompense du placement manuel). */
   widthFactor = 1,
@@ -41,7 +41,7 @@ export function aimTarget(
   const r = profile.rally;
   const forward = clamp(aim.forward, -1, 1);
   const depth = forward >= 0 ? mix(t.depthNeutral, t.depthLong, forward) : mix(t.depthNeutral, t.depthShort, -forward);
-  const width = mix(r.aimWidthMin, r.aimWidthMax, charge) * widthFactor;
+  const width = (perfect ? r.aimWidthPerfect : r.aimWidth) * widthFactor;
   const x = clamp(clamp(aim.right, -1, 1) * width * rightFor(side).x, -(HALF_WIDTH - 0.6), HALF_WIDTH - 0.6);
   return vec3(x, BALL_RADIUS, -side * depth);
 }
@@ -86,7 +86,7 @@ export function solveShot(
   kind: ShotKind,
   contact: Vec3,
   target: Vec3,
-  charge: number,
+  perfect: boolean,
   profile: PhysicsProfile,
 ): SolvedShot {
   const t = shotTuning(kind, profile);
@@ -100,12 +100,13 @@ export function solveShot(
   const netTop = netHeightAt(xAtNet) + BALL_RADIUS;
 
   let flightTime: number;
-  if (t.flightTimeMax > 0) {
-    flightTime = mix(t.flightTimeMax, t.flightTimeMin, charge);
+  if (t.flightTime > 0) {
+    flightTime = perfect ? t.flightTimePerfect : t.flightTime;
   } else {
-    const fastest = distance / mix(t.speedMin, t.speedMax, charge);
+    const fastest = distance / (perfect ? t.speedPerfect : t.speed);
     // Parabole sans air : hauteur au filet = y0 + (yL - y0)·f + g·T²·f(1-f)/2.
-    const rise = netTop + t.clearance - contact.y - (target.y - contact.y) * f;
+    const clearance = t.clearance * (perfect ? profile.rally.perfectClearance : 1);
+    const rise = netTop + clearance - contact.y - (target.y - contact.y) * f;
     const clearing = rise > 0 ? Math.sqrt((2 * rise) / (g * f * (1 - f))) : 0;
     flightTime = Math.max(fastest, clearing, 0.3);
   }
