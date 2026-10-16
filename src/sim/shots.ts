@@ -46,6 +46,18 @@ export function aimTarget(
   return vec3(x, BALL_RADIUS, -side * depth);
 }
 
+/**
+ * Frappe en retard : relâchée après la sous-fenêtre parfaite, la balle part plus large et plus long,
+ * d'autant plus que le retard approche la fin de la fenêtre. Déterministe : même retard, même écart.
+ */
+export function lateDrift(target: Vec3, side: CourtSide, timing: number, profile: PhysicsProfile): Vec3 {
+  const r = profile.rally;
+  if (timing <= r.perfectAfter) return target;
+  const k = Math.min(1, (timing - r.perfectAfter) / (r.lateWindow - r.perfectAfter));
+  const outward = target.x >= 0 ? 1 : -1;
+  return vec3(target.x + outward * k * r.lateDriftLateral, target.y, target.z - side * k * r.lateDriftDepth);
+}
+
 /** Simule le vol libre (sans collision) pendant `seconds` et retourne la position atteinte. */
 function flyFor(pos: Vec3, vel: Vec3, spin: Vec3, seconds: number, profile: PhysicsProfile): Vec3 {
   const ball = createBall(pos, vel, spin);

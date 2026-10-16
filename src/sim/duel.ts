@@ -4,7 +4,9 @@ import { stepBall, type Contact } from './collisions';
 import { NEUTRAL_ARCADE, type ArcadeCommands, type ShotKind } from './commands';
 import { SIM_DT } from './constants';
 import { ARCADE, type PhysicsProfile } from './profile';
-import { aimTarget, forwardFor, rightFor, solveShot, type CourtSide } from './shots';
+import { Match, type MatchRules, type PointOutcome, type ServeSide } from './score';
+import { inServiceBox, serveIdealTick, servePositions, serveTarget } from './serve';
+import { aimTarget, forwardFor, lateDrift, rightFor, solveShot, type CourtSide } from './shots';
 import { addScaled, length, vec3, type Vec3 } from './vec3';
 
 /**
@@ -81,7 +83,8 @@ export type PointReason =
   | 'opponent-wall'
   | 'out'
   | 'second-bounce'
-  | 'not-returned';
+  | 'not-returned'
+  | 'double-fault';
 
 export interface PointResult {
   winner: 0 | 1;
@@ -90,11 +93,41 @@ export interface PointResult {
   hits: number;
 }
 
-export type DuelPhase = 'serve' | 'rally' | 'dead';
+/**
+ * - `serve` : le serveur a la balle en main ;
+ * - `toss` : il l'a lâchée (bouton maintenu), elle rebondit, il la frappe en relâchant ;
+ * - `rally` : balle en jeu ; `dead` : pause après un point, une faute ou un let ;
+ * - `over` : match terminé, un appui relance une partie.
+ */
+export type DuelPhase = 'serve' | 'toss' | 'rally' | 'dead' | 'over';
+
+/**
+ * Faute de service : `late` = maintenu trop longtemps, la balle n'est pas frappée ; `net` = dans le
+ * filet ; `box` = hors du carré de service ; `wall` = vitre ou grillage avant le rebond, ou grillage après.
+ */
+export type ServeFault = 'late' | 'net' | 'box' | 'wall';
+
+/** Annonce sur un service : faute, ou let (filet puis bon carré, le service est rejoué). */
+export interface ServeCall {
+  call: 'fault' | 'let';
+  reason: ServeFault | null;
+  /** Service concerné : premier ou second. */
+  serveNumber: 1 | 2;
+}
+
+/** Balle lâchée par le serveur, bouton maintenu. */
+export interface Toss {
+  kind: ShotKind;
+  releaseTick: number | null;
+  /** Pas du moment idéal pour frapper : le sommet du rebond. */
+  idealTick: number;
+}
 
 /** Délai minimal avant de pouvoir servir, et pause après un point (s). */
 const SERVE_DELAY = 0.4;
 const DEAD_TIME = 1.4;
+/** Pause après une faute de service ou un let (s). */
+const FAULT_TIME = 1;
 /** Un échange sans frappe pendant ce temps est arrêté (balle coincée). */
 const STALL_TIME = 8;
 /** Position d'attente et de service, en distance au filet (m). */
@@ -120,7 +153,8 @@ function createDuelPlayer(side: CourtSide): DuelPlayer {
 }
 
 /**
- * Échange libre en 1 contre 1, sans score (GAME_DESIGN.md §12, étape A).
+ * Match en 1 contre 1 (GAME_DESIGN.md §12, étape B), ou échange libre sans score (étape A) si aucune
+ * règle de match n'est donnée. Le service suit les règles FIP dans les deux cas.
  * Avance uniquement par pas fixes, déterministe : mêmes commandes, même échange.
  * Joueur 0 côté Z négatif (près de la caméra), joueur 1 en face.
  */
@@ -149,6 +183,33 @@ export class Duel {
   /** Point terminé pendant le dernier pas, sinon `null`. */
   result: PointResult | null = null;
   lastResult: PointResult | null = null;
+  /** Score du match, ou `null` en échange libre. */
+  match: Match | null = null;
+  /** Ce qu'a terminé le dernier point (jeu, set, match), en match seulement. */
+  lastOutcome: PointOutcome | null = null;
+  serveNumber: 1 | 2 = 1;
+  serveSide: ServeSide = 'right';
+  toss: Toss | null = null;
+  /** Faute ou let annoncé pendant le dernier pas, sinon `null`. */
+  serveCall: ServeCall | null = null;
+  lastServeCall: ServeCall | null = null;
+  /** Après la pause, le service est rejoué (faute de premier service ou let) au lieu d'un nouveau point. */
+  private replayServe = false;
+
+  constructor(readonly rules: MatchRules | null = null) {
+    this.restart();
+  }
+
+  /** Nouvelle partie : score à zéro, premier service au joueur 0. */
+  restart(): void {
+    this.match = this.rules ? new Match(this.rules) : null;
+    this.bestRally = 0;
+    this.rallies = 0;
+    this.lastResult = null;
+    this.lastOutcome = null;
+    this.lastServeCall = null;
+    this.startServe(0);
+  }
 
   get time(): number {
     return this.tick * SIM_DT;
@@ -159,11 +220,11 @@ export class Duel {
     return this.phase === 'rally' && this.lastHitter !== null && this.lastHitter !== index;
   }
 
-  /** Position de la balle tenue par le serveur, avant le service. */
+  /** Position de la balle tenue par le serveur, avant le service : côté coup droit. */
   servePosition(): Vec3 {
     const player = this.players[this.server];
     return vec3(
-      player.pos.x - rightFor(player.side).x * this.profile.rally.standLateral,
+      player.pos.x + rightFor(player.side).x * this.profile.rally.standLateral,
       SERVE_HEIGHT,
       player.pos.z + forwardFor(player.side).z * 0.25,
     );
@@ -173,6 +234,7 @@ export class Duel {
     this.contacts.length = 0;
     this.shot = null;
     this.result = null;
+    this.serveCall = null;
 
     for (const index of [0, 1] as const) this.updatePlayer(index, commands[index]);
 
@@ -180,14 +242,20 @@ export class Duel {
       this.prevBallPos = this.ball.pos;
       stepBall(this.ball, SIM_DT, this.profile, this.contacts);
     }
-    if (this.phase === 'rally') {
+    if (this.phase === 'toss') {
+      this.updateToss();
+    } else if (this.phase === 'rally') {
       this.judge();
       if (this.phase === 'rally') for (const index of [0, 1] as const) this.tryHit(index);
       if (this.phase === 'rally' && this.tick - this.lastHitTick() > STALL_TIME / SIM_DT) {
         this.endPoint(this.lastHitter ?? 0, 'not-returned');
       }
-    } else if (this.phase === 'dead' && this.tick - this.phaseTick >= DEAD_TIME / SIM_DT) {
-      this.startServe(this.server === 0 ? 1 : 0);
+    } else if (this.phase === 'dead' && this.tick - this.phaseTick >= (this.replayServe ? FAULT_TIME : DEAD_TIME) / SIM_DT) {
+      if (this.replayServe) this.startServe(this.server, false);
+      else if (this.match?.winner != null) {
+        this.phase = 'over';
+        this.phaseTick = this.tick;
+      } else this.startServe(this.match ? this.match.server : this.server === 0 ? 1 : 0);
     }
     this.tick++;
   }
@@ -196,10 +264,26 @@ export class Duel {
     return Math.max(this.players[0].lastHitTick, this.players[1].lastHitTick);
   }
 
-  private startServe(server: 0 | 1): void {
+  /** Prépare un service : nouveau point, ou service rejoué (second service, let). */
+  private startServe(server: 0 | 1, newPoint = true): void {
     this.phase = 'serve';
     this.phaseTick = this.tick;
     this.server = server;
+    this.replayServe = false;
+    if (newPoint) this.serveNumber = 1;
+    this.serveSide = this.match ? this.match.serveSide : this.rallies % 2 === 0 ? 'right' : 'left';
+    // Serveur et receveur prennent place en diagonale.
+    const spots = servePositions(this.players[server].side, this.serveSide, this.profile);
+    const receiver = server === 0 ? 1 : 0;
+    for (const [index, pos] of [
+      [server, spots.server],
+      [receiver, spots.receiver],
+    ] as const) {
+      const player = this.players[index];
+      player.pos = player.prevPos = pos;
+      player.vel = vec3(0, 0, 0);
+    }
+    this.toss = null;
     this.ball = null;
     this.prevBallPos = null;
     this.lastHitter = null;
@@ -213,6 +297,9 @@ export class Duel {
   private endPoint(winner: 0 | 1, reason: PointReason): void {
     const result: PointResult = { winner, reason, hits: this.hits };
     this.result = this.lastResult = result;
+    if (this.match) this.lastOutcome = this.match.awardPoint(winner);
+    this.lastServeCall = null;
+    this.replayServe = false;
     this.bestRally = Math.max(this.bestRally, this.hits);
     this.rallies++;
     this.phase = 'dead';
@@ -232,11 +319,27 @@ export class Duel {
       player.engagement.releaseTick = this.tick;
     }
 
-    if (this.phase === 'serve' && index === this.server) {
-      if (pressed && this.tick - this.phaseTick >= SERVE_DELAY / SIM_DT) this.serve(index, pressed, cmd);
-    } else if (
+    if (this.phase === 'over') {
+      if (pressed && this.tick - this.phaseTick >= DEAD_TIME / SIM_DT) this.restart();
+      return;
+    }
+    if ((this.phase === 'serve' || this.phase === 'toss') && index === this.server) {
+      // Appuyer lâche la balle ; relâcher la frappe (voir `updateToss`).
+      if (this.phase === 'serve' && pressed && this.tick - this.phaseTick >= SERVE_DELAY / SIM_DT) {
+        this.startToss(pressed);
+      } else if (this.phase === 'toss' && this.toss) {
+        if (pressed) {
+          this.toss.kind = pressed;
+          this.toss.releaseTick = null;
+        } else if (cmd.shot === null) this.toss.releaseTick ??= this.tick;
+      }
+      // Le serveur reste en place jusqu'à sa frappe.
+      player.vel = vec3(0, 0, 0);
+      return;
+    }
+    if (
       pressed &&
-      this.phase === 'rally' &&
+      (this.phase === 'rally' || this.phase === 'toss') &&
       !player.whiffed &&
       this.tick - player.lastHitTick >= r.recoverTime / SIM_DT
     ) {
@@ -311,13 +414,51 @@ export class Duel {
     player.pos = vec3(moved.x, 0, moved.z);
   }
 
-  private serve(index: 0 | 1, kind: ShotKind, cmd: ArcadeCommands): void {
+  /** Le serveur lâche la balle : elle rebondit, il la frappera au relâcher. */
+  private startToss(kind: ShotKind): void {
     const contact = this.servePosition();
     this.ball = createBall(contact, vec3(0, 0, 0));
     this.prevBallPos = contact;
+    this.phase = 'toss';
+    this.phaseTick = this.tick;
+    this.toss = { kind, releaseTick: null, idealTick: serveIdealTick(this.ball, this.tick, this.profile) };
+  }
+
+  /**
+   * Frappe de service, même fenêtre de timing qu'en échange : relâché avant le sommet du rebond, le
+   * service part au sommet ; autour du sommet, frappe parfaite ; maintenu trop longtemps, faute.
+   */
+  private updateToss(): void {
+    const toss = this.toss;
+    const ball = this.ball;
+    if (!toss || !ball || this.tick < toss.idealTick) return;
+    const r = this.profile.rally;
+    if (toss.releaseTick === null) {
+      if ((this.tick - toss.idealTick) * SIM_DT > r.lateWindow) this.serveFault('late');
+      return;
+    }
+    const timing = (toss.releaseTick - toss.idealTick) * SIM_DT;
+    const perfect = timing >= -r.perfectBefore && timing <= r.perfectAfter;
+    const player = this.players[this.server];
+    const aimed = serveTarget(player.side, this.serveSide, player.stick, perfect, this.profile);
+    const target = lateDrift(aimed, player.side, timing, this.profile);
     this.phase = 'rally';
     this.phaseTick = this.tick;
-    this.hit(index, kind, contact, cmd.stick, false, 0, false, true, false);
+    this.toss = null;
+    this.hit(this.server, toss.kind, ball.pos, target, perfect, timing, false, true, false);
+  }
+
+  /** Faute de service (`reason`) ou let (`null`) : le service est rejoué, ou le point perdu sur double faute. */
+  private serveFault(reason: ServeFault | null): void {
+    const call: ServeCall = { call: reason ? 'fault' : 'let', reason, serveNumber: this.serveNumber };
+    this.serveCall = this.lastServeCall = call;
+    this.toss = null;
+    if (reason && this.serveNumber === 2) return this.endPoint(this.server === 0 ? 1 : 0, 'double-fault');
+    if (reason) this.serveNumber = 2;
+    this.replayServe = true;
+    this.phase = 'dead';
+    this.phaseTick = this.tick;
+    for (const player of this.players) player.engagement = null;
   }
 
   /**
@@ -331,6 +472,8 @@ export class Duel {
     const engagement = player.engagement;
     const ball = this.ball;
     if (!engagement || !ball || ball.out || !this.isReceiving(index)) return;
+    // Le service doit rebondir avant d'être renvoyé.
+    if (this.hits === 1 && this.bounces === 0) return;
     const r = this.profile.rally;
     const distance = flatDistance(ball.pos, player.pos);
     const heightOk = ball.pos.y >= r.hitLow && ball.pos.y <= r.hitHigh;
@@ -361,7 +504,10 @@ export class Duel {
     if (!heightOk || distance > r.reach * (sinceReady > 0 ? r.lateReach : 1)) return this.whiff(index);
     const timing = (engagement.releaseTick - engagement.readyTick) * SIM_DT;
     const perfect = timing >= -r.perfectBefore && timing <= r.perfectAfter;
-    this.hit(index, engagement.kind, ball.pos, player.stick, perfect, timing, volley, false, engagement.manual);
+    const bonus = engagement.manual ? r.manualAimBonus : 1;
+    const aimed = aimTarget(engagement.kind, player.side, player.stick, perfect, this.profile, bonus);
+    const target = lateDrift(aimed, player.side, timing, this.profile);
+    this.hit(index, engagement.kind, ball.pos, target, perfect, timing, volley, false, engagement.manual);
   }
 
   /** Coup raté par maintien trop long : la balle passe, le joueur ne peut plus la reprendre. */
@@ -376,7 +522,7 @@ export class Duel {
     index: 0 | 1,
     kind: ShotKind,
     contact: Vec3,
-    stick: ArcadeCommands['stick'],
+    target: Vec3,
     perfect: boolean,
     timing: number,
     volley: boolean,
@@ -384,8 +530,6 @@ export class Duel {
     manual: boolean,
   ): void {
     const player = this.players[index];
-    const bonus = manual ? this.profile.rally.manualAimBonus : 1;
-    const target = aimTarget(kind, player.side, stick, perfect, this.profile, bonus);
     const solved = solveShot(kind, contact, target, perfect, this.profile);
     const ball = this.ball!;
     ball.vel = solved.vel;
@@ -411,7 +555,7 @@ export class Duel {
     };
   }
 
-  /** Règles du padel appliquées aux contacts du pas (sans service ni score à cette étape). */
+  /** Règles du padel appliquées aux contacts du pas. */
   private judge(): void {
     const hitter = this.lastHitter;
     if (hitter === null) return;
@@ -419,6 +563,28 @@ export class Duel {
     const hitterSide = this.players[hitter].side;
     for (const contact of this.contacts) {
       const hitterHalf = contact.pos.z * hitterSide > 0;
+      if (this.hits === 1) {
+        // Service pas encore renvoyé : il doit rebondir dans le carré en diagonale, et ne toucher
+        // ni vitre avant le rebond, ni grillage du tout.
+        switch (contact.surface) {
+          case 'ground':
+            if (this.bounces > 0) break;
+            if (!hitterHalf && inServiceBox(contact.pos, -hitterSide as CourtSide, this.serveSide)) {
+              if (this.touchedNet) return this.serveFault(null);
+              this.bounces = 1;
+              continue;
+            }
+            return this.serveFault(hitterHalf ? 'net' : 'box');
+          case 'glass':
+            if (this.bounces === 0) return this.serveFault('wall');
+            break;
+          case 'mesh':
+            return this.serveFault('wall');
+          case 'out':
+            if (this.bounces === 0) return this.serveFault('box');
+            break;
+        }
+      }
       switch (contact.surface) {
         case 'ground':
           if (hitterHalf) {

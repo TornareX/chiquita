@@ -5,9 +5,10 @@ import { Prng } from './prng';
 import { forwardFor, rightFor } from './shots';
 
 /**
- * Joueur automatique de l'échange arcade. Il ne triche pas : il ne produit que des commandes,
- * comme une manette (appui sur un bouton, stick), et ne lit que ce qu'un humain voit à l'écran.
- * Il sert à vérifier que l'échange est jouable, pas à faire une IA d'adversaire.
+ * Joueur automatique. Il ne triche pas : il ne produit que des commandes, comme une manette (appui
+ * sur un bouton, stick), et ne lit que ce qu'un humain voit à l'écran. Avec les réglages par défaut,
+ * il sert à vérifier que l'échange est jouable ; avec `AI_LEVELS`, c'est l'adversaire du joueur.
+ * Sa difficulté joue sur la lecture et la précision, jamais sur la physique (GAME_DESIGN.md §7).
  */
 export interface BotOptions {
   /** Temps de réaction après la frappe adverse avant d'appuyer (s). */
@@ -28,6 +29,11 @@ export interface BotOptions {
    * laisser la course assistée faire. Sinon, il ne touche au stick que pour viser, juste avant l'impact.
    */
   manualPlacement: boolean;
+  /**
+   * Joue placé : vise le côté où l'adversaire n'est pas, lobe un adversaire monté au filet. Sinon,
+   * type et direction du coup sont tirés au hasard.
+   */
+  tactics: boolean;
 }
 
 export const DEFAULT_BOT: BotOptions = {
@@ -37,6 +43,37 @@ export const DEFAULT_BOT: BotOptions = {
   aim: 0.7,
   release: null,
   manualPlacement: false,
+  tactics: false,
+};
+
+export type AiLevel = 'facile' | 'normal' | 'fort';
+export const AI_LEVEL_NAMES: readonly AiLevel[] = ['facile', 'normal', 'fort'];
+
+/**
+ * Adversaires de l'étape B. [à calibrer en jouant] Le facile tape souvent tôt ou en retard (coups
+ * normaux, quelques ratés) ; le fort relâche presque toujours dans la fenêtre parfaite et place la balle.
+ */
+export const AI_LEVELS: Record<AiLevel, BotOptions> = {
+  facile: {
+    ...DEFAULT_BOT,
+    reaction: 0.35,
+    aim: 0.45,
+    release: { offset: 0.02, spread: 0.15 },
+  },
+  normal: {
+    ...DEFAULT_BOT,
+    reaction: 0.25,
+    aim: 0.75,
+    release: { offset: 0.01, spread: 0.12 },
+    tactics: true,
+  },
+  fort: {
+    ...DEFAULT_BOT,
+    reaction: 0.15,
+    aim: 0.95,
+    release: { offset: 0, spread: 0.085 },
+    tactics: true,
+  },
 };
 
 export class Bot {
@@ -55,23 +92,40 @@ export class Bot {
     this.prng = new Prng(seed);
   }
 
-  /** Décide d'un nouveau coup : type et direction, tirés au hasard (reproductible). */
-  private chooseShot(): void {
+  /** Décide d'un nouveau coup : type et direction (reproductible). Au service, `duel` est omis. */
+  private chooseShot(duel?: Duel): void {
     const roll = this.prng.next();
     const { normalShare, sliceShare, aim } = this.options;
     this.kind = roll < normalShare ? 'normal' : roll < normalShare + sliceShare ? 'slice' : 'lob';
     const clamp = (v: number): number => Math.max(-1, Math.min(1, v));
     this.stick = { forward: clamp(this.prng.range(-0.4, 0.8) * aim), right: clamp(this.prng.range(-1, 1) * aim) };
+    if (this.options.tactics && duel) {
+      const me = duel.players[this.index];
+      const opponent = duel.players[this.index === 0 ? 1 : 0];
+      // Adversaire au filet : le lob le passe ; sinon, balle profonde du côté libre.
+      if (Math.abs(opponent.pos.z) < 4.5 && this.prng.next() < 0.6) this.kind = 'lob';
+      else if (this.kind === 'lob') this.kind = 'normal';
+      // Côté libre, vu du joueur : à l'opposé de l'adversaire (au hasard s'il est au centre).
+      const open = Math.abs(opponent.pos.x) > 0.6 ? -Math.sign(opponent.pos.x) : this.prng.next() < 0.5 ? -1 : 1;
+      const right = open * rightFor(me.side).x;
+      this.stick = {
+        forward: clamp(this.prng.range(0.2, 1) * aim),
+        right: clamp(right * this.prng.range(0.6, 1) * aim),
+      };
+    }
     const { release } = this.options;
     this.releaseOffset = release ? release.offset + this.prng.range(-1, 1) * release.spread : 0;
   }
 
-  /** Bouton à tenir pendant la préparation : maintenu jusqu'au moment choisi pour relâcher. */
+  /**
+   * Bouton à tenir pendant la préparation : maintenu jusqu'au moment choisi pour relâcher. Le moment
+   * d'impact est lu comme un humain le voit : point de course assistée, ou sommet du rebond au service.
+   */
   private holding(duel: Duel): ShotKind | null {
     const me = duel.players[this.index];
-    const plan = me.engagement?.plan;
-    if (!this.options.release || !plan || me.heldShot === null) return null;
-    return duel.tick < plan.tick + Math.round(this.releaseOffset / SIM_DT) ? me.heldShot : null;
+    const impact = duel.phase === 'toss' ? duel.toss?.idealTick : me.engagement?.plan?.tick;
+    if (!this.options.release || impact === undefined || me.heldShot === null) return null;
+    return duel.tick < impact + Math.round(this.releaseOffset / SIM_DT) ? me.heldShot : null;
   }
 
   commands(duel: Duel): ArcadeCommands {
@@ -83,11 +137,14 @@ export class Bot {
       return { stick, shot: this.kind };
     };
 
-    if (duel.phase === 'serve' && duel.server === this.index) {
+    if (duel.phase === 'serve' || duel.phase === 'toss') {
+      if (duel.server !== this.index) return NEUTRAL_ARCADE;
+      if (duel.phase === 'toss') return { stick: this.stick, shot: this.holding(duel) };
       if (duel.tick - duel.phaseTick < 0.6 / SIM_DT) return NEUTRAL_ARCADE;
       if (this.pressedFor === null || this.pressedFor < duel.phaseTick) this.chooseShot();
       return press();
     }
+    if (duel.phase === 'over') return NEUTRAL_ARCADE;
 
     if (duel.isReceiving(this.index)) {
       const opponentHit = duel.players[this.index === 0 ? 1 : 0].lastHitTick;
@@ -116,7 +173,7 @@ export class Bot {
         return { stick: aiming ? this.stick : { forward: 0, right: 0 }, shot: this.holding(duel) };
       }
       if (duel.tick - opponentHit >= this.options.reaction / SIM_DT) {
-        if (this.pressedFor === null || this.pressedFor < opponentHit) this.chooseShot();
+        if (this.pressedFor === null || this.pressedFor < opponentHit) this.chooseShot(duel);
         // Il appuie stick au repos : il visera plus tard, juste avant l'impact.
         return press({ forward: 0, right: 0 });
       }

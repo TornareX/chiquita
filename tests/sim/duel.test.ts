@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { Bot, DEFAULT_BOT, type BotOptions } from '../../src/sim/bot';
 import { NEUTRAL_ARCADE, type ArcadeCommands } from '../../src/sim/commands';
 import { SIM_DT } from '../../src/sim/constants';
+import { HALF_LENGTH } from '../../src/sim/constants';
 import { Duel, type AssistLevel, type DuelShot, type PointResult } from '../../src/sim/duel';
+import { ARCADE } from '../../src/sim/profile';
+import { aimTarget, lateDrift } from '../../src/sim/shots';
+import type { Vec3 } from '../../src/sim/vec3';
 
 /**
  * Fait jouer deux joueurs automatiques pendant `seconds` secondes simulées, via les mêmes commandes
@@ -11,7 +15,8 @@ import { Duel, type AssistLevel, type DuelShot, type PointResult } from '../../s
 function play(
   seconds: number,
   seed: number,
-  options: BotOptions = DEFAULT_BOT,
+  /** Réglages des deux joueurs automatiques, ou les mêmes pour les deux. */
+  options: BotOptions | readonly [BotOptions, BotOptions] = DEFAULT_BOT,
   assist: AssistLevel = 'full',
 ): { results: PointResult[]; ongoing: number; manualShots: number; shots: DuelShot[]; whiffs: number } {
   const duel = new Duel();
@@ -19,7 +24,8 @@ function play(
   let manualShots = 0;
   let whiffs = 0;
   const shots: DuelShot[] = [];
-  const bots = [new Bot(0, seed, options), new Bot(1, seed + 1, options)] as const;
+  const [a, b] = Array.isArray(options) ? options : [options, options];
+  const bots = [new Bot(0, seed, a as BotOptions), new Bot(1, seed + 1, b as BotOptions)] as const;
   const results: PointResult[] = [];
   while (duel.time < seconds) {
     duel.step([bots[0].commands(duel), bots[1].commands(duel)]);
@@ -77,6 +83,8 @@ describe('assistance partielle', () => {
     const serve: ArcadeCommands = { stick: { forward: 0, right: 0 }, shot: 'normal' };
     for (let i = 0; i < 0.5 / SIM_DT; i++) duel.step();
     duel.step([serve, NEUTRAL_ARCADE]);
+    // Balle lâchée : le service part au sommet du rebond.
+    while (duel.phase !== 'rally') duel.step();
     duel.step();
     duel.step([NEUTRAL_ARCADE, { stick: heldAtPress, shot: 'normal' }]);
     for (let i = 1; i < 0.3 / SIM_DT; i++) duel.step([NEUTRAL_ARCADE, { stick: stick(i), shot: null }]);
@@ -119,18 +127,37 @@ describe('fenêtre de timing : maintenir puis relâcher', () => {
   });
 
   it('relâcher un peu après l’impact : coup normal, dans la fenêtre de retard', () => {
-    const { shots, whiffs } = play(60, 7, { ...DEFAULT_BOT, release: { offset: 0.09, spread: 0 } });
+    const { shots, whiffs } = play(60, 7, { ...DEFAULT_BOT, release: { offset: 0.06, spread: 0 } });
     const rally = rallyShots(shots);
     expect(rally.length).toBeGreaterThan(10);
     expect(rally.every((shot) => !shot.perfect && shot.timing > 0)).toBe(true);
     expect(whiffs).toBe(0);
   });
 
+  it('plus le relâcher est tardif, plus la balle part large et long', () => {
+    const p = ARCADE;
+    const aimed = aimTarget('normal', -1, { forward: 0, right: 0.5 }, false, p);
+    const at = (timing: number): Vec3 => lateDrift(aimed, -1, timing, p);
+    expect(at(-0.3)).toEqual(aimed);
+    expect(at(p.rally.perfectAfter)).toEqual(aimed);
+    const a = at(0.07);
+    const b = at(p.rally.lateWindow);
+    expect(Math.abs(b.x)).toBeGreaterThan(Math.abs(a.x));
+    expect(Math.abs(a.x)).toBeGreaterThan(Math.abs(aimed.x));
+    expect(b.z).toBeGreaterThan(a.z);
+    // En fin de fenêtre, un coup au neutre finit au-delà de la vitre du fond : faute.
+    expect(b.z).toBeGreaterThan(HALF_LENGTH);
+  });
+
   it('maintenir trop longtemps : coup raté, point perdu, pas de seconde chance', () => {
-    const { shots, whiffs, results } = play(30, 7, { ...DEFAULT_BOT, release: { offset: 0.4, spread: 0 } });
+    // Le joueur 1 garde le bouton trop longtemps : il rate ses retours et ses services.
+    const late = { ...DEFAULT_BOT, release: { offset: 0.4, spread: 0 } };
+    const { shots, whiffs, results } = play(30, 7, [DEFAULT_BOT, late]);
     expect(rallyShots(shots)).toHaveLength(0);
     expect(whiffs).toBeGreaterThan(0);
-    expect(results.every((r) => r.hits === 1)).toBe(true);
+    expect(results.every((r) => r.winner === 0)).toBe(true);
+    expect(results.map((r) => r.reason)).toContain('double-fault');
+    expect(results.map((r) => r.reason)).toContain('second-bounce');
   });
 
   it('un joueur imprécis mélange frappes parfaites et coups normaux', () => {

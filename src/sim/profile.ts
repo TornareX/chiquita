@@ -136,6 +136,13 @@ export interface RallyTuning {
   lateWindow: number;
   /** Pendant la fenêtre de retard, la portée est multipliée par ce facteur (la balle a dépassé le joueur). */
   lateReach: number;
+  /**
+   * Frappe en retard (après la sous-fenêtre parfaite) : la cible s'écarte vers l'extérieur et vers le
+   * fond, proportionnellement au retard, jusqu'à ces distances en fin de fenêtre (m). Un coup visé
+   * profond et relâché tard finit dans la vitre adverse : c'est le risque de la fenêtre de timing.
+   */
+  lateDriftLateral: number;
+  lateDriftDepth: number;
   /** Frappe parfaite : passage au-dessus du filet multiplié par ce facteur (balle plus tendue). */
   perfectClearance: number;
   /** Écart latéral de la cible au stick à fond : coup normal, puis frappe parfaite (m). */
@@ -166,6 +173,22 @@ export interface RallyTuning {
   normal: ShotTypeTuning;
   slice: ShotTypeTuning;
   lob: ShotTypeTuning;
+  serve: ServeTuning;
+}
+
+/** Service à la cuillère, en diagonale. Distances en m ; profondeurs comptées depuis le filet. */
+export interface ServeTuning {
+  /** Écart au centre du serveur et du receveur, chacun de son côté de service. */
+  standLateral: number;
+  serverDepth: number;
+  receiverDepth: number;
+  /** Centre de la cible dans le carré, puis écart au stick à fond : coup normal, frappe parfaite. */
+  centerLateral: number;
+  aimWidth: number;
+  aimWidthPerfect: number;
+  depthShort: number;
+  depthNeutral: number;
+  depthLong: number;
 }
 
 /** Tous les coefficients de la physique, regroupés pour être modifiables à chaud. */
@@ -266,6 +289,8 @@ export const REALISTIC: PhysicsProfile = {
     perfectAfter: 0.05,
     lateWindow: 0.12,
     lateReach: 1.6,
+    lateDriftLateral: 2.5,
+    lateDriftDepth: 4.5,
     perfectClearance: 0.6,
     aimWidth: 3,
     aimWidthPerfect: 3.8,
@@ -311,6 +336,17 @@ export const REALISTIC: PhysicsProfile = {
       depthNeutral: 8.2,
       depthLong: 9.2,
       spin: 0.12,
+    },
+    serve: {
+      standLateral: 1.6,
+      serverDepth: 7.5,
+      receiverDepth: 8.6,
+      centerLateral: 2.4,
+      aimWidth: 1.4,
+      aimWidthPerfect: 2,
+      depthShort: 3.8,
+      depthNeutral: 5.3,
+      depthLong: 6.4,
     },
   },
   gravity: 9.81,

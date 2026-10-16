@@ -2,22 +2,38 @@ import { createSounds } from '../audio/sounds';
 import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands, type PadState } from '../input/gamepad';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { createDuelView } from '../render/duelScene';
-import { Bot } from '../sim/bot';
+import { AI_LEVEL_NAMES, AI_LEVELS, Bot, DEFAULT_BOT, type AiLevel } from '../sim/bot';
 import type { ArcadeCommands } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
 import { ASSIST_LEVELS, Duel, type AssistLevel } from '../sim/duel';
 import { FixedStepLoop } from '../sim/loop';
+import { DEFAULT_RULES, type MatchRules } from '../sim/score';
 import { createDuelHud } from '../ui/duelHud';
 
 /**
- * Mode principal (GAME_DESIGN.md §12, étape A) : échange libre en 1 contre 1, à deux manettes
- * ou au clavier. Paramètres : `?far=own` (directions du joueur d'en face vues de son côté),
- * `?bot=1`, `?bot=2` ou `?bot=both` (joueur automatique à la place d'un humain),
- * `?assist=full|partial|off` ou `?assist=full,off` (assistance de chaque joueur, sinon complète).
+ * Mode principal (GAME_DESIGN.md §12, étape B) : match en 1 contre 1, à deux manettes, au clavier
+ * ou contre l'IA. Paramètres :
+ * - `?ai=facile|normal|fort` : l'IA joue Rouge (ou les joueurs donnés par `?bot=`) ;
+ * - `?bot=1`, `?bot=2` ou `?bot=both` : joueur automatique à la place d'un humain ;
+ * - `?sets=2` (deux sets gagnants, sinon un), `?games=4` (jeux par set), `?gold=1` (punto de oro) ;
+ * - `?free=1` : échange libre sans score (étape A) ;
+ * - `?far=own` (directions du joueur d'en face vues de son côté),
+ *   `?assist=full|partial|off` ou `?assist=full,off` (assistance de chaque joueur, sinon complète).
  */
 export function startDuel(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
-  const duel = new Duel();
+  const positive = (name: string, fallback: number): number => {
+    const value = Number(params.get(name));
+    return Number.isInteger(value) && value > 0 ? value : fallback;
+  };
+  const rules: MatchRules | null = params.has('free')
+    ? null
+    : {
+        setsToWin: positive('sets', DEFAULT_RULES.setsToWin),
+        gamesPerSet: positive('games', DEFAULT_RULES.gamesPerSet),
+        goldenPoint: params.get('gold') === '1',
+      };
+  const duel = new Duel(rules);
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
   const keyboard = createKeyboardPads();
@@ -29,10 +45,14 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   window.addEventListener('gamepadconnected', () => sounds.unlock());
 
   const farOwnView = params.get('far') === 'own';
-  const botParam = params.get('bot');
+  const aiParam = params.get('ai');
+  const ai = AI_LEVEL_NAMES.includes(aiParam as AiLevel) ? (aiParam as AiLevel) : null;
+  const botOptions = ai ? AI_LEVELS[ai] : DEFAULT_BOT;
+  // `?ai=` seul : l'IA prend Rouge.
+  const botParam = params.get('bot') ?? (ai ? '2' : null);
   const bots = [
-    botParam === '1' || botParam === 'both' ? new Bot(0, 1) : null,
-    botParam === '2' || botParam === 'both' ? new Bot(1, 2) : null,
+    botParam === '1' || botParam === 'both' ? new Bot(0, 1, botOptions) : null,
+    botParam === '2' || botParam === 'both' ? new Bot(1, 2, botOptions) : null,
   ] as const;
   const sources: [string, string] = ['Clavier', 'Clavier'];
 
@@ -50,7 +70,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     const read = (index: 0 | 1): ArcadeCommands => {
       const bot = bots[index];
       if (bot) {
-        sources[index] = 'joueur automatique';
+        sources[index] = ai ? `IA ${ai}` : 'joueur automatique';
         return bot.commands(duel);
       }
       const pad = pads[index];

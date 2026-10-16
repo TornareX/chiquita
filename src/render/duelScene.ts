@@ -226,25 +226,27 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     view.racket.position.x = -0.35;
     view.racket.rotation.y = swing < 1 ? -Math.PI * 0.85 + swing * Math.PI * 1.4 : engaged ? -Math.PI * 0.8 : -0.4;
 
+    // Coup préparé, bouton maintenu : en échange, ou balle lâchée au service.
     const engagement = player.engagement;
-    view.timingRing.visible = engagement !== null && engagement.releaseTick === null;
-    view.standMarker.visible = false;
-    if (engagement) {
+    const toss = duel.phase === 'toss' && duel.players[duel.server] === player ? duel.toss : null;
+    const plan = engagement && !engagement.manual ? engagement.plan : null;
+    const preparing = toss ? toss.releaseTick === null : engagement !== null && engagement.releaseTick === null;
+    // Moment d'impact : sommet du rebond au service, point prévu par la course assistée en échange.
+    const impactTick = toss ? toss.idealTick : (plan?.tick ?? null);
+    view.timingRing.visible = preparing;
+    if (preparing) {
       const r = duel.profile.rally;
-      const plan = engagement.manual ? null : engagement.plan;
-      // Temps restant avant l'impact prévu ; sans point prévu, l'anneau reste à mi-chemin.
-      const remaining = plan ? (plan.tick - duel.tick - alpha) * SIM_DT : RING_LEAD / 2;
+      // Temps restant avant l'impact ; sans point prévu (placement manuel), l'anneau reste à mi-chemin.
+      const remaining = impactTick !== null ? (impactTick - duel.tick - alpha) * SIM_DT : RING_LEAD / 2;
       view.timingRing.scale.setScalar(1 + Math.min(1, Math.max(0, remaining / RING_LEAD)) * 1.2);
-      const inPerfect = plan !== null && remaining <= r.perfectBefore && remaining >= -r.perfectAfter;
+      const inPerfect = impactTick !== null && remaining <= r.perfectBefore && remaining >= -r.perfectAfter;
       view.timingMaterial.opacity = inPerfect ? 1 : 0.45;
       view.timingMaterial.color.set(inPerfect ? 0xffffff : view.color);
-      // En placement manuel, pas de point d'arrivée : le joueur se place lui-même.
-      const stand = plan?.stand;
-      if (stand) {
-        view.standMarker.position.set(stand.x, 0.011, stand.z);
-        view.standMarker.visible = true;
-      }
     }
+    // En placement manuel, pas de point d'arrivée : le joueur se place lui-même.
+    const stand = plan?.stand;
+    view.standMarker.visible = stand !== undefined;
+    if (stand) view.standMarker.position.set(stand.x, 0.011, stand.z);
   };
 
   return {
