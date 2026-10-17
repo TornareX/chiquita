@@ -474,3 +474,20 @@ toute autre balle haute se joue de volée (ou au sol). **Option à l'essai, le d
 - IA normale contre IA normale, 2 × 15 min (graines 3 et 11), épaules → lob : coups hauts 40 → 16 par partie (dont ~1/3
   sur des balles qui n'étaient pas des lobs avant, 0 après), volées 80 → 95, coups par point inchangés (~6), coups dans
   le vide inchangés, por tres toujours possibles.
+
+### E1, retour de Xavier : la préparation en défense ressemblait à un smash (17/10/2026)
+
+Au stick, la commande est toujours celle d'un coup haut (`HELD`) : c'est la hauteur de la balle qui décide. Le rendu
+lisait la commande et armait la raquette au-dessus de la tête même pour un coup droit de fond de court.
+443 tests OK (dont 3 de plus dans `tests/render/pose.test.ts`), typecheck OK, 8 tests navigateur (duel, double, stick,
+tutoriel) OK. **À rejouer à la manette.**
+
+- `plansHighShot` (`src/render/pose.ts`) reprend la règle de la simulation : hauteur du point d'impact prévu face à
+  `Duel.swingFloor` (au moins les yeux après un rebond ; épaules pour B aux boutons ; jamais en seuil `lob` hors lob).
+  Un coup dans le vide garde la famille de sa préparation.
+- Coup droit et revers refaits d'après la décomposition envoyée par Xavier (fléchir, préparation courte, rotation des
+  épaules et des hanches, contrôle) : jambes fléchies, raquette armée à hauteur d'épaule tête en haut, main libre qui
+  vise, contact bas devant soi, fin du geste par-dessus l'épaule opposée (raquette derrière la tête au coup droit). Les
+  hanches prennent 45 % de la rotation des épaules (`Pose.hipTwist`).
+- Planche des phases (préparation, impact, fin du geste, retour ; coup droit en haut, revers en bas) :
+  `screenshots/41-coup-droit-revers.png`, rendue en figeant la simulation et en déplaçant le pas de la frappe.

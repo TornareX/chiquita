@@ -7,6 +7,9 @@
  * Les directions des bras et de la raquette sont données dans le repère du buste, après sa torsion.
  */
 
+import type { Duel, DuelPlayer, Engagement } from '../sim/duel';
+import { bandejaHeight } from '../sim/shots';
+
 export type V3 = readonly [number, number, number];
 
 /** Famille du geste : coup droit, revers, au-dessus de la tête, service à la cuillère. */
@@ -19,8 +22,10 @@ export interface Pose {
   bob: number;
   /** Rotation du corps entier par rapport à la direction du filet (rad, + vers la gauche du joueur). */
   bodyYaw: number;
-  /** Torsion du buste sur le bassin (rad) : négative = épaule droite en arrière (coup droit armé). */
+  /** Rotation des épaules (rad) : négative = épaule droite en arrière (coup droit armé). */
   twist: number;
+  /** Part de cette rotation prise par les hanches (rad) ; le buste fait le reste. */
+  hipTwist: number;
   /** Inclinaison du buste vers l'avant (rad). */
   lean: number;
   /** Direction épaule → coude, bras droit (raquette) et bras gauche. */
@@ -60,21 +65,24 @@ function key(k: Omit<Key, 'face' | 'elbowR'> & { face?: V3; elbowR?: number }): 
 }
 
 /** Entre deux points : en attente dans l'échange, raquette devant soi, genoux fléchis. */
-const READY = key({ twist: 0, lean: 0.14, crouch: 0.07, armR: [-0.3, -0.7, 0.6], armL: [0.3, -0.6, 0.7], elbowR: 0.5, racket: [0.25, 0.85, 0.4] });
+const READY = key({ twist: 0, lean: 0.14, crouch: 0.09, armR: [-0.3, -0.7, 0.6], armL: [0.3, -0.6, 0.7], elbowR: 0.5, racket: [0.25, 0.85, 0.4] });
 /** Hors de l'échange (pause entre les points, service adverse pas encore lâché). */
 const REST = key({ twist: 0, lean: 0.03, crouch: 0, armR: [-0.2, -0.95, 0.15], armL: [0.2, -0.97, 0.05], elbowR: 0.2, racket: [-0.1, -0.5, 0.85], face: [-1, 0, 0] });
 
 /** Pour chaque famille : armé (préparation pleine), image d'impact, fin du geste. */
 const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
+  // Coup droit et revers d'après la décomposition d'un entraîneur (images de Xavier) : jambes fléchies,
+  // préparation courte tête de raquette en haut, épaules et hanches tournées, main libre qui vise (contrôle),
+  // contact bas devant soi, fin du geste par-dessus l'épaule opposée.
   fore: {
-    prep: key({ twist: -0.95, lean: 0.18, crouch: 0.12, armR: [-0.75, -0.35, -0.2], armL: [0.45, 0, 0.9], racket: [-0.2, 0.55, -0.8], face: [-1, 0, 0] }),
-    impact: key({ twist: -0.15, lean: 0.16, crouch: 0.1, armR: [-0.85, -0.3, 0.4], armL: [0.6, -0.5, 0.5], elbowR: 0.05, racket: [-0.75, 0.1, 0.65] }),
-    follow: key({ twist: 0.75, lean: 0.12, crouch: 0.06, armR: [0.1, 0.15, 1], armL: [0.2, -0.6, 0.5], elbowR: 0.6, racket: [0.7, 0.65, -0.2], face: [0, 0, -1] }),
+    prep: key({ twist: -1.2, lean: 0.2, crouch: 0.14, armR: [-0.75, -0.1, -0.65], armL: [0.55, 0.1, 0.85], elbowR: 1.0, racket: [-0.15, 0.85, -0.5], face: [-1, 0, 0] }),
+    impact: key({ twist: -0.15, lean: 0.35, crouch: 0.17, armR: [-0.6, -0.65, 0.45], armL: [0.75, -0.2, 0], elbowR: 0.2, racket: [-0.75, -0.15, 0.65] }),
+    follow: key({ twist: 0.95, lean: 0.15, crouch: 0.12, armR: [0.4, 0.55, 0.75], armL: [0.5, -0.6, 0.4], elbowR: 1.3, racket: [0.35, 0.35, -0.85], face: [1, 0, 0] }),
   },
   back: {
-    prep: key({ twist: 1.0, lean: 0.18, crouch: 0.12, armR: [0.55, -0.45, 0.2], armL: [0.2, -0.4, 0.5], elbowR: 0.4, racket: [0.5, 0.55, -0.65], face: [1, 0, 0] }),
-    impact: key({ twist: 0.15, lean: 0.16, crouch: 0.1, armR: [0.5, -0.35, 0.8], armL: [0.6, -0.6, -0.3], elbowR: 0.05, racket: [0.8, 0.1, 0.6] }),
-    follow: key({ twist: -0.6, lean: 0.1, crouch: 0.06, armR: [-0.4, 0.35, 0.85], armL: [0.7, -0.5, -0.3], elbowR: 0.3, racket: [-0.6, 0.75, 0.2], face: [0, 0, -1] }),
+    prep: key({ twist: 1.2, lean: 0.2, crouch: 0.14, armR: [0.65, -0.35, -0.25], armL: [0.45, -0.25, 0.3], elbowR: 0.6, racket: [0.25, 0.8, -0.55], face: [1, 0, 0] }),
+    impact: key({ twist: 0.2, lean: 0.35, crouch: 0.17, armR: [0.55, -0.6, 0.55], armL: [0.55, -0.45, -0.7], elbowR: 0.05, racket: [0.8, -0.15, 0.55] }),
+    follow: key({ twist: -0.6, lean: 0.15, crouch: 0.1, armR: [-0.6, 0.15, 0.75], armL: [0.6, -0.5, -0.6], elbowR: 0.3, racket: [-0.55, 0.75, 0.1], face: [-1, 0, 0] }),
   },
   overhead: {
     prep: key({ twist: -0.7, lean: -0.12, crouch: 0.04, armR: [-0.5, 0.8, -0.3], armL: [0.35, 0.9, 0.3], elbowR: 0.9, racket: [0.1, -0.3, -0.95], face: [-1, 0, 0] }),
@@ -93,6 +101,8 @@ export const FOLLOW_TIME = 0.28;
 export const RECOVER_TIME = 0.3;
 /** Préparation : la raquette est à moitié armée en ~0,12 s, entièrement à 0,6 s (comme le bonus de vitesse, §13). */
 const PREP_FULL = 0.6;
+/** Part de la rotation des épaules prise par les hanches. */
+const HIP_SHARE = 0.45;
 /** Longueur d'une foulée complète (deux pas, m) à pleine course, et vitesse de course de référence (m/s). */
 export const STRIDE = 1.7;
 const RUN_SPEED = 5;
@@ -210,6 +220,7 @@ export function computePose(input: PoseInput): Pose {
     bob: moving ? runBob : idleBob,
     bodyYaw: input.bodyYaw,
     twist: upper.twist,
+    hipTwist: upper.twist * HIP_SHARE,
     lean: upper.lean + run * 0.16 * Math.max(0, fwd),
     armR: upper.armR,
     armL: moving && !input.prep && !s ? mixDir(upper.armL, [0.3, -0.75, -Math.sin(input.stride) * 0.6], run) : upper.armL,
@@ -219,4 +230,19 @@ export function computePose(input: PoseInput): Pose {
     legR: leg(1),
     legL: leg(-1),
   };
+}
+
+/**
+ * La préparation en cours vise-t-elle un coup au-dessus de la tête ? Même règle que la simulation : la hauteur du
+ * point d'impact prévu face au seuil des coups hauts (`Duel.swingFloor` au stick, au moins les yeux après un
+ * rebond ; les épaules pour B aux boutons). Au stick, la commande est toujours celle d'un coup haut : seule la
+ * hauteur décide. Sans point prévu, coup au sol.
+ */
+export function plansHighShot(duel: Duel, player: DuelPlayer, engagement: Engagement): boolean {
+  const plan = engagement.plan;
+  if (!plan) return false;
+  const floor = duel.swingFloor(player.height);
+  // `swingFloor` infini : seuil `lob`, pas de coup haut sur cette balle, aux boutons non plus.
+  if (!engagement.swing) return engagement.kind === 'overhead' && floor !== Infinity && plan.contact.y >= duel.profile.rally.overheadLow;
+  return plan.contact.y >= (plan.volley ? floor : Math.max(floor, bandejaHeight(duel.profile, player.height) - 0.02));
 }

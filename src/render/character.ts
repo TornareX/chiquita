@@ -236,7 +236,9 @@ export function createCharacter(look: CharacterLook, jersey: number, height = PL
     apply(pose: Pose): void {
       body.rotation.y = pose.bodyYaw;
       hips.position.y = HIP_Y - pose.crouch + pose.bob;
-      torso.rotation.set(pose.lean, pose.twist, 0, 'YXZ');
+      // Les hanches tournent avec les épaules (jambes comprises : les pieds pivotent), le buste fait le reste.
+      hips.rotation.y = pose.hipTwist;
+      torso.rotation.set(pose.lean, pose.twist - pose.hipTwist, 0, 'YXZ');
       // La tête compense la moitié de la torsion : le joueur regarde la balle.
       head.rotation.y = -pose.twist * 0.5;
 

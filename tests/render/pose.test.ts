@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { bodyYawTarget, computePose, FOLLOW_TIME, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { NEUTRAL_ARCADE } from '../../src/sim/commands';
+import { Duel, type HighFloor } from '../../src/sim/duel';
+import { vec3 } from '../../src/sim/vec3';
 
 const still: PoseInput = { inPlay: true, prep: null, strike: null, speed: 0, heading: 0, bodyYaw: 0, stride: 0, time: 0 };
 const length = (v: V3): number => Math.hypot(v[0], v[1], v[2]);
@@ -77,5 +80,37 @@ describe('poses du personnage', () => {
     expect(bodyYawTarget(6, Math.PI / 2, true)).toBe(0);
     // En reculant, il ne tourne pas le dos au filet.
     expect(Math.abs(bodyYawTarget(6, Math.PI, false))).toBeLessThan(0.1);
+  });
+});
+
+describe('préparation au stick : geste au sol ou au-dessus de la tête, comme la simulation le jugera', () => {
+  /** Bleu prépare au stick (la commande est toujours celle d'un coup haut) ; le geste dessiné est-il un coup haut ? */
+  function prepared(setup: (duel: Duel) => void, floor: HighFloor = 'epaules'): boolean {
+    const duel = new Duel(null);
+    duel.highFloor = floor;
+    setup(duel);
+    for (let i = 0; i < 3; i++) duel.step([{ stick: { forward: 0, right: 0 }, shot: 'overhead', swing: { prepared: true } }, NEUTRAL_ARCADE]);
+    const me = duel.players[0];
+    expect(me.engagement?.plan).toBeTruthy();
+    return plansHighShot(duel, me, me.engagement!);
+  }
+  const defence = (duel: Duel): void =>
+    duel.playSituation(1, [vec3(0, 0, -9), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.9, 8.5), target: vec3(1.4, 0.03, -7) });
+  const lob = (duel: Duel): void =>
+    duel.playSituation(1, [vec3(0.3, 0, -3.5), vec3(0, 0, 8.6)], { kind: 'lob', contact: vec3(0.3, 0.9, 8.6), target: vec3(0.6, 0.03, -6.2) });
+  const floaty = (duel: Duel): void =>
+    duel.playSituation(1, [vec3(0, 0, -2.5), vec3(0, 0, 8.5)], { kind: 'slice', contact: vec3(0, 1, 8.5), target: vec3(0.8, 0.03, -5), error: 0.5 });
+
+  it('en défense derrière la ligne, sur une balle qui n’est pas un lob : coup droit ou revers, pas un smash', () => {
+    expect(prepared(defence)).toBe(false);
+  });
+
+  it('au filet sur un lob : préparation au-dessus de la tête', () => {
+    expect(prepared(lob)).toBe(true);
+  });
+
+  it('seuil « lob » : la balle flottante haute se prépare comme une volée', () => {
+    expect(prepared(floaty, 'epaules')).toBe(true);
+    expect(prepared(floaty, 'lob')).toBe(false);
   });
 });

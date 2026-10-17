@@ -7,7 +7,7 @@ import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { loadModel, modelsEnabled } from './models';
-import { bodyYawTarget, computePose, STRIDE, swingSide, type SwingFamily } from './pose';
+import { bodyYawTarget, computePose, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
 export interface DuelView {
   render(alpha: number, frameTime: number): void;
@@ -56,8 +56,6 @@ const CAMERA_FOLLOW = 0.15;
 const CAMERA_SMOOTHING = 4;
 /** Lissage (1/s) de la rotation du corps quand il se tourne pour courir. */
 const BODY_TURN = 10;
-/** Hauteur des épaules d'un joueur de 1,80 m : au-dessus, le geste se prépare au-dessus de la tête. */
-const SHOULDERS = 1.45;
 
 /**
  * Côté caméra, tout ce qui dépasse la hauteur des vitres près du fond (grillage, montants) est
@@ -87,7 +85,7 @@ interface PlayerView {
   object: THREE.Group;
   /** Personnage cartoon et son état d'animation, propre au rendu. */
   rig: CharacterRig;
-  anim: { yaw: number; stride: number; side: 'fore' | 'back'; last: { x: number; z: number } | null };
+  anim: { yaw: number; stride: number; side: 'fore' | 'back'; high: boolean; last: { x: number; z: number } | null };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
    * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
@@ -168,7 +166,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', last: null };
+  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', high: false, last: null };
   return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
@@ -351,8 +349,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     } else if (engagement && engagement.releaseTick === null) {
       const target = engagement.plan?.contact ?? duel.ball?.pos ?? null;
       if (target) view.anim.side = swingSide(localX(target), view.anim.side);
-      const high = engagement.kind === 'overhead' || (engagement.plan !== null && engagement.plan.contact.y > SHOULDERS * scale);
-      prep = { family: high ? 'overhead' : view.anim.side, seconds: (now - engagement.pressTick) * SIM_DT };
+      view.anim.high = plansHighShot(duel, player, engagement);
+      prep = { family: view.anim.high ? 'overhead' : view.anim.side, seconds: (now - engagement.pressTick) * SIM_DT };
     }
 
     // Dernière frappe, ou coup dans le vide.
@@ -363,7 +361,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const hit = whiffed ? null : player.lastHit;
       const kind = whiffed ? player.lastWhiffKind : hit?.kind;
       if (hit && !hit.serve && kind !== 'overhead') view.anim.side = swingSide(localX(hit.contact), view.anim.side);
-      const family: SwingFamily = hit?.serve ? 'serve' : kind === 'overhead' ? 'overhead' : view.anim.side;
+      // Le coup joué dit la famille ; un coup dans le vide garde celle de sa préparation (au stick, la commande
+      // est toujours celle d'un coup haut : c'est la hauteur de la balle qui décide).
+      const high = hit ? kind === 'overhead' : view.anim.high;
+      const family: SwingFamily = hit?.serve ? 'serve' : high ? 'overhead' : view.anim.side;
       strike = { family, seconds: (now - strikeTick) * SIM_DT };
     }
 
