@@ -42,6 +42,8 @@ const BALL_MIN_SCREEN = 0.009;
 /** Au-delà de cette vitesse (m/s), une traînée suit la balle, longue de sa course pendant `TRAIL_TIME` (s). */
 const TRAIL_SPEED = 12;
 const TRAIL_TIME = 0.04;
+/** Rayon (m) du disque de l'ombre de balle, sans l'anneau blanc ; plus large que la balle pour se lire de loin. [à calibrer] */
+const SHADOW_RADIUS = 0.1;
 /** Part du déplacement latéral du joueur suivie par la caméra, et lissage (1/s) : à peine, comme à la télé. */
 const CAMERA_FOLLOW = 0.15;
 const CAMERA_SMOOTHING = 4;
@@ -156,10 +158,20 @@ function createBallView(): {
     new THREE.MeshLambertMaterial({ color: 0xe4ff3a, emissive: 0x3a4a00 }),
   );
   sphere.add(simple);
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(BALL_RADIUS * 1.15, 24),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.8, depthWrite: false }),
+  // Ombre façon Rocket League : disque sombre cerclé de blanc, à l'aplomb exact de la balle. Dessinée
+  // par-dessus tout, pour rester visible quand la balle passe au-dessus du joueur (son corps la cacherait).
+  const shadow = new THREE.Group();
+  const shadowLook = { transparent: true, depthWrite: false, depthTest: false };
+  const shadowDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(SHADOW_RADIUS, 32),
+    new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0.55, ...shadowLook }),
   );
+  const shadowRing = new THREE.Mesh(
+    new THREE.RingGeometry(SHADOW_RADIUS, SHADOW_RADIUS * 1.35, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, ...shadowLook }),
+  );
+  shadowDisc.renderOrder = shadowRing.renderOrder = 10;
+  shadow.add(shadowDisc, shadowRing);
   shadow.rotation.x = -Math.PI / 2;
   const heightLine = new THREE.Mesh(
     new THREE.CylinderGeometry(0.008, 0.008, 1, 6),
@@ -183,8 +195,8 @@ function createBallView(): {
       sphere.position.set(pos.x, pos.y, pos.z);
       const scale = minScreenScale(camera, pos.x, pos.y, pos.z, 2 * BALL_RADIUS);
       sphere.scale.setScalar(scale);
-      // L'ombre rétrécit un peu avec la hauteur, sans jamais disparaître.
-      const s = (1 / (1 + pos.y * 0.12)) * minScreenScale(camera, pos.x, 0, pos.z, 2 * BALL_RADIUS);
+      // Taille constante quelle que soit la hauteur : c'est sa position qui compte, pas son flou.
+      const s = minScreenScale(camera, pos.x, 0, pos.z, 2 * SHADOW_RADIUS);
       shadow.scale.set(s, s, s);
       shadow.position.set(pos.x, 0.009, pos.z);
       const height = Math.max(0.001, pos.y);
@@ -225,10 +237,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   const players = TEAM_COLORS.map((color) => createPlayerView(color));
   for (const view of players) scene.add(view.object, view.standMarker);
   // Point de rebond prévu : repère orange au sol.
-  const bounceMarker = new THREE.Mesh(
-    new THREE.RingGeometry(0.16, 0.24, 32),
-    new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.85, depthWrite: false }),
-  );
+  const bounceMaterial = new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.85, depthWrite: false });
+  const bounceMarker = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), bounceMaterial);
   bounceMarker.rotation.x = -Math.PI / 2;
   scene.add(bounceMarker);
   // Zone cible du tutoriel : rectangle translucide au sol.
@@ -362,6 +372,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
         if (bounce) {
           bounceMarker.position.set(bounce.x, 0.01, bounce.z);
           bounceMarker.visible = true;
+          // Coup haut en préparation : on frappe la balle avant son rebond, le repère s'efface devant l'ombre.
+          bounceMaterial.opacity = near.engagement?.kind === 'overhead' ? 0.25 : 0.85;
         }
       }
       renderer.render(scene, camera);
