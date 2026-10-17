@@ -4,8 +4,9 @@
 > appuyer et comment le réussir, avec un retour visuel des boutons pressés pour que le joueur sache
 > toujours ce qu'il a fait, quelle que soit sa manette.
 >
-> Statut : étape 1 du §5 faite (retour d'entrées, symboles selon la manette, « Teste ta manette » ;
-> voir `STATUS.md`). Le mode tutoriel lui-même n'est pas commencé. S'appuie sur ce qui existe déjà : `Duel.playSituation()` et les
+> Statut : étapes 1 et 2 du §5 faites : retour d'entrées, symboles selon la manette, « Teste ta
+> manette », puis le squelette du mode (`?mode=tutoriel`) avec 3 leçons (coup normal, direction,
+> bandeja). Voir `STATUS.md`. Reste : les autres leçons (étape 3), la démo enregistrée, le menu. S'appuie sur ce qui existe déjà : `Duel.playSituation()` et les
 > situations du labo (`src/sim/situations.ts`), l'événement `duel.shot` (`DuelShot` : type, variante,
 > style, parfait, volée, timing, pression, erreur), et la boucle du labo (`src/modes/labo.ts`), qui
 > rejoue une situation à l'identique.

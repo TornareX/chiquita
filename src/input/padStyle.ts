@@ -37,7 +37,7 @@ export const POSITION_INDEX: Record<ButtonPosition, number> = { bottom: 0, right
 
 export const SHOT_NAMES: Record<ShotKind, string> = {
   normal: 'coup normal',
-  overhead: 'au-dessus de la tête',
+  overhead: 'coup haut',
   slice: 'coupé',
   lob: 'lob',
 };

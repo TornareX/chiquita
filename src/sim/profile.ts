@@ -233,8 +233,29 @@ export interface RallyTuning {
   viboraLateral: number;
   /** Bandeja sans direction : écart au centre de la cible, vers le coin, le long de la ligne (m). */
   bandejaLateral: number;
-  /** Retard de la bandeja : la dérive est multipliée par ce facteur (coup sûr). */
-  bandejaDrift: number;
+  /**
+   * Hauteur de frappe de la bandeja et de la víbora : idéale à hauteur des yeux du joueur (sa taille moins
+   * `eyesBelowHead`), ± `overheadBand` (m), devant et sur le côté. La course assistée place le joueur
+   * pour cette hauteur ; pour le remate (stick vers l'avant à l'appui, près du filet), plus haut, bras
+   * tendu (`overheadIdeal`). Prise trop haute, la balle est moins coupée
+   * (effet perdu, jusqu'à `overheadHighSpin` à `overheadHigh`) et part plus profond (`overheadHighDepth`, m) :
+   * elle rebondit plus et ressort de la vitre, balle facile pour l'adversaire. Prise trop basse, elle part
+   * plus à plat (vitesse verticale retirée, jusqu'à `overheadLowDip` m/s à `overheadLow`) : risque de filet.
+   */
+  eyesBelowHead: number;
+  overheadBand: number;
+  overheadHighSpin: number;
+  overheadHighDepth: number;
+  overheadLowDip: number;
+  /** Sous la bande idéale, hauteur (m) sur laquelle l'écart va de 0 à « trop basse » au maximum. */
+  overheadLowSpan: number;
+  /**
+   * Balle haute prise en retard : descendue sous `overheadLow`, le joueur frappe encore son coup haut
+   * (trop bas, il part au filet) tant qu'elle est au-dessus de `overheadMissLow` (m) et dans
+   * `overheadLateWindow` (s) après le moment idéal ; au-delà, coup dans le vide.
+   */
+  overheadMissLow: number;
+  overheadLateWindow: number;
   /** Lob parfait : profondeur ajoutée (m). */
   lobPerfectDepth: number;
   /** Pression de la balle reçue et précision du contact (`src/sim/pressure.ts`). */
@@ -455,7 +476,7 @@ export const REALISTIC: PhysicsProfile = {
     aimWindow: 0.3,
     manualThreshold: 0.35,
     manualAimBonus: 1.25,
-    overheadLow: 1.9,
+    overheadLow: 1.45, // vers les épaules : la bandeja se prend à hauteur des yeux
     overheadHigh: 3.0,
     overheadIdeal: 2.55,
     overheadLateral: 0.35,
@@ -467,7 +488,14 @@ export const REALISTIC: PhysicsProfile = {
     remateWidthLoose: 1.1,
     viboraLateral: 4.3,
     bandejaLateral: 3,
-    bandejaDrift: 0.5,
+    eyesBelowHead: 0.12, // 1,68 m pour un joueur de 1,80 m
+    overheadBand: 0.12, // ±12 cm : la balle qui redescend y passe en ~1/20 s [à calibrer en jouant]
+    overheadHighSpin: 1,
+    overheadHighDepth: 0.8,
+    overheadLowDip: 7, // prise au plancher (épaules) : filet ; un peu basse : passe plus près de la bande
+    overheadMissLow: 0.6, // genoux : plus bas, coup dans le vide
+    overheadLowSpan: 0.35, // filet sous ~1,33 m (1,80 m)
+    overheadLateWindow: 0.4,
     pressure: {
       scale: 1,
       // Calé sur l'échange arcade (IA contre IA) : volées 0,6-1 s de préparation et 9-14 m/s, balles

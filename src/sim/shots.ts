@@ -1,6 +1,6 @@
 import { createBall, integrateFlight } from './ball';
 import type { ArcadeCommands, OverheadKind, ShotKind } from './commands';
-import { BALL_RADIUS, HALF_WIDTH, SIM_DT } from './constants';
+import { BALL_RADIUS, HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
 import { netHeightAt } from './court';
 import type { PhysicsProfile, ShotTypeTuning } from './profile';
 import { addScaled, cross, length, normalize, scale, sub, vec3, type Vec3 } from './vec3';
@@ -10,7 +10,7 @@ export type CourtSide = -1 | 1;
 
 const UP = vec3(0, 1, 0);
 /** Profondeur maximale visée : un rebond juste devant la vitre du fond (m). */
-const HALF_LENGTH_SAFE = 9.5;
+export const HALF_LENGTH_SAFE = 9.5;
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
 
@@ -112,6 +112,24 @@ export function overheadTarget(
 }
 
 /**
+ * Hauteur de frappe d'une bandeja ou d'une víbora par rapport à l'idéal (hauteur des yeux) :
+ * 0 dans la bande idéale, jusqu'à 1 au plus haut jouable (trop haute), jusqu'à -1 au plus bas (trop basse).
+ */
+export function overheadHeightOff(height: number, profile: PhysicsProfile, playerHeight = PLAYER_HEIGHT): number {
+  const r = profile.rally;
+  const ideal = bandejaHeight(profile, playerHeight);
+  const d = height - ideal;
+  if (Math.abs(d) <= r.overheadBand) return 0;
+  if (d > 0) return clamp((d - r.overheadBand) / (r.overheadHigh - ideal - r.overheadBand), 0, 1);
+  return -clamp((-d - r.overheadBand) / r.overheadLowSpan, 0, 1);
+}
+
+/** Hauteur idéale de frappe d'une bandeja ou d'une víbora pour un joueur de cette taille : ses yeux (m). */
+export function bandejaHeight(profile: PhysicsProfile, playerHeight = PLAYER_HEIGHT): number {
+  return playerHeight - profile.rally.eyesBelowHead;
+}
+
+/**
  * Frappe en retard : relâchée après la sous-fenêtre parfaite, la balle part plus large et plus long,
  * d'autant plus que le retard approche la fin de la fenêtre. Déterministe : même retard, même écart.
  */
@@ -189,6 +207,8 @@ export function solveShot(
   extraClearance = 0,
   /** Effet imposé (fraction de la vitesse, négatif = coupé), à la place de celui du coup. */
   spinOverride: number | null = null,
+  /** Part de l'effet gardée (coupé et latéral) : une bandeja prise trop haute perd son effet. */
+  spinScale = 1,
 ): SolvedShot {
   const t = shotTuning(kind, profile);
   const g = profile.gravity;
@@ -225,13 +245,13 @@ export function solveShot(
       (target.y - contact.y + (g * flightTime * flightTime) / 2) / flightTime,
       (target.z - contact.z) / flightTime,
     );
-    const effect = spinOverride ?? (perfect && t.spinPerfect !== undefined ? t.spinPerfect : t.spin);
+    const effect = (spinOverride ?? (perfect && t.spinPerfect !== undefined ? t.spinPerfect : t.spin)) * spinScale;
     let spin = scale(cross(UP, direction), (effect * length(vel)) / BALL_RADIUS);
     if (t.sideSpin) {
       // Rotation autour de la verticale qui courbe la balle vers l'extérieur (le côté de la cible).
       const outward = Math.sign(target.x || 1);
       const curve = cross(UP, vel).x >= 0 ? 1 : -1;
-      spin = addScaled(spin, UP, (outward * curve * t.sideSpin * length(vel)) / BALL_RADIUS);
+      spin = addScaled(spin, UP, (outward * curve * t.sideSpin * spinScale * length(vel)) / BALL_RADIUS);
     }
     // Tir par approximations successives : on corrige la vitesse de l'écart à l'arrivée.
     for (let i = 0; i < 6; i++) {

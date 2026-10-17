@@ -1,8 +1,8 @@
-import type { Ball } from './ball';
-import { HALF_LENGTH, HALF_WIDTH, SIM_DT } from './constants';
+import { createBall, integrateFlight, type Ball } from './ball';
+import { HALF_LENGTH, HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
 import { predictBall } from './predict';
 import type { PhysicsProfile } from './profile';
-import { rightFor, type CourtSide } from './shots';
+import { bandejaHeight, rightFor, type CourtSide } from './shots';
 import { addScaled, vec3, type Vec3 } from './vec3';
 import { clampWalkable, outsideCourt, pathDistance } from './walkable';
 
@@ -69,6 +69,10 @@ export function planIntercept(
   bounced = false,
   /** Coup au-dessus de la tête : on cherche la balle haute. */
   overhead = false,
+  /** Taille du joueur : la balle haute se prend à hauteur de ses yeux (bandeja). */
+  playerHeight = PLAYER_HEIGHT,
+  /** Coup haut préparé pour un remate (stick vers l'avant à l'appui) : près du filet, on la vise plus haut. */
+  smash = false,
 ): Intercept | null {
   const r = profile.rally;
   const radius = profile.player.radius;
@@ -79,6 +83,7 @@ export function planIntercept(
   const low = overhead ? r.overheadLow : r.hitLow;
   const high = overhead ? r.overheadHigh : r.hitHigh;
   const lateral = overhead ? r.overheadLateral : r.standLateral;
+  const overheadIdeal = bandejaHeight(profile, playerHeight);
 
   let best: { cost: number; intercept: Intercept } | null = null;
   let fallback: { late: number; intercept: Intercept } | null = null;
@@ -124,9 +129,24 @@ export function planIntercept(
       continue;
     }
     // Au-dessus de la tête, la hauteur compte double : la balle prise haute ouvre le remate.
-    const height = overhead ? 2 * Math.abs(p.y - r.overheadIdeal) - (volley ? 0.5 : 0) : volley ? -1 : Math.abs(p.y - 0.95);
+    // Balle haute : à hauteur des yeux (bandeja, víbora) ; remate préparé près du filet : bras tendu, plus haut.
+    const ideal = smash && Math.abs(p.z) <= r.remateZone ? r.overheadIdeal : overheadIdeal;
+    const height = overhead ? 2 * Math.abs(p.y - ideal) - (volley ? 0.5 : 0) : volley ? -1 : Math.abs(p.y - 0.95);
     const cost = height + 0.25 * time - (afterGlass ? r.glassBonus : 0) + nearWeight * distanceTo(stand);
     if (!best || cost < best.cost) best = { cost, intercept };
   }
   return best?.intercept ?? fallback?.intercept ?? null;
+}
+
+/**
+ * Pas avant que la balle, en redescendant, passe sous `height` (vol libre, sans collision) ; `null` si
+ * elle n'y descend pas dans les 2 s. Sert à attendre la hauteur des yeux pour une bandeja.
+ */
+export function ticksToHeight(ball: Ball, height: number, profile: PhysicsProfile): number | null {
+  const b = createBall(ball.pos, ball.vel, ball.spin);
+  for (let i = 1; i * SIM_DT < 2; i++) {
+    integrateFlight(b, SIM_DT, profile);
+    if (b.vel.y < 0 && b.pos.y <= height) return i;
+  }
+  return null;
 }

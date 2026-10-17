@@ -320,7 +320,12 @@ export function createSettingsMenu(
   testPad.textContent = 'Tester ma manette';
   testPad.title = 'Vérifier quel bouton est lequel sur ta manette, et le stick';
   testPad.hidden = !onTestPad;
-  actions.append(testPad, labo, resume, restart);
+  const tutorial = document.createElement('button');
+  tutorial.type = 'button';
+  tutorial.textContent = 'Tutoriel';
+  tutorial.title = 'Une leçon par coup : quand le jouer, quels boutons, comment le réussir';
+  tutorial.addEventListener('click', () => (location.search = '?mode=tutoriel'));
+  actions.append(tutorial, testPad, labo, resume, restart);
   panel.append(actions);
 
   document.body.append(gear, overlay);

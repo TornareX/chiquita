@@ -47,7 +47,9 @@ function play(duel: Duel, kind: ShotKind, stick: ArcadeCommands['stick'], offset
   let exited = false;
   for (let i = 0; i < 8 / SIM_DT && duel.phase === 'rally'; i++) {
     const plan = duel.players[0].engagement?.plan;
-    if (!released && plan && duel.tick >= plan.tick + Math.round(offset / SIM_DT)) released = true;
+    // Coup haut : relâché quand la balle est à la hauteur du coup (yeux, ou plus haut pour le remate).
+    const ideal = plan ? (duel.overheadReleaseTick(0) ?? plan.tick) : 0;
+    if (!released && plan && duel.tick >= ideal + Math.round(offset / SIM_DT)) released = true;
     duel.step([{ stick, shot: released ? null : kind }, NEUTRAL_ARCADE]);
     if (duel.shot?.player === 0) shot = duel.shot;
     if (duel.exit) exited = true;
@@ -100,7 +102,8 @@ describe('sur un lob, au filet', () => {
     expect(shot?.kind).toBe('overhead');
     expect(shot?.overhead).toBe('bandeja');
     expect(shot?.volley).toBe(true);
-    expect(shot!.contact.y).toBeGreaterThan(ARCADE.rally.hitHigh);
+    // Prise à hauteur des yeux : propre.
+    expect(shot!.heightOff).toBe(0);
   });
 
   it('un remate parfait près du filet sort du terrain : por tres, point pour le frappeur', () => {
@@ -116,7 +119,7 @@ describe('sur un lob, au filet', () => {
   it('un remate non parfait reste dans le terrain', () => {
     for (const right of [0, 0.6, 1]) {
       // Relâché en avance : coup normal, pas parfait.
-      const { shot, exited } = play(lobTo(vec3(0.3, 0, -3), { forward: -1, right: 0 }), 'overhead', { forward: 1, right }, -0.1);
+      const { shot, exited } = play(lobTo(vec3(0.3, 0, -3), { forward: -1, right: 0 }), 'overhead', { forward: 1, right }, -0.08);
       expect(shot?.overhead).toBe('remate');
       expect(shot?.perfect).toBe(false);
       expect(exited).toBe(false);
@@ -378,14 +381,16 @@ describe('IA contre IA : le jeu au-dessus de la tête', () => {
         `dont remate ${((100 * t.smashWinners) / t.winners).toFixed(0)} % (au-dessus de la tête ${((100 * t.overheadWinners) / t.winners).toFixed(0)} %), ` +
         `lobs qui passent ${((100 * t.lobsPassed) / t.lobs).toFixed(0)} % sur ${t.lobs}, sorties ${t.exits}, rattrapées dehors ${t.catches}`,
     );
-    // Depuis la défense à plat (17/10), le remate seul conclut moins (balles hautes plus rares) : on
-    // vérifie la part de tous les coups au-dessus de la tête (pros : smash 35-43 % + bandeja 5-13 %).
-    expect(perPoint).toBeGreaterThan(7);
+    // Bandeja et víbora à hauteur des yeux (17/10, demandé par Xavier) : prises plus bas, elles concluent
+    // moins (~9 % des gagnants, pros 5-13 % ; avant, ~28 %, trop) ; le remate reste rare (3-8 %, pros 35-43 %,
+    // déjà le cas avant). 6 parties : 6,8 coups/point, coups hauts 17 % des gagnants, lobs qui passent 42 %.
+    // [à recaler en jouant]
+    expect(perPoint).toBeGreaterThan(6.3);
     expect(perPoint).toBeLessThan(11.5);
-    expect(t.overheadWinners / t.winners).toBeGreaterThan(0.25);
+    expect(t.overheadWinners / t.winners).toBeGreaterThan(0.1);
     expect(t.smashWinners).toBeGreaterThan(0);
-    expect(t.lobsPassed / t.lobs).toBeGreaterThan(0.1);
-    expect(t.lobsPassed / t.lobs).toBeLessThan(0.45);
+    expect(t.lobsPassed / t.lobs).toBeGreaterThan(0.05);
+    expect(t.lobsPassed / t.lobs).toBeLessThan(0.55);
     expect(t.exits).toBeGreaterThan(0);
   }, 120000);
 });

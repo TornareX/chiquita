@@ -11,6 +11,8 @@ export interface DuelView {
   render(alpha: number, frameTime: number): void;
   /** Léger tremblement de caméra ; `strength` de 0 à 1. */
   shake(strength: number): void;
+  /** Zone à viser, dessinée au sol (tutoriel), ou `null` pour l'effacer. */
+  setTarget(zone: { x0: number; x1: number; z0: number; z1: number } | null): void;
 }
 
 /** Anneau de timing : couleur de la balle à venir (`pressure.ts`). */
@@ -229,6 +231,14 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   );
   bounceMarker.rotation.x = -Math.PI / 2;
   scene.add(bounceMarker);
+  // Zone cible du tutoriel : rectangle translucide au sol.
+  const targetZone = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.28, depthWrite: false }),
+  );
+  targetZone.rotation.x = -Math.PI / 2;
+  targetZone.visible = false;
+  scene.add(targetZone);
 
   canvas.dataset.models = 'pending';
   if (modelsEnabled()) {
@@ -267,14 +277,16 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     // Face au filet.
     view.object.rotation.y = player.side < 0 ? 0 : Math.PI;
 
-    // Frappe : la raquette balaie de l'arrière vers l'avant ; sinon, position d'attente.
-    const sinceHit = (duel.tick - player.lastHitTick) * SIM_DT;
+    // Frappe, ou coup dans le vide : la raquette balaie de l'arrière vers l'avant ; sinon, position d'attente.
+    const whiffed = player.lastWhiffTick > player.lastHitTick;
+    const sinceHit = (duel.tick - (whiffed ? player.lastWhiffTick : player.lastHitTick)) * SIM_DT;
     const swing = sinceHit < SWING_TIME ? sinceHit / SWING_TIME : 1;
+    const swingKind = whiffed ? player.lastWhiffKind : player.lastHit?.kind;
     const engaged = player.engagement !== null;
     // Repère local : le joueur regarde vers +Z, sa droite est vers -X.
     view.racket.position.x = -0.35;
     // Au-dessus de la tête (bouton B) : raquette armée derrière la tête, puis frappe de haut en bas.
-    const overheadSwing = swing < 1 && player.lastHit?.kind === 'overhead';
+    const overheadSwing = swing < 1 && swingKind === 'overhead';
     const overheadReady = swing >= 1 && player.engagement?.kind === 'overhead';
     if (overheadSwing || overheadReady) {
       view.racket.position.y = 1.75;
@@ -291,8 +303,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const toss = duel.phase === 'toss' && duel.players[duel.server] === player ? duel.toss : null;
     const plan = engagement && !engagement.manual ? engagement.plan : null;
     const preparing = toss ? toss.releaseTick === null : engagement !== null && engagement.releaseTick === null;
-    // Moment d'impact : sommet du rebond au service, point prévu par la course assistée en échange.
-    const impactTick = toss ? toss.idealTick : (plan?.tick ?? null);
+    // Moment d'impact : sommet du rebond au service, point prévu par la course assistée en échange ; coup
+    // haut : la balle à hauteur des yeux, ou plus haut, plus tôt, stick vers l'avant (remate).
+    const overheadTick = plan && engagement?.kind === 'overhead' ? duel.overheadReleaseTick(index) : null;
+    const impactTick = toss ? toss.idealTick : (overheadTick ?? plan?.tick ?? null);
     view.timingRing.visible = preparing;
     if (preparing) {
       const r = duel.profile.rally;
@@ -315,6 +329,13 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   return {
     shake(strength: number): void {
       shake = Math.max(shake, strength);
+    },
+
+    setTarget(zone): void {
+      targetZone.visible = zone !== null;
+      if (!zone) return;
+      targetZone.scale.set(zone.x1 - zone.x0, zone.z1 - zone.z0, 1);
+      targetZone.position.set((zone.x0 + zone.x1) / 2, 0.009, (zone.z0 + zone.z1) / 2);
     },
 
     render(alpha: number, frameTime: number): void {

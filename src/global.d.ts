@@ -15,6 +15,8 @@ declare global {
     };
     /** Échange arcade, exposé en mode debug (preview, Playwright). */
     __duel?: { duel: Duel; Bot: typeof Bot };
+    /** Tutoriel, exposé en mode debug (Playwright) : étape en cours, réussites, essai. */
+    __tutorial?: { readonly phase: string; readonly successes: number; readonly attempt: number };
   }
 }
 

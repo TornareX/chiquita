@@ -54,6 +54,12 @@ export function describeShot(shot: DuelShot, profile: PhysicsProfile): { text: s
   else if (shot.volley) name = shot.kind === 'normal' ? 'volée' : `volée (${SHOT_NAMES[shot.kind]})`;
   else name = SHOT_NAMES[shot.kind];
   if (shot.style === 'block') return { text: `${name} bloqué : appuie plus tôt pour armer`, quality: 'off' };
+  // Bandeja et víbora : prise trop haute (elle rebondit) ou trop basse (vers le filet).
+  if (shot.overhead === 'bandeja' || shot.overhead === 'vibora') {
+    const off = shot.heightOff;
+    if (off > 0) return { text: `${name} prise trop haute : relâche plus tard`, quality: 'off' };
+    if (off < 0) return { text: `${name} prise trop basse : relâche plus tôt`, quality: 'off' };
+  }
   if (shot.perfect) return { text: `${name} parfait !`, quality: 'perfect' };
   if (shot.timing > r.perfectAfter) {
     return { text: `${name}, relâché en retard (+${shot.timing.toFixed(2).replace('.', ',')} s)`, quality: 'off' };

@@ -49,6 +49,16 @@ export interface BotOptions {
    * corps sur une balle verte (moins sur une jaune), et de la volée coupée sur une balle flottante.
    */
   choices: { lob: number; chiquita: number; body: number; cut: number };
+  /**
+   * Coup imposé (démonstration du tutoriel) : toujours ce bouton, et ce stick au moment de l'impact,
+   * quelle que soit la balle. Sans lui, le bot choisit selon ses parts et sa tactique.
+   */
+  forced?: { kind: ShotKind; stick: ArcadeCommands['stick'] };
+  /**
+   * Relâcher des coups hauts, plus précis que les autres : la bandeja ne se réussit qu'à hauteur des yeux,
+   * en quelques centièmes. Sans lui, `release`.
+   */
+  overheadRelease?: { offset: number; spread: number };
 }
 
 export const DEFAULT_BOT: BotOptions = {
@@ -77,6 +87,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     reaction: 0.35,
     aim: 0.45,
     release: { offset: 0.02, spread: 0.15 },
+    overheadRelease: { offset: 0, spread: 0.04 },
     overhead: { maxDepth: 6.4, remate: 0.3, vibora: 0, bajada: 0.1 },
     choices: { lob: 0.6, chiquita: 0.05, body: 0.05, cut: 0.15 },
   },
@@ -85,6 +96,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     reaction: 0.25,
     aim: 0.75,
     release: { offset: 0.01, spread: 0.12 },
+    overheadRelease: { offset: 0, spread: 0.02 },
     tactics: true,
     overhead: { maxDepth: 7, remate: 0.35, vibora: 0.2, bajada: 0.4 },
     choices: { lob: 0.55, chiquita: 0.2, body: 0.15, cut: 0.5 },
@@ -94,6 +106,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     reaction: 0.15,
     aim: 0.95,
     release: { offset: 0, spread: 0.1 },
+    overheadRelease: { offset: 0, spread: 0.01 },
     tactics: true,
     overhead: { maxDepth: 7.4, remate: 0.9, vibora: 0.3, bajada: 0.6 },
     choices: { lob: 0.5, chiquita: 0.25, body: 0.2, cut: 0.8 },
@@ -114,6 +127,8 @@ export class Bot {
   /** Dernière frappe prise en compte pour choisir sa position, et position choisie : au filet ou au fond. */
   private seenHitTick = -Infinity;
   private atNet = false;
+  /** Bandeja : pas où la balle redescend à hauteur de ses yeux, calculé une fois par coup (appui). */
+  private eyeTick: { press: number; tick: number } | null = null;
 
   constructor(
     private readonly index: 0 | 1,
@@ -172,9 +187,14 @@ export class Bot {
     } else {
       this.volleyStick = this.stick;
     }
-    const { release } = this.options;
-    this.releaseOffset = release.offset + this.prng.range(-1, 1) * release.spread;
     if (duel) this.chooseOverhead(duel);
+    const { forced } = this.options;
+    if (forced) {
+      this.kind = forced.kind;
+      this.stick = this.volleyStick = this.overheadStick = forced.stick;
+    }
+    const release = this.kind === 'overhead' ? (this.options.overheadRelease ?? this.options.release) : this.options.release;
+    this.releaseOffset = release.offset + this.prng.range(-1, 1) * release.spread;
   }
 
   /** Couleur de la balle qu'il va frapper, lue comme un humain lit l'anneau : où et quand il la prendra. */
@@ -183,7 +203,7 @@ export class Bot {
     const ball = duel.ball;
     const unknown = { color: 'jaune' as const, volley: false, height: 1 };
     if (!ball) return unknown;
-    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0);
+    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, false, me.height);
     if (!plan) return unknown;
     const speed = Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2);
     const color = ballColor(duel.pressureOf(this.index, 'normal', plan.contact.y, speed, 0, plan.tick));
@@ -200,9 +220,12 @@ export class Bot {
     const ball = duel.ball;
     if (!ball) return;
     const r = duel.profile.rally;
-    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, true);
+    // Point le plus haut jouable près du filet : de quoi juger si le remate est possible.
+    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, true, me.height, true);
     const { maxDepth, remate, vibora, bajada } = this.options.overhead;
-    if (!plan?.reachable || plan.outside || plan.contact.y <= r.hitHigh) return;
+    // Balle haute (un lob, ou une balle qui ressort haut de la vitre) : elle monte au-dessus des coups normaux.
+    const apex = ball.vel.y > 0 ? ball.pos.y + (ball.vel.y * ball.vel.y) / (2 * duel.profile.gravity) : ball.pos.y;
+    if (!plan?.reachable || plan.outside || apex <= r.hitHigh) return;
     const right = this.volleyStick.right >= 0 ? 1 : -1;
     const roll = this.prng.next();
     // Au fond, sur la balle haute qui ressort de la vitre : bajada, une attaque, puis il monte au filet.
@@ -213,6 +236,7 @@ export class Bot {
       return;
     }
     this.kind = 'overhead';
+    // Remate : près du filet, sur une balle qui monte assez haut pour être frappée bras tendu.
     const nearNet = Math.abs(plan.contact.z) <= r.remateZone - 0.3 && plan.contact.y >= r.remateLow + 0.1;
     if (nearNet && roll < remate) this.overheadStick = { forward: 1, right: right * this.prng.range(0.3, 0.8) * this.options.aim };
     else if (this.prng.next() < vibora) this.overheadStick = { forward: 0, right };
@@ -241,7 +265,18 @@ export class Bot {
    */
   private holding(duel: Duel): ShotKind | null {
     const me = duel.players[this.index];
-    const impact = duel.phase === 'toss' ? duel.toss?.idealTick : me.engagement?.plan?.tick;
+    let impact = duel.phase === 'toss' ? duel.toss?.idealTick : me.engagement?.plan?.tick;
+    // Coup haut : il relâche quand la balle redescend à la bonne hauteur, ses yeux pour la bandeja et la
+    // víbora, plus haut pour le remate (bras tendu). Calculé une fois par coup, une fois le point prévu.
+    if (me.engagement?.kind === 'overhead' && me.engagement.plan) {
+      const press = me.engagement.pressTick;
+      if (this.eyeTick?.press !== press) {
+        const smash = this.overheadStick.forward >= duel.profile.rally.overheadStick;
+        const tick = duel.overheadReleaseTick(this.index, smash);
+        this.eyeTick = tick === null ? null : { press, tick };
+      }
+      if (this.eyeTick?.press === press) impact = this.eyeTick.tick;
+    }
     if (me.heldShot === null) return null;
     // Moment d'impact pas encore connu : il garde le bouton.
     if (impact === undefined) return me.heldShot;
@@ -298,8 +333,10 @@ export class Bot {
       }
       if (duel.tick - opponentHit >= this.options.reaction / SIM_DT) {
         if (this.pressedFor === null || this.pressedFor < opponentHit) this.chooseShot(duel);
-        // Il appuie stick au repos : il visera plus tard, juste avant l'impact.
-        return press({ forward: 0, right: 0 });
+        // Il appuie stick au repos : il visera plus tard, juste avant l'impact. Pour un remate, stick vers
+        // l'avant dès l'appui : la course assistée le prépare bras tendu.
+        const smash = this.kind === 'overhead' && this.overheadStick.forward >= duel.profile.rally.overheadStick;
+        return press(smash ? this.overheadStick : { forward: 0, right: 0 });
       }
       return NEUTRAL_ARCADE;
     }

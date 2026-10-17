@@ -78,11 +78,12 @@ describe('retour des entrées', () => {
     pressure: 0,
     error: 0,
     style: null,
+    heightOff: 0,
     ...over,
   });
 
   it('dit ce que le relâcher a donné', () => {
-    expect(describeShot(shot({ overhead: 'vibora', kind: 'overhead', perfect: true }), ARCADE)).toEqual({
+    expect(describeShot(shot({ overhead: 'vibora', kind: 'overhead', perfect: true, contact: vec3(0, 2.35, -4) }), ARCADE)).toEqual({
       text: 'víbora parfait !',
       quality: 'perfect',
     });
