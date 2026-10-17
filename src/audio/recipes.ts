@@ -317,3 +317,115 @@ export function stepCrowdReactions(duel: Duel): CrowdReaction[] {
   }
   return reactions;
 }
+
+/**
+ * Crissement de semelle sur la moquette : bref glissement aigu, deux harmoniques qui montent, plus un souffle de
+ * frottement. `intensity` de 0 à 1 (vitesse perdue). Varie selon la position, comme les rebonds.
+ */
+export function squeakRecipe(pos: Vec3, intensity: number): SoundRecipe {
+  const r = variation(pos, 11);
+  const i = clamp(intensity, 0, 1);
+  // Environ 13 dB sous une frappe forte (mesuré hors ligne) : on l'entend sans qu'il couvre la balle.
+  const v = 1.5 * (0.35 + 0.65 * i) * distanceGain(pos);
+  const f = 1900 * (1 + 0.12 * r(0));
+  const length = 0.05 + 0.05 * i;
+  return {
+    pan: panFor(pos),
+    reverb: 0.35,
+    layers: [
+      { type: 'tone', wave: 'sine', from: f, to: f * 1.35, duration: length, attack: 0.006, gain: 0.05 * v },
+      { type: 'tone', wave: 'sine', from: f * 2, to: f * 2.6, duration: length * 0.8, attack: 0.006, gain: 0.02 * v },
+      { type: 'noise', filter: 'bandpass', frequency: 3200, q: 2, duration: length, attack: 0.004, gain: 0.08 * v },
+    ],
+  };
+}
+
+/** Voix d'un personnage : hauteur du souffle à la frappe (Hz) et de la synthèse vocale (1 = normale). */
+export interface Voice {
+  pitch: number;
+  speech: number;
+}
+
+/** Voix des quatre personnages, dans l'ordre de `CHARACTERS` (Lucho, Paloma, Inés, Nico). */
+export const VOICES: readonly Voice[] = [
+  { pitch: 120, speech: 0.85 },
+  { pitch: 215, speech: 1.35 },
+  { pitch: 235, speech: 1.5 },
+  { pitch: 140, speech: 1.0 },
+];
+
+/**
+ * Souffle du joueur sur un coup fort (« hah ! ») : bruit passé dans les deux premiers formants d'un « a », plus un
+ * peu de voix à la hauteur du personnage. `power` de 0 à 1 ; rien sous un coup moyen.
+ */
+export function gruntRecipe(pos: Vec3, power: number, voice: Voice): SoundRecipe | null {
+  const p = clamp(power, 0, 1);
+  if (p < 0.35) return null;
+  // Environ 11 dB sous une frappe forte (mesuré hors ligne).
+  const v = 1.6 * (0.4 + 0.6 * p) * distanceGain(pos);
+  const length = 0.12 + 0.1 * p;
+  return {
+    pan: panFor(pos),
+    reverb: 0.3,
+    layers: [
+      { type: 'noise', filter: 'bandpass', frequency: 750, frequencyTo: 650, q: 5, duration: length, attack: 0.012, gain: 0.5 * v },
+      { type: 'noise', filter: 'bandpass', frequency: 1200, frequencyTo: 1050, q: 6, duration: length * 0.9, attack: 0.012, gain: 0.3 * v },
+      { type: 'tone', wave: 'triangle', from: voice.pitch * 1.15, to: voice.pitch * 0.85, duration: length, attack: 0.015, gain: 0.05 * v },
+    ],
+  };
+}
+
+/** Force d'un coup pour le souffle : vitesse de balle (16 à 32 m/s), et tout smash compte comme un coup très fort. */
+export function shotPower(shot: Pick<ShotSound, 'speed' | 'overhead'>): number {
+  if (shot.overhead === 'remate') return 1;
+  return clamp((shot.speed - 16) / 16, 0, 1);
+}
+
+/**
+ * Crissements : un par arrêt net (vitesse tombée sous 1 m/s après plus de 4,5 m/s) ou par demi-tour (plus de 130°
+ * en 0,15 s à plus de 3 m/s). Une seule fois par appui : il faut repartir pour recrisser ; et pas plus d'un toutes les
+ * `SQUEAK_GAP` s par joueur : les joueurs (IA comprises) courent à fond et s'arrêtent net presque à chaque coup, et un
+ * crissement à chaque fois devenait un bruit de fond.
+ */
+export const SQUEAK_GAP = 2;
+
+export class SqueakDetector {
+  private readonly peak: number[] = [];
+  /** Temps écoulé depuis le dernier crissement de chaque joueur (s). */
+  private readonly quiet: number[] = [];
+  private readonly history: { x: number; z: number }[][] = [];
+
+  /** Vitesse au sol du joueur `index` à ce pas ; rend l'intensité du crissement (0..1), ou 0. */
+  update(index: number, vel: Vec3, dt: number): number {
+    const speed = Math.hypot(vel.x, vel.z);
+    const lag = Math.max(1, Math.round(0.15 / dt));
+    const past = (this.history[index] ??= []);
+    past.push({ x: vel.x, z: vel.z });
+    if (past.length > lag) past.shift();
+    const peak = Math.max(this.peak[index] ?? 0, speed);
+    this.peak[index] = peak;
+    const quiet = (this.quiet[index] ?? SQUEAK_GAP) + dt;
+    this.quiet[index] = quiet;
+    if (quiet < SQUEAK_GAP) {
+      if (speed < 1) this.peak[index] = 0;
+      return 0;
+    }
+    if (peak > 4.5 && speed < 1) {
+      this.quiet[index] = 0;
+      this.peak[index] = 0;
+      return clamp((peak - 4.5) / 2, 0.3, 1);
+    }
+    const old = past[0]!;
+    const oldSpeed = Math.hypot(old.x, old.z);
+    if (past.length === lag && speed > 3 && oldSpeed > 3) {
+      const cos = (old.x * vel.x + old.z * vel.z) / (speed * oldSpeed);
+      if (cos < Math.cos((130 * Math.PI) / 180)) {
+        this.quiet[index] = 0;
+        this.peak[index] = 0;
+        past.length = 0;
+        return clamp((speed + oldSpeed) / 10, 0.3, 1);
+      }
+    }
+    return 0;
+  }
+}

@@ -1,6 +1,7 @@
 import type { Contact } from '../sim/collisions';
 import type { BallResult } from '../sim/rules';
-import { contactRecipe, shotRecipe, type CrowdReaction, type Layer, type ShotSound, type SoundRecipe } from './recipes';
+import type { Vec3 } from '../sim/vec3';
+import { contactRecipe, gruntRecipe, shotRecipe, squeakRecipe, type CrowdReaction, type Layer, type ShotSound, type SoundRecipe, type Voice } from './recipes';
 
 export interface Sounds {
   /** À appeler sur un geste de l'utilisateur : les navigateurs bloquent le son avant. */
@@ -10,6 +11,12 @@ export interface Sounds {
   result(result: BallResult): void;
   /** Réaction du public : murmure qui monte (`ooh`), clameur (`cheer`) ou applaudissements. */
   crowd(reaction: CrowdReaction): void;
+  /** Crissement de semelle, `intensity` de 0 à 1. */
+  squeak(pos: Vec3, intensity: number): void;
+  /** Souffle du joueur sur un coup fort. */
+  grunt(pos: Vec3, power: number, voice: Voice): void;
+  /** Fond sonore de la salle, permanent une fois le son débloqué ; `level` de 0 (calme) à 1 (salle en feu), négatif = coupé. */
+  ambience(level: number): void;
 }
 
 /** Générateur pseudo-aléatoire à graine fixe : les tampons de bruit sont les mêmes à chaque partie. */
@@ -87,6 +94,8 @@ export function createSounds(createContext: () => BaseAudioContext = () => new A
   let dry: AudioNode | null = null;
   let wet: AudioNode | null = null;
   let echo: AudioNode | null = null;
+  /** Fond sonore : bruit de salle et brouhaha, dont on règle le volume. */
+  let room: GainNode | null = null;
 
   const setup = (audio: BaseAudioContext): void => {
     noiseBuffer = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
@@ -122,6 +131,35 @@ export function createSounds(createContext: () => BaseAudioContext = () => new A
     dry = compressor;
     wet = reverb;
     echo = echoIn;
+
+    // Fond sonore de la salle : souffle grave (ventilation, foule lointaine) et brouhaha dans le médium, qui
+    // ondule lentement. Bouclé sur le tampon de bruit, il tourne en permanence à faible volume.
+    room = audio.createGain();
+    room.gain.value = 0.0001;
+    room.connect(compressor);
+    for (const [type, frequency, q, gain] of [
+      ['lowpass', 320, 0.7, 0.5],
+      ['bandpass', 650, 1.2, 0.35],
+      ['bandpass', 1300, 1.5, 0.12],
+    ] as const) {
+      const source = audio.createBufferSource();
+      source.buffer = noiseBuffer;
+      source.loop = true;
+      const filter = audio.createBiquadFilter();
+      filter.type = type;
+      filter.frequency.value = frequency;
+      filter.Q.value = q;
+      const level = audio.createGain();
+      level.gain.value = gain;
+      const wobble = audio.createOscillator();
+      wobble.frequency.value = 0.13 + frequency / 10000;
+      const wobbleDepth = audio.createGain();
+      wobbleDepth.gain.value = gain * 0.35;
+      wobble.connect(wobbleDepth).connect(level.gain);
+      source.connect(filter).connect(level).connect(room);
+      source.start(audio.currentTime + (frequency % 7) * 0.01);
+      wobble.start();
+    }
   };
 
   /** Enveloppe d'une couche : montée `attack`, puis extinction exponentielle jusqu'à `end`. */
@@ -291,6 +329,21 @@ export function createSounds(createContext: () => BaseAudioContext = () => new A
       } else if (result.kind === 'fault') {
         beep(170, 120, 0.25, 0.16, 'sawtooth');
       }
+    },
+
+    squeak(pos: Vec3, intensity: number): void {
+      play(squeakRecipe(pos, intensity));
+    },
+
+    grunt(pos: Vec3, power: number, voice: Voice): void {
+      play(gruntRecipe(pos, power, voice));
+    },
+
+    ambience(level: number): void {
+      if (!ctx || !room) return;
+      // Toujours présent, discret ; plus fort quand la salle s'enflamme. Négatif : coupé (son désactivé, menu).
+      const target = level < 0 ? 0.0001 : 0.012 + 0.03 * Math.min(1, level);
+      room.gain.setTargetAtTime(target, ctx.currentTime, 0.4);
     },
 
     crowd(reaction: CrowdReaction): void {

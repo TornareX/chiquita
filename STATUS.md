@@ -648,3 +648,27 @@ sont mises de côté à sa demande. 471 tests OK (dont `tests/render/arena.test.
   pendant une clameur aussi, comme sans arène. Le navigateur de test sans carte graphique passe de 67 à 133 ms (rendu
   logiciel, non représentatif).
 - Capture pendant une clameur : `screenshots/50-arene-clameur.png`.
+
+## Étape E7 : sons (18/10/2026, branche `feat/etape-e`)
+
+Tout reste synthétisé (Web Audio), sauf les voix (synthèse vocale du navigateur). 478 tests OK (dont
+`tests/audio/e7.test.ts`), typecheck OK, tests navigateur (`tests/e2e/sounds.spec.ts`, duel, arène) OK, `src/sim`
+inchangé. **Pas encore écouté à la manette** : niveaux mesurés hors ligne seulement.
+
+- **Crissements de semelles** (`squeakRecipe`, `SqueakDetector`) : arrêt net après plus de 4,5 m/s ou demi-tour
+  (plus de 130° en 0,15 s) ; pas plus d'un toutes les 2 s par joueur. Entre IA : 168 en 5 min pour deux joueurs (sans
+  ce délai, 266 : un bruit de fond).
+- **Souffle à la frappe** (`gruntRecipe`, `shotPower`) : « hah ! » sur les coups forts (au-delà de ~22 m/s) et tous les
+  smashes, avec une voix par personnage (`VOICES` : Lucho et Nico graves, Paloma et Inés aiguës). ~1 coup sur 10.
+- **Fond sonore de salle** (`sounds.ambience`) : souffle grave et brouhaha qui ondulent, permanents une fois le son
+  débloqué, plus forts quand la salle s'enflamme (même humeur que la foule dessinée, `CrowdMood`) ; coupé avec le son
+  et quand le menu est ouvert.
+- **Voix** (`src/audio/announcer.ts`, `?voix=0` pour les couper) : l'arbitre annonce le score en espagnol 1 s après
+  chaque point, serveur d'abord (« Quince nada », « Treinta iguales », « Iguales », « Ventaja », « Punto de oro »,
+  « Juego », « Juego y set », « Juego, set y partido », jeu décisif en chiffres) ; le gagnant d'un grand point
+  (clameur ou applaudissements) crie « ¡Vamos! » avec la hauteur de voix de son personnage. Voix espagnole du système
+  si elle existe : la qualité dépend de la machine.
+- Niveaux mesurés hors ligne (crête, frappe forte = 0,30) : crissement 0,04, souffle 0,08, fond sonore 0,009 au calme
+  et 0,03 en pleine clameur.
+- `stepCrowdReactions` (recettes) : réactions du public au dernier pas, partagées par le son et la foule (E6).
+- Pas fait : pas de course, glissade, son de la porte, musique de menu (il n'y a pas encore de menu d'accueil).

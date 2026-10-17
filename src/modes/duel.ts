@@ -1,4 +1,6 @@
-import { stepCrowdReactions } from '../audio/recipes';
+import { createAnnouncer, scoreCall } from '../audio/announcer';
+import { shotPower, SqueakDetector, stepCrowdReactions, VOICES } from '../audio/recipes';
+import { CrowdMood } from '../render/arena';
 import { createSounds } from '../audio/sounds';
 import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
@@ -58,7 +60,12 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
   const keyboard = createKeyboardPads();
-  const sounds = muteable(createSounds(), () => settings.sound);
+  const audio = createSounds();
+  const sounds = muteable(audio, () => settings.sound);
+  const announcer = createAnnouncer();
+  /** Ambiance de la salle : la même humeur que la foule dessinée, pour le fond sonore. */
+  const mood = new CrowdMood();
+  const squeaks = new SqueakDetector();
   for (const type of ['pointerdown', 'keydown'] as const) {
     window.addEventListener(type, () => sounds.unlock(), { once: true });
   }
@@ -146,12 +153,31 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     view.afterStep();
     inputs.step(duel, states);
     for (const contact of duel.contacts) sounds.contact(contact);
-    for (const reaction of stepCrowdReactions(duel)) sounds.crowd(reaction);
+    duel.players.forEach((player, i) => {
+      const squeak = squeaks.update(i, player.vel, SIM_DT);
+      if (squeak > 0) sounds.squeak(player.pos, squeak);
+    });
+    for (const reaction of stepCrowdReactions(duel)) {
+      sounds.crowd(reaction);
+      mood.react(reaction);
+      // Grand point : le gagnant crie « ¡Vamos! » (celui des deux partenaires qui a frappé le dernier).
+      if (duel.result && reaction.kind !== 'ooh' && reaction.intensity >= 0.6 && settings.sound) {
+        const winners = duel.teamPlayers(duel.result.winner);
+        const shouter = winners.reduce((a, b) => (duel.players[b]!.lastHitTick > duel.players[a]!.lastHitTick ? b : a));
+        setTimeout(() => announcer.shout('¡Vamos!', VOICES[shouter % VOICES.length]!), 150);
+      }
+    }
+    if (duel.result && duel.match && settings.sound) {
+      // L'arbitre annonce le score une fois le point retombé.
+      const call = scoreCall(duel.match, duel.lastOutcome);
+      if (call) setTimeout(() => announcer.score(call), 1000);
+    }
     if (duel.shot) {
       const { shot } = duel;
       // Le contact sonne plein quand le relâcher est bien placé, creux quand il est très en avance ou en retard.
       const quality = shot.perfect ? 1 : Math.max(0.25, 0.85 - (Math.abs(shot.timing) / 0.12) * 0.6);
       sounds.shot({ ...shot, quality });
+      sounds.grunt(shot.contact, shotPower(shot), VOICES[shot.player % VOICES.length]!);
       if (shot.perfect) {
         hitstopUntil = performance.now() + 40; // [à calibrer VT4]
         view.shake(0.5);
@@ -177,6 +203,9 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
     if (!menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
     view.render(alpha, frameTime, now < hitstopUntil);
+    mood.update(frameTime);
+    // Hors du proxy muet : couper le son doit aussi couper le fond sonore.
+    audio.ambience(settings.sound && !menu.isOpen ? mood.stir : -1);
     hud.update(duel, sources, buttons);
     inputs.render(duel, states, buttons, settings.inputDisplay && !menu.isOpen && !padTest.isOpen);
     requestAnimationFrame(frame);
