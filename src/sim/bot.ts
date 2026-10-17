@@ -1,7 +1,7 @@
 import { planIntercept } from './assist';
 import { NEUTRAL_ARCADE, type ArcadeCommands, type ShotKind } from './commands';
 import { SIM_DT } from './constants';
-import { HOME_DEPTH, NET_DEPTH, type Duel } from './duel';
+import { HOME_DEPTH, NET_DEPTH, teamOf, type Duel, type DuelPlayer } from './duel';
 import { ballColor, type BallColor } from './pressure';
 import { Prng } from './prng';
 import { forwardFor, rightFor } from './shots';
@@ -59,6 +59,17 @@ export interface BotOptions {
    * en quelques centièmes. Sans lui, `release`.
    */
   overheadRelease?: { offset: number; spread: number };
+  /**
+   * En double (`research/tactique/TACTIQUE_2V2.md` §3.1 et §10) : basculement de la paire vers le frappeur
+   * adverse (0 = ne bouge pas avec la balle, 0,4 = sur la bissectrice de ses angles), et part des balles visées
+   * au milieu, entre les deux adversaires (le reste vers le plus grand trou).
+   */
+  doubles?: { shift: number; middle: number };
+  /**
+   * En double, partenaire humain : il se cale sur sa profondeur (les deux au filet ou les deux au fond) au lieu
+   * de décider seul. Réglé par le mode de jeu.
+   */
+  followPartner?: boolean;
 }
 
 export const DEFAULT_BOT: BotOptions = {
@@ -74,6 +85,16 @@ export const DEFAULT_BOT: BotOptions = {
   choices: { lob: 0.6, chiquita: 0.15, body: 0.1, cut: 0.3 },
 };
 
+/**
+ * En double (`TACTIQUE_2V2.md` §2 et §12) : profondeur au filet et au fond (m du filet), écart entre partenaires,
+ * et profondeur de la balle à jouer au-delà de laquelle la paire au filet est lobée et recule. [à calibrer en jouant]
+ */
+const DOUBLES_NET_DEPTH = 2.8;
+const DOUBLES_BACK_DEPTH = 8.2;
+const DOUBLES_SPACING_NET = 3.2;
+const DOUBLES_SPACING_BACK = 3.0;
+const DOUBLES_LOBBED_DEPTH = 6.5;
+
 export type AiLevel = 'facile' | 'normal' | 'fort';
 export const AI_LEVEL_NAMES: readonly AiLevel[] = ['facile', 'normal', 'fort'];
 
@@ -84,6 +105,7 @@ export const AI_LEVEL_NAMES: readonly AiLevel[] = ['facile', 'normal', 'fort'];
 export const AI_LEVELS: Record<AiLevel, BotOptions> = {
   facile: {
     ...DEFAULT_BOT,
+    doubles: { shift: 0.15, middle: 0.3 },
     reaction: 0.35,
     aim: 0.45,
     release: { offset: 0.02, spread: 0.15 },
@@ -93,6 +115,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
   },
   normal: {
     ...DEFAULT_BOT,
+    doubles: { shift: 0.3, middle: 0.55 },
     reaction: 0.25,
     aim: 0.75,
     release: { offset: 0.01, spread: 0.12 },
@@ -103,6 +126,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
   },
   fort: {
     ...DEFAULT_BOT,
+    doubles: { shift: 0.4, middle: 0.7 },
     reaction: 0.15,
     aim: 0.95,
     release: { offset: 0, spread: 0.1 },
@@ -129,9 +153,13 @@ export class Bot {
   private atNet = false;
   /** Bandeja : pas où la balle redescend à hauteur de ses yeux, calculé une fois par coup (appui). */
   private eyeTick: { press: number; tick: number } | null = null;
+  /** En double : début du point en cours (la décision filet / fond de la paire repart du fond à chaque point). */
+  private pointTick = -Infinity;
+  /** Frappe adverse pour laquelle il a déjà annoncé « à toi ». */
+  private calledFor: number | null = null;
 
   constructor(
-    private readonly index: 0 | 1,
+    private readonly index: number,
     seed: number,
     private readonly options: BotOptions = DEFAULT_BOT,
   ) {
@@ -146,8 +174,9 @@ export class Bot {
     const clamp = (v: number): number => Math.max(-1, Math.min(1, v));
     this.stick = { forward: clamp(this.prng.range(-0.4, 0.8) * aim), right: clamp(this.prng.range(-1, 1) * aim) };
     if (this.options.tactics && duel) {
-      const me = duel.players[this.index];
-      const opponent = duel.players[this.index === 0 ? 1 : 0];
+      const me = duel.players[this.index]!;
+      // En double, l'adversaire visé est le plus près du filet : c'est lui qu'on lobe ou qu'on met en difficulté.
+      const opponent = this.closestOpponent(duel);
       // Adversaire au filet : il lit la balle comme l'anneau la montre. Verte, le lob le passe ;
       // rouge, un lob serait court : il la remet basse, aux pieds. Sinon, balle profonde du côté libre.
       const { color, volley, height } = this.readBall(duel);
@@ -165,9 +194,11 @@ export class Bot {
       if (lobbing) this.kind = 'lob';
       else if (cut || chiquita) this.kind = 'slice';
       else if (this.kind === 'lob') this.kind = 'normal';
-      // Côté libre, vu du joueur : à l'opposé de l'adversaire (au hasard s'il est au centre).
+      // Côté libre, vu du joueur : à l'opposé de l'adversaire (au hasard s'il est au centre). En double : le milieu,
+      // entre les deux adversaires (ils hésitent), ou le plus grand trou.
       const open = Math.abs(opponent.pos.x) > 0.6 ? -Math.sign(opponent.pos.x) : this.prng.next() < 0.5 ? -1 : 1;
-      const right = open * rightFor(me.side).x;
+      const gap = duel.doubles ? this.doublesGap(duel) : null;
+      const right = gap ?? open * rightFor(me.side).x;
       this.stick = {
         forward: clamp(this.prng.range(0.2, 1) * aim),
         right: clamp(right * this.prng.range(0.6, 1) * aim),
@@ -199,7 +230,7 @@ export class Bot {
 
   /** Couleur de la balle qu'il va frapper, lue comme un humain lit l'anneau : où et quand il la prendra. */
   private readBall(duel: Duel): { color: BallColor; volley: boolean; height: number } {
-    const me = duel.players[this.index];
+    const me = duel.players[this.index]!;
     const ball = duel.ball;
     const unknown = { color: 'jaune' as const, volley: false, height: 1 };
     if (!ball) return unknown;
@@ -216,7 +247,7 @@ export class Bot {
    * portée de filet, sinon víbora ou bandeja, vers le côté libre.
    */
   private chooseOverhead(duel: Duel): void {
-    const me = duel.players[this.index];
+    const me = duel.players[this.index]!;
     const ball = duel.ball;
     if (!ball) return;
     const r = duel.profile.rally;
@@ -248,7 +279,7 @@ export class Bot {
 
   /** Stick qui fait courir vers `target`, assez vite pour arriver, assez lentement pour freiner (par la porte s'il faut). */
   private runTo(duel: Duel, target: Vec3): ArcadeCommands['stick'] {
-    const me = duel.players[this.index];
+    const me = duel.players[this.index]!;
     const next = waypoint(me.pos, target, me.side);
     const dx = next.x - me.pos.x;
     const dz = next.z - me.pos.z;
@@ -266,7 +297,7 @@ export class Bot {
    * d'impact est lu comme un humain le voit : point de course assistée, ou sommet du rebond au service.
    */
   private holding(duel: Duel): ShotKind | null {
-    const me = duel.players[this.index];
+    const me = duel.players[this.index]!;
     let impact = duel.phase === 'toss' ? duel.toss?.idealTick : me.engagement?.plan?.tick;
     // Coup haut : il relâche quand la balle redescend à la bonne hauteur, ses yeux pour la bandeja et la
     // víbora, plus haut pour le remate (bras tendu). Calculé une fois par coup, une fois le point prévu.
@@ -292,16 +323,101 @@ export class Bot {
    * Après sa frappe, monte-t-il au filet ? Comme au padel : après un service, un lob, une volée ou une
    * frappe parfaite qui met l'adversaire en difficulté. Après un coup défensif au fond, il reste derrière.
    */
-  private netAfter(duel: Duel): boolean {
-    const hit = duel.players[this.index].lastHit;
+  private netAfter(duel: Duel, hitter = this.index): boolean {
+    const hit = duel.players[hitter]!.lastHit;
     if (!hit || hit.outside) return false;
     // La bandeja et la víbora gardent le filet ; le remate y reste aussi. La chiquita et la bajada
     // permettent de le reprendre.
     return hit.serve || hit.kind === 'lob' || hit.kind === 'overhead' || hit.style === 'chiquita' || hit.volley || hit.perfect;
   }
 
+  /** Adversaire le plus près du filet (en simple, l'adversaire). */
+  private closestOpponent(duel: Duel): DuelPlayer {
+    const opponents = duel.players.filter((p) => p.team !== teamOf(this.index));
+    return opponents.reduce((a, b) => (Math.abs(b.pos.z) < Math.abs(a.pos.z) ? b : a));
+  }
+
+  /**
+   * En double, direction à viser au stick (`right`, de -1 à 1) : le milieu entre les deux adversaires (zone du
+   * divorce, `TACTIQUE_2V2.md` §6.1), ou le plus grand trou entre un adversaire et sa vitre latérale.
+   */
+  private doublesGap(duel: Duel): number {
+    const me = duel.players[this.index]!;
+    const opponents = duel.players.filter((p) => p.team !== me.team);
+    const middle = this.options.doubles?.middle ?? 0.5;
+    let x: number;
+    if (this.prng.next() < middle) x = opponents.reduce((sum, p) => sum + p.pos.x, 0) / opponents.length;
+    else {
+      // Trou le long d'une vitre : entre l'adversaire le plus au bord et la vitre de son côté.
+      const xs = opponents.map((p) => p.pos.x).sort((a, b) => a - b);
+      const low = xs[0]! + 5;
+      const high = 5 - xs[xs.length - 1]!;
+      x = low > high ? xs[0]! - low / 2 : xs[xs.length - 1]! + high / 2;
+    }
+    const width = duel.profile.rally.aimWidth;
+    return Math.max(-1, Math.min(1, x / (width * rightFor(me.side).x)));
+  }
+
+  /**
+   * En double : position d'attente de la paire (`TACTIQUE_2V2.md` §3.1). Les deux au filet ou les deux au fond ;
+   * la paire glisse vers le côté où l'adversaire va frapper (ou d'où vient la balle qu'elle joue) ; chacun garde
+   * sa moitié, à un écart constant de son partenaire.
+   */
+  private doublesHome(duel: Duel): Vec3 {
+    const me = duel.players[this.index]!;
+    const right = rightFor(me.side).x;
+    const opponentTeam = me.team === 0 ? 1 : 0;
+    // Le frappeur adverse : celui qui va jouer la balle (s'ils la reçoivent), sinon la balle elle-même.
+    const striker = duel.owner(opponentTeam);
+    const strikerX = striker !== null ? duel.players[striker]!.pos.x : (duel.ball?.pos.x ?? 0);
+    const shift = this.options.doubles?.shift ?? 0.3;
+    const centre = Math.max(-1.5, Math.min(1.5, shift * strikerX * right));
+    const spacing = this.atNet ? DOUBLES_SPACING_NET : DOUBLES_SPACING_BACK;
+    const lateral = centre + (me.half === 'right' ? 1 : -1) * (spacing / 2);
+    const depth = this.atNet ? DOUBLES_NET_DEPTH : DOUBLES_BACK_DEPTH;
+    return vec3(lateral * right, 0, me.side * depth);
+  }
+
+  /**
+   * En double, la paire décide ensemble de monter ou de reculer : d'après le dernier coup de l'équipe (le sien ou
+   * celui du partenaire). Lobé (la balle passe derrière la paire au filet), les deux reculent ; avec un partenaire
+   * humain, il se cale sur sa profondeur.
+   */
+  private updateDoublesDepth(duel: Duel): void {
+    const me = duel.players[this.index]!;
+    const partnerIndex = duel.partnerOf(this.index)!;
+    const partner = duel.players[partnerIndex]!;
+    if (duel.phase === 'serve' && this.pointTick !== duel.phaseTick) {
+      this.pointTick = duel.phaseTick;
+      // Au service, le serveur et son partenaire attaquent ; le receveur et le sien défendent.
+      this.atNet = teamOf(duel.server) === me.team;
+      this.seenHitTick = Math.max(me.lastHitTick, partner.lastHitTick);
+    }
+    const teamHitTick = Math.max(me.lastHitTick, partner.lastHitTick);
+    if (teamHitTick !== this.seenHitTick) {
+      this.seenHitTick = teamHitTick;
+      const hitter = me.lastHitTick >= partner.lastHitTick ? this.index : partnerIndex;
+      this.atNet = this.options.tactics ? this.netAfter(duel, hitter) : false;
+    }
+    // Lob de la paire que l'adversaire reprend au-dessus de la tête : il ne passe pas, on reste derrière.
+    const teamHit = (me.lastHitTick >= partner.lastHitTick ? me : partner).lastHit;
+    const opponentArming = duel.players.some((p) => p.team !== me.team && p.engagement?.kind === 'overhead');
+    if (this.atNet && teamHit?.kind === 'lob' && opponentArming) this.atNet = false;
+    // Lobés : la balle qu'on doit jouer passe derrière la ligne de service, les deux reculent.
+    if (this.atNet && duel.isReceiving(partnerIndex) && duel.ball) {
+      const owner = duel.owner(me.team);
+      const plan = owner !== null ? duel.players[owner]!.engagement?.plan : null;
+      if (plan && !plan.volley && Math.abs(plan.contact.z) > DOUBLES_LOBBED_DEPTH) this.atNet = false;
+    }
+    if (this.options.followPartner && partnerIndex !== duel.lastHitter) {
+      const depth = Math.abs(partner.pos.z);
+      if (depth < 4.5) this.atNet = true;
+      else if (depth > 6.5) this.atNet = false;
+    }
+  }
+
   commands(duel: Duel): ArcadeCommands {
-    const me = duel.players[this.index];
+    const me = duel.players[this.index]!;
     const press = (stick = this.stick): ArcadeCommands => {
       // Un appui est un front montant : le bouton est relâché au pas suivant.
       if (this.pressedFor === duel.tick - 1) return { stick, shot: null };
@@ -317,9 +433,14 @@ export class Bot {
       return press();
     }
     if (duel.phase === 'over') return NEUTRAL_ARCADE;
+    if (duel.doubles) this.updateDoublesDepth(duel);
 
-    if (duel.isReceiving(this.index)) {
-      const opponentHit = duel.players[this.index === 0 ? 1 : 0].lastHitTick;
+    // En double, il ne joue que les balles qui lui reviennent (sa moitié, ou le milieu s'il y est le mieux placé) ;
+    // celles du partenaire, il les lui laisse et se replace.
+    const owner = duel.doubles ? duel.owner(me.team) : this.index;
+    const mine = duel.isReceiving(this.index) && (owner === this.index || me.engagement !== null);
+    if (mine) {
+      const opponentHit = duel.lastHitter !== null ? duel.players[duel.lastHitter]!.lastHitTick : -Infinity;
       const engagement = me.engagement;
       if (engagement) {
         const plan = engagement.plan;
@@ -347,16 +468,31 @@ export class Bot {
     }
 
     // Hors coup : retour à la position d'attente, au centre, au fond ou au filet.
+    let home: Vec3;
+    if (duel.doubles) {
+      home = this.doublesHome(duel);
+      // Le partenaire joue une balle du milieu : « à toi ! ».
+      // Une fois par balle.
+      const shotTick = duel.lastHitter !== null ? duel.players[duel.lastHitter]!.lastHitTick : null;
+      const call = owner !== null && owner !== this.index && duel.isReceiving(owner) && shotTick !== this.calledFor ? ('tuya' as const) : undefined;
+      if (call) this.calledFor = shotTick;
+      return { ...this.walkTo(duel, home), ...(call ? { call } : {}) };
+    }
     if (me.lastHitTick !== this.seenHitTick) {
       this.seenHitTick = me.lastHitTick;
       this.atNet = this.options.tactics && this.netAfter(duel);
     }
     // Après un lob, il ne monte que si le lob passe : l'adversaire qui arme un coup au-dessus de la
     // tête (ça se voit à l'écran) va le reprendre de volée, il reste derrière.
-    const opponent = duel.players[this.index === 0 ? 1 : 0];
+    const opponent = this.closestOpponent(duel);
     if (this.atNet && me.lastHit?.kind === 'lob' && opponent.engagement?.kind === 'overhead') this.atNet = false;
-    // Dehors (après une salida de pista), il rentre d'abord par la porte.
-    const home = vec3(0, 0, me.side * (this.atNet ? NET_DEPTH : HOME_DEPTH));
+    home = vec3(0, 0, me.side * (this.atNet ? NET_DEPTH : HOME_DEPTH));
+    return this.walkTo(duel, home);
+  }
+
+  /** Commandes pour rejoindre sa position d'attente ; dehors (après une salida de pista), par la porte. */
+  private walkTo(duel: Duel, home: Vec3): ArcadeCommands {
+    const me = duel.players[this.index]!;
     const next = waypoint(me.pos, home, me.side);
     const dx = next.x - me.pos.x;
     const dz = next.z - me.pos.z;

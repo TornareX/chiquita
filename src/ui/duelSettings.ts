@@ -9,6 +9,8 @@ export type Controller = 'humain' | AiLevel;
 export interface MatchSettings {
   /** Échange libre, sans score. */
   free: boolean;
+  /** 2 contre 2 (étape C) ; sinon 1 contre 1. */
+  doubles: boolean;
   setsToWin: number;
   gamesPerSet: number;
   goldenPoint: boolean;
@@ -16,8 +18,9 @@ export interface MatchSettings {
 
 /** Réglages du mode match, modifiables dans le menu (Échap ou Start) et mémorisés dans le navigateur. */
 export interface DuelSettings {
-  players: [Controller, Controller];
-  assists: [AssistLevel, AssistLevel];
+  /** Qui joue chaque joueur : Bleu, Rouge, puis en double Bleu 2 et Rouge 2 (`playerName`). */
+  players: [Controller, Controller, Controller, Controller];
+  assists: [AssistLevel, AssistLevel, AssistLevel, AssistLevel];
   /** Pression des balles (vertes, jaunes, rouges) : 0 = sans, 1 = normale, 1,5 = forte. */
   pressure: number;
   sound: boolean;
@@ -31,14 +34,15 @@ export interface DuelSettings {
 }
 
 export const DEFAULT_SETTINGS: DuelSettings = {
-  players: ['humain', 'humain'],
-  assists: ['magnet', 'magnet'],
+  // En double, les partenaires sont des IA tant qu'on ne choisit pas d'autres manettes.
+  players: ['humain', 'humain', 'normal', 'normal'],
+  assists: ['magnet', 'magnet', 'magnet', 'magnet'],
   pressure: 1,
   sound: true,
   farOwnView: false,
   padStyle: 'auto',
   inputDisplay: true,
-  match: { free: false, ...DEFAULT_RULES },
+  match: { free: false, doubles: false, ...DEFAULT_RULES },
 };
 
 const STORAGE_KEY = 'padel-smash.reglages';
@@ -58,7 +62,17 @@ const ASSIST_LABELS: Record<AssistLevel, string> = {
 };
 
 const CONTROLLERS: readonly Controller[] = ['humain', ...AI_LEVEL_NAMES];
-const NAMES = ['Bleu', 'Rouge'] as const;
+
+/**
+ * Nom de chaque joueur. En simple : Bleu et Rouge. En double : les joueurs 0 et 1 jouent à droite (drive),
+ * les 2 et 3 à gauche (revés), dans l'équipe bleue (0, 2) ou rouge (1, 3).
+ */
+export function playerName(index: number, doubles: boolean, long = false): string {
+  const team = index % 2 === 0 ? 'Bleu' : 'Rouge';
+  if (!doubles) return team;
+  const number = index < 2 ? 1 : 2;
+  return long ? `${team} ${number} (${index < 2 ? 'droite' : 'gauche'})` : `${team} ${number}`;
+}
 
 /** Copie sûre des réglages enregistrés : toute valeur inconnue est remplacée par la valeur par défaut. */
 function sanitize(raw: unknown): DuelSettings {
@@ -66,10 +80,10 @@ function sanitize(raw: unknown): DuelSettings {
   if (!raw || typeof raw !== 'object') return s;
   const r = raw as Partial<DuelSettings>;
   r.players?.forEach((c, i) => {
-    if (i < 2 && CONTROLLERS.includes(c)) s.players[i] = c;
+    if (i < 4 && CONTROLLERS.includes(c)) s.players[i] = c;
   });
   r.assists?.forEach((a, i) => {
-    if (i < 2 && ASSIST_LEVELS.includes(a)) s.assists[i] = a;
+    if (i < 4 && ASSIST_LEVELS.includes(a)) s.assists[i] = a;
   });
   if (typeof r.pressure === 'number' && r.pressure >= 0 && r.pressure <= 2) s.pressure = r.pressure;
   if (typeof r.sound === 'boolean') s.sound = r.sound;
@@ -79,6 +93,7 @@ function sanitize(raw: unknown): DuelSettings {
   const m = r.match;
   if (m && typeof m === 'object') {
     if (typeof m.free === 'boolean') s.match.free = m.free;
+    if (typeof m.doubles === 'boolean') s.match.doubles = m.doubles;
     if (m.setsToWin === 1 || m.setsToWin === 2) s.match.setsToWin = m.setsToWin;
     if (Number.isInteger(m.gamesPerSet) && m.gamesPerSet >= 1 && m.gamesPerSet <= 6) s.match.gamesPerSet = m.gamesPerSet;
     if (typeof m.goldenPoint === 'boolean') s.match.goldenPoint = m.goldenPoint;
@@ -102,16 +117,22 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
   const ai = params.get('ai');
   const level = AI_LEVEL_NAMES.includes(ai as AiLevel) ? (ai as AiLevel) : null;
   const bot = params.get('bot') ?? (level ? '2' : null);
+  if (params.has('double')) s.match.doubles = params.get('double') !== '0';
   if (bot) {
-    s.players = ['humain', 'humain'];
-    if (bot === '1' || bot === 'both') s.players[0] = level ?? 'normal';
-    if (bot === '2' || bot === 'both') s.players[1] = level ?? 'normal';
+    // `?bot=1`, `2`, `both` (tout le monde), `none` (personne), ou une liste de numéros de joueurs à partir de 1 : `?bot=2,3,4`.
+    const ai = level ?? 'normal';
+    const listed = bot === 'both' ? [1, 2, 3, 4] : bot.split(',').map(Number);
+    s.players = ['humain', 'humain', 'humain', 'humain'];
+    for (const n of listed) if (n >= 1 && n <= 4) s.players[n - 1] = ai;
+    // Un seul côté donné : en double, son partenaire aussi.
+    if (bot === '1') s.players[2] = ai;
+    if (bot === '2') s.players[3] = ai;
   }
   const assists = params.get('assist')?.split(',');
   assists?.forEach((a, i) => {
-    if (i < 2 && ASSIST_LEVELS.includes(a as AssistLevel)) s.assists[i] = a as AssistLevel;
+    if (i < 4 && ASSIST_LEVELS.includes(a as AssistLevel)) s.assists[i] = a as AssistLevel;
   });
-  if (assists?.length === 1 && ASSIST_LEVELS.includes(assists[0] as AssistLevel)) s.assists[1] = assists[0] as AssistLevel;
+  if (assists?.length === 1 && ASSIST_LEVELS.includes(assists[0] as AssistLevel)) s.assists.fill(assists[0] as AssistLevel);
   const pressure = Number(params.get('pression'));
   if (params.has('pression') && Number.isFinite(pressure) && pressure >= 0) s.pressure = pressure;
   if (params.get('far') === 'own') s.farOwnView = true;
@@ -184,12 +205,13 @@ export function createSettingsMenu(
     panel.append(element);
     return element;
   };
-  const row = (parent: HTMLElement, label: string, control: HTMLElement): void => {
+  const row = (parent: HTMLElement, label: string, control: HTMLElement): HTMLElement => {
     const element = document.createElement('label');
     const text = document.createElement('span');
     text.textContent = label;
     element.append(text, control);
     parent.append(element);
+    return element;
   };
   const select = <T extends string | number>(
     options: readonly T[],
@@ -216,29 +238,40 @@ export function createSettingsMenu(
     return element;
   };
 
+  // Manette n° 1 pour Bleu (1), n° 2 pour Rouge (1) ; en double, n° 3 pour Bleu 2 et n° 4 pour Rouge 2.
   const players = section('Joueurs');
-  ([0, 1] as const).forEach((i) => {
+  const playerRows = ([0, 1, 2, 3] as const).map((i) =>
     row(
       players,
-      NAMES[i],
+      playerName(i, true, true),
       select(CONTROLLERS, (c) => CONTROLLER_LABELS[c], settings.players[i], (c) => {
         settings.players[i] = c;
         changed();
       }),
-    );
-  });
+    ),
+  );
 
   const assist = section('Assistance de course');
-  ([0, 1] as const).forEach((i) => {
+  const assistRows = ([0, 1, 2, 3] as const).map((i) =>
     row(
       assist,
-      NAMES[i],
+      playerName(i, true, true),
       select(ASSIST_LEVELS, (a) => ASSIST_LABELS[a], settings.assists[i], (a) => {
         settings.assists[i] = a;
         changed();
       }),
-    );
-  });
+    ),
+  );
+  /** Les joueurs 3 et 4 n'apparaissent qu'en double ; les noms suivent le format. */
+  const showFormat = (doubles: boolean): void => {
+    for (const rows of [playerRows, assistRows]) {
+      rows.forEach((element, i) => {
+        element.hidden = i >= 2 && !doubles;
+        element.querySelector('span')!.textContent = playerName(i, doubles, true);
+      });
+    }
+  };
+  showFormat(settings.match.doubles);
 
   const game = section('Jeu');
   const pressure = document.createElement('input');
@@ -271,7 +304,7 @@ export function createSettingsMenu(
   );
   row(
     game,
-    'Rouge voit les directions de son côté',
+    "L'équipe d'en face voit les directions de son côté",
     check(settings.farOwnView, (on) => {
       settings.farOwnView = on;
       changed();
@@ -296,6 +329,7 @@ export function createSettingsMenu(
 
   const match = section('Match (appliqué à la prochaine partie)');
   const draft = structuredClone(settings.match);
+  row(match, '2 contre 2 (une manette par joueur, IA aux places libres)', check(draft.doubles, (on) => (draft.doubles = on)));
   row(match, 'Échange libre, sans score', check(draft.free, (on) => (draft.free = on)));
   row(match, 'Sets', select([1, 2] as const, (n) => (n === 1 ? 'Un set' : 'Deux sets gagnants'), draft.setsToWin as 1 | 2, (n) => (draft.setsToWin = n)));
   const games = [...new Set([2, 4, 6, draft.gamesPerSet])].sort((a, b) => a - b);
@@ -351,6 +385,7 @@ export function createSettingsMenu(
   });
   restart.addEventListener('click', () => {
     settings.match = structuredClone(draft);
+    showFormat(settings.match.doubles);
     changed(true);
     menu.toggle();
   });

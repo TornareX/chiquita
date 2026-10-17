@@ -37,6 +37,8 @@ export class Match {
   winner: 0 | 1 | null = null;
   /** Serveur du jeu en cours ; en jeu décisif, celui qui a servi le premier point. */
   gameServer: 0 | 1;
+  /** Jeux terminés depuis le début du match, jeux décisifs compris. */
+  private gamesPlayed = 0;
 
   constructor(
     readonly rules: MatchRules = DEFAULT_RULES,
@@ -50,6 +52,16 @@ export class Match {
     if (!this.tiebreak) return this.gameServer;
     const played = this.points[0] + this.points[1];
     return Math.floor((played + 1) / 2) % 2 === 0 ? this.gameServer : other(this.gameServer);
+  }
+
+  /**
+   * Tours de service écoulés depuis le début du match : un par jeu, et en jeu décisif un tour au premier
+   * point puis tous les deux points. En double, le serveur est le joueur suivant de la rotation à chaque tour.
+   */
+  get serveTurn(): number {
+    if (!this.tiebreak) return this.gamesPlayed;
+    const played = this.points[0] + this.points[1];
+    return this.gamesPlayed + Math.floor((played + 1) / 2);
   }
 
   get serveSide(): ServeSide {
@@ -75,6 +87,7 @@ export class Match {
     if (!this.gameWonBy(winner)) return outcome;
 
     outcome.game = true;
+    this.gamesPlayed++;
     const wasTiebreak = this.tiebreak;
     this.games[winner]++;
     this.points = [0, 0];

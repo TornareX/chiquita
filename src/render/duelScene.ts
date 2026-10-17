@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALL_RADIUS, HALF_LENGTH, SIM_DT } from '../sim/constants';
-import type { Duel, DuelPlayer } from '../sim/duel';
+import type { CallKind, Duel, DuelPlayer } from '../sim/duel';
 import { predictBall } from '../sim/predict';
 import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
@@ -20,6 +20,11 @@ const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23
 
 /** Couleurs d'équipe vives, lisibles de loin (GAME_DESIGN.md §9). */
 export const TEAM_COLORS = [0x2f8cff, 0xff4f5e] as const;
+/** En double, le partenaire (joueurs 2 et 3) porte une teinte plus claire de la couleur de son équipe. */
+const PARTNER_COLORS = [0x8fc3ff, 0xff9ea8] as const;
+/** Durée d'affichage d'une annonce entre partenaires (s), et son texte. */
+const CALL_TIME = 1;
+const CALL_TEXT: Record<CallKind, string> = { mia: '¡Mía!', tuya: '¡Tuya!' };
 
 /**
  * Caméra de retransmission télé, derrière le joueur du camp Z négatif (GAME_DESIGN.md §8) : téléobjectif
@@ -86,6 +91,49 @@ interface PlayerView {
   /** Point où la course assistée emmène le joueur. */
   standMarker: THREE.Mesh;
   color: number;
+  /** Bulle d'annonce au-dessus de la tête (« ¡Mía! »), et l'annonce qu'elle affiche. */
+  bubble: THREE.Sprite;
+  bubbleKind: CallKind | null;
+}
+
+/** Bulle d'annonce : texte blanc sur fond sombre, dessinée dans une texture, toujours face à la caméra. */
+function createBubble(): THREE.Sprite {
+  const material = new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.renderOrder = 20;
+  sprite.visible = false;
+  return sprite;
+}
+
+function drawBubble(sprite: THREE.Sprite, text: string, color: number): void {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const g = canvas.getContext('2d');
+  if (g) {
+    g.fillStyle = 'rgba(10,16,24,0.82)';
+    g.beginPath();
+    g.roundRect(8, 8, 240, 64, 22);
+    g.fill();
+    g.strokeStyle = `#${color.toString(16).padStart(6, '0')}`;
+    g.lineWidth = 6;
+    g.stroke();
+    g.beginPath();
+    g.moveTo(112, 72);
+    g.lineTo(128, 92);
+    g.lineTo(144, 72);
+    g.fillStyle = 'rgba(10,16,24,0.82)';
+    g.fill();
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 40px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, 128, 41);
+  }
+  const material = sprite.material;
+  material.map?.dispose();
+  material.map = new THREE.CanvasTexture(canvas);
+  material.needsUpdate = true;
 }
 
 /** L'anneau commence à se resserrer ce temps avant l'impact (s). */
@@ -135,7 +183,8 @@ function createPlayerView(color: number): PlayerView {
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false }),
   );
   standMarker.rotation.x = -Math.PI / 2;
-  return { object, racket: pivot, timingRing, timingMaterial, standMarker, color };
+  const bubble = createBubble();
+  return { object, racket: pivot, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
 /** Agrandissement à appliquer à un objet de diamètre `size` à cette position pour le voir à `BALL_MIN_SCREEN`. */
@@ -234,8 +283,22 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   clipNearWall(court.object);
   const ball = createBallView();
   scene.add(ball.object);
-  const players = TEAM_COLORS.map((color) => createPlayerView(color));
-  for (const view of players) scene.add(view.object, view.standMarker);
+  /** Un joueur dessiné par joueur simulé : créés au besoin (le format peut passer du simple au double). */
+  const players: PlayerView[] = [];
+  const syncPlayers = (): void => {
+    while (players.length < duel.players.length) {
+      const i = players.length;
+      const view = createPlayerView(i < 2 ? TEAM_COLORS[i]! : PARTNER_COLORS[i - 2]!);
+      scene.add(view.object, view.standMarker, view.bubble);
+      players.push(view);
+    }
+    players.forEach((view, i) => {
+      const active = i < duel.players.length;
+      view.object.visible = active;
+      if (!active) view.standMarker.visible = view.bubble.visible = false;
+    });
+  };
+  syncPlayers();
   // Point de rebond prévu : repère orange au sol.
   const bounceMaterial = new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.85, depthWrite: false });
   const bounceMarker = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), bounceMaterial);
@@ -281,9 +344,22 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   window.addEventListener('resize', resize);
   resize();
 
-  const updatePlayer = (view: PlayerView, player: DuelPlayer, index: 0 | 1, alpha: number): void => {
+  const updatePlayer = (view: PlayerView, player: DuelPlayer, index: number, alpha: number): void => {
     const pos = lerp(player.prevPos, player.pos, alpha);
     view.object.position.set(pos.x, 0, pos.z);
+    // Annonce entre partenaires, au-dessus de la tête pendant un court instant.
+    const call = player.call && (duel.tick - player.call.tick) * SIM_DT < CALL_TIME ? player.call.kind : null;
+    view.bubble.visible = call !== null;
+    if (call) {
+      if (view.bubbleKind !== call) {
+        drawBubble(view.bubble, CALL_TEXT[call], view.color);
+        view.bubbleKind = call;
+      }
+      // Taille lisible de loin comme la balle : le joueur du fond garde une bulle de même taille à l'écran.
+      const scale = Math.max(0.9, minScreenScale(camera, pos.x, 2.4, pos.z, 1) * 0.045);
+      view.bubble.scale.set(scale * 2.67, scale, 1);
+      view.bubble.position.set(pos.x, 2.15 + scale * 0.5, pos.z);
+    }
     // Face au filet.
     view.object.rotation.y = player.side < 0 ? 0 : Math.PI;
 
@@ -349,16 +425,19 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     },
 
     render(alpha: number, frameTime: number): void {
+      syncPlayers();
       const near = duel.players[0];
-      const nearPos = lerp(near.prevPos, near.pos, alpha);
-      cameraX += (nearPos.x * CAMERA_FOLLOW - cameraX) * (1 - Math.exp(-CAMERA_SMOOTHING * frameTime));
+      // Caméra partagée : elle suit à peine l'équipe proche (en double, le milieu de la paire bleue).
+      const nearTeam = duel.players.filter((p) => p.side < 0);
+      const nearX = nearTeam.reduce((sum, p) => sum + lerp(p.prevPos, p.pos, alpha).x, 0) / nearTeam.length;
+      cameraX += (nearX * CAMERA_FOLLOW - cameraX) * (1 - Math.exp(-CAMERA_SMOOTHING * frameTime));
       shake *= Math.exp(-10 * frameTime);
       shakeTime += frameTime;
       const jitter = shake * 0.06 * Math.sin(shakeTime * 70);
       camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
       camera.lookAt(cameraX * 0.6, 0, CAMERA_LOOK_Z);
 
-      players.forEach((view, i) => updatePlayer(view, duel.players[i]!, i as 0 | 1, alpha));
+      duel.players.forEach((player, i) => updatePlayer(players[i]!, player, i, alpha));
 
       const { ball: simBall, prevBallPos } = duel;
       let pos: Vec3 | null = null;

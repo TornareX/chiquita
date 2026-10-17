@@ -36,10 +36,12 @@ function muteable<T extends object>(sounds: T, audible: () => boolean): T {
 }
 
 /**
- * Mode principal (GAME_DESIGN.md §12) : match en 1 contre 1, à deux manettes, au clavier ou contre
- * l'IA. Tout se règle dans le menu (Échap ou Start) : qui joue chaque côté, assistance, pression,
- * son, règles du match. Les réglages sont mémorisés dans le navigateur. Raccourcis d'URL, pour les tests :
- * - `?ai=facile|normal|fort` : l'IA joue Rouge (ou les joueurs donnés par `?bot=1|2|both`) ;
+ * Mode principal (GAME_DESIGN.md §12) : match en 1 contre 1 ou en 2 contre 2, une manette par joueur, au
+ * clavier ou contre l'IA. Tout se règle dans le menu (Échap ou Start) : simple ou double, qui joue chaque place,
+ * assistance, pression, son, règles du match. Les réglages sont mémorisés dans le navigateur. Raccourcis d'URL,
+ * pour les tests :
+ * - `?double=1` : 2 contre 2 (manettes 1 à 4 pour Bleu 1, Rouge 1, Bleu 2, Rouge 2) ;
+ * - `?ai=facile|normal|fort` : l'IA joue Rouge (ou les joueurs donnés par `?bot=1|2|both|none`, ou `?bot=2,3,4`) ;
  * - `?sets=2`, `?games=4`, `?gold=1` (punto de oro), `?free=1` (échange libre sans score) ;
  * - `?pression=0` (sans), `0.5`, `1.5` ; `?far=own` ; `?assist=full|partial|off|magnet` ou `?assist=full,off`.
  */
@@ -48,7 +50,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const settings = loadSettings(params);
   const rulesOf = (s: DuelSettings): MatchRules | null =>
     s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint };
-  const duel = new Duel(rulesOf(settings));
+  const duel = new Duel(rulesOf(settings), settings.match.doubles ? 'double' : 'simple');
   duel.highFloor = highFloorFromUrl();
   // Sensations réglées dans le labo, si on a choisi de les garder en match.
   const feel = loadFeel();
@@ -63,17 +65,25 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   // Une manette ne s'annonce qu'à son premier bouton : le son se débloque aussi à ce moment.
   window.addEventListener('gamepadconnected', () => sounds.unlock());
 
-  let bots: [Bot | null, Bot | null] = [null, null];
-  const sources: [string, string] = ['Clavier', 'Clavier'];
-  /** Applique les réglages à la partie en cours ; `restart` relance une partie avec les nouvelles règles. */
+  let bots: (Bot | null)[] = [];
+  const sources: string[] = ['Clavier', 'Clavier', 'Clavier', 'Clavier'];
+  /** Applique les réglages à la partie en cours ; `restart` relance une partie avec les nouvelles règles (et le format). */
   const apply = (s: DuelSettings, restart: boolean): void => {
-    bots = s.players.map((c, i) => (c === 'humain' ? null : new Bot(i as 0 | 1, i + 1, AI_LEVELS[c]))) as [Bot | null, Bot | null];
-    duel.players.forEach((player, i) => (player.assist = s.assists[i]!));
-    duel.profile.rally.pressure.scale = s.pressure;
     if (restart) {
       duel.rules = rulesOf(s);
+      duel.format = s.match.doubles ? 'double' : 'simple';
       duel.restart();
     }
+    // En double, une IA dont le partenaire est humain se cale sur lui (les deux au filet ou les deux au fond).
+    bots = duel.players.map((_, i) => {
+      const c = s.players[i]!;
+      if (c === 'humain') return null;
+      const partner = duel.partnerOf(i);
+      const followPartner = partner !== null && s.players[partner] === 'humain';
+      return new Bot(i, i + 1, { ...AI_LEVELS[c], followPartner });
+    });
+    duel.players.forEach((player, i) => (player.assist = s.assists[i]!));
+    duel.profile.rally.pressure.scale = s.pressure;
   };
   apply(settings, false);
   const padTest = createPadTest(
@@ -85,23 +95,26 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   );
   const menu = createSettingsMenu(settings, apply, () => padTest.open());
   /** Frappe au geste du stick droit, une par manette. */
-  const swings = swingEnabled() ? ([new SwingStick(), new SwingStick()] as const) : null;
+  const swings = swingEnabled() ? [new SwingStick(), new SwingStick(), new SwingStick(), new SwingStick()] : null;
   const inputs = createInputDisplay(swings);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
-  const states: [PadState | null, PadState | null] = [null, null];
-  const buttons: [InputSource | null, InputSource | null] = [null, null];
+  const states: (PadState | null)[] = [null, null, null, null];
+  const buttons: (InputSource | null)[] = [null, null, null, null];
 
   /** Bouton d'assistance maintenu au pas précédent : un appui fait passer au niveau suivant. */
-  const assistHeld = [false, false];
+  const assistHeld = [false, false, false, false];
 
-  /** Commandes des deux joueurs : manette n° i pour le joueur i, clavier en complément. */
-  const sample = (): [ArcadeCommands, ArcadeCommands] => {
+  /**
+   * Commandes de chaque joueur : manette n° i pour le joueur i ; le clavier en complément pour les deux
+   * premiers (Bleu et Rouge, ou Bleu 1 et Rouge 1 en double).
+   */
+  const sample = (): ArcadeCommands[] => {
     const pads = connectedGamepads();
-    const read = (index: 0 | 1): ArcadeCommands => {
+    const read = (index: number): ArcadeCommands => {
       const bot = bots[index];
-      const controller = settings.players[index];
+      const controller = settings.players[index]!;
       if (bot && controller !== 'humain') {
         sources[index] = AI_NAMES[controller];
         states[index] = buttons[index] = null;
@@ -109,20 +122,21 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       }
       const pad = pads[index];
       sources[index] = pad ? `Manette ${index + 1}` : 'Clavier';
-      const state: PadState = mergePads(pad ? readGamepad(pad, swings?.[index], SIM_DT) : IDLE_PAD, keyboard.read(index));
+      const typed = index < 2 ? keyboard.read(index as 0 | 1) : IDLE_PAD;
+      const state: PadState = mergePads(pad ? readGamepad(pad, swings?.[index], SIM_DT) : IDLE_PAD, typed);
       states[index] = state;
       buttons[index] = pad
         ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
-        : { kind: 'keyboard', player: index, layout: keyboardLayout };
+        : { kind: 'keyboard', player: (index % 2) as 0 | 1, layout: keyboardLayout };
       if (state.assistButton && !assistHeld[index]) {
-        const player = duel.players[index];
+        const player = duel.players[index]!;
         player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;
         settings.assists[index] = player.assist;
       }
       assistHeld[index] = state.assistButton;
-      return toCommands(state, index === 0, settings.farOwnView);
+      return toCommands(state, duel.players[index]!.side < 0, settings.farOwnView);
     };
-    return [read(0), read(1)];
+    return duel.players.map((_, i) => read(i));
   };
 
   /** Micro-pause sur une frappe parfaite : fin de la pause, en temps réel (ms). */
@@ -136,7 +150,9 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       if (contact.surface === 'out' && duel.exit) sounds.crowd({ kind: 'ooh', intensity: 0.8 });
     }
     if (duel.result) {
-      const winnerShot = duel.players[duel.result.winner].lastHit;
+      // Dernière frappe de l'équipe gagnante (en double, celle des deux partenaires qui a frappé le plus tard).
+      const winners = duel.teamPlayers(duel.result.winner).map((i) => duel.players[i]!);
+      const winnerShot = winners.reduce((a, b) => (b.lastHitTick > a.lastHitTick ? b : a)).lastHit;
       const reaction = crowdReaction(duel.result, winnerShot);
       if (reaction) sounds.crowd(reaction);
     }

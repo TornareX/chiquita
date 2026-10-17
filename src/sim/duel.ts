@@ -1,4 +1,4 @@
-import { flatDistance, planIntercept, ticksToHeight, type Intercept } from './assist';
+import { flatDistance, planIntercept, runTime, ticksToHeight, type Intercept } from './assist';
 import { createBall, type Ball } from './ball';
 import { stepBall, type Contact } from './collisions';
 import { NEUTRAL_ARCADE, type ArcadeCommands, type OverheadKind, type ShotKind, type SwingEnd } from './commands';
@@ -65,8 +65,29 @@ export interface Engagement {
  */
 export type HighFloor = 'epaules' | 'yeux' | 'tete';
 
+/** Équipe : 0 (bleus, camp Z négatif) ou 1 (rouges). Le joueur `i` est dans l'équipe `i % 2`. */
+export type Team = 0 | 1;
+export const teamOf = (index: number): Team => (index % 2 === 0 ? 0 : 1);
+export const otherTeam = (team: Team): Team => (team === 0 ? 1 : 0);
+
+/** Simple (1 contre 1) ou double (2 contre 2, GAME_DESIGN.md §12, étape C). */
+export type DuelFormat = 'simple' | 'double';
+
+/**
+ * Côté du joueur dans sa paire, vu du joueur qui regarde le filet : droite (drive) ou gauche (revés).
+ * Il le garde tout le match ; c'est aussi le côté d'où il reçoit le service (`research/tactique/TACTIQUE_2V2.md` §3.0).
+ */
+export type Half = 'right' | 'left';
+
+/** Annonce entre partenaires, affichée au-dessus du joueur : « ¡Mía! », « ¡Tuya! ». */
+export type CallKind = 'mia' | 'tuya';
+
 export interface DuelPlayer {
   side: CourtSide;
+  team: Team;
+  half: Half;
+  /** Dernière annonce et son pas, ou `null`. */
+  call: { kind: CallKind; tick: number } | null;
   pos: Vec3;
   vel: Vec3;
   /** Position au pas précédent, pour l'interpolation du rendu. */
@@ -90,7 +111,7 @@ export interface DuelPlayer {
 }
 
 export interface DuelShot {
-  player: 0 | 1;
+  player: number;
   /** Coup joué : B sur une balle basse donne un coupé, et toute balle rattrapée dehors repart en lob. */
   kind: ShotKind;
   /** Variante du coup au-dessus de la tête, sinon `null`. */
@@ -182,14 +203,15 @@ export type PointReason =
 /** Balle sortie du terrain après son rebond : elle reste jouable dehors jusqu'à ce qu'elle touche le sol. */
 export interface BallExit {
   /** Joueur qui a frappé la balle sortie. */
-  hitter: 0 | 1;
+  hitter: number;
   wall: WallId;
   tick: number;
   pos: Vec3;
 }
 
 export interface PointResult {
-  winner: 0 | 1;
+  /** Équipe gagnante (en simple, c'est aussi le numéro du joueur). */
+  winner: Team;
   reason: PointReason;
   /** Nombre de coups de l'échange, service compris. */
   hits: number;
@@ -236,6 +258,20 @@ const STALL_TIME = 8;
 export const HOME_DEPTH = 8.5;
 /** Position d'attaque au filet, en distance au filet (m). */
 export const NET_DEPTH = 3.5;
+/** En double : position latérale de base, au milieu de sa moitié (m), et profondeur du partenaire du serveur. */
+export const DOUBLE_LATERAL = 1.6;
+const SERVER_PARTNER_DEPTH = 2.6;
+/** En double : profondeur du partenaire du receveur, un pas derrière la ligne de service (m). */
+const RECEIVER_PARTNER_DEPTH = 7.4;
+/** Ordre de service en double : un joueur de chaque équipe à tour de rôle (A1, B1, A2, B2). */
+const DOUBLE_ROTATION = [0, 1, 2, 3] as const;
+/** Deux partenaires ne se chevauchent pas : écart minimal entre leurs centres (m). */
+const PARTNER_GAP = 0.75;
+/** Bande centrale partagée entre partenaires, de part et d'autre du centre de la paire (m), et égalité d'arrivée (s). */
+const MIDDLE_BAND = 0.7;
+const MIDDLE_TIE = 0.15;
+/** Attribution de la balle entre partenaires recalculée tous les ce nombre de pas. */
+const OWNER_TICKS = 6;
 const SERVE_HEIGHT = 0.95;
 
 /**
@@ -268,10 +304,18 @@ export function contactTiming(
   return best;
 }
 
-function createDuelPlayer(side: CourtSide): DuelPlayer {
-  const pos = vec3(0, 0, side * HOME_DEPTH);
+function createDuelPlayer(index: number, format: DuelFormat): DuelPlayer {
+  const team = teamOf(index);
+  const side: CourtSide = team === 0 ? -1 : 1;
+  // En double, les joueurs 0 et 1 jouent à droite, 2 et 3 à gauche.
+  const half: Half = index < 2 ? 'right' : 'left';
+  const lateral = format === 'double' ? (half === 'right' ? 1 : -1) * DOUBLE_LATERAL * rightFor(side).x : 0;
+  const pos = vec3(lateral, 0, side * HOME_DEPTH);
   return {
     side,
+    team,
+    half,
+    call: null,
     pos,
     vel: vec3(0, 0, 0),
     prevPos: pos,
@@ -297,7 +341,8 @@ function createDuelPlayer(side: CourtSide): DuelPlayer {
 export class Duel {
   tick = 0;
   profile: PhysicsProfile = structuredClone(ARCADE);
-  players: [DuelPlayer, DuelPlayer] = [createDuelPlayer(-1), createDuelPlayer(1)];
+  /** Joueurs : 2 en simple, 4 en double. Le joueur `i` est dans l'équipe `i % 2` (`teamOf`). */
+  players: [DuelPlayer, DuelPlayer, ...DuelPlayer[]] = [] as unknown as [DuelPlayer, DuelPlayer];
   /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`). */
   highFloor: HighFloor = 'epaules';
   ball: Ball | null = null;
@@ -305,9 +350,11 @@ export class Duel {
   readonly contacts: Contact[] = [];
   phase: DuelPhase = 'serve';
   phaseTick = 0;
-  server: 0 | 1 = 0;
+  server = 0;
+  /** Receveur du service en cours : lui seul peut renvoyer le service. */
+  receiver = 1;
   /** Dernier joueur à avoir frappé la balle en jeu. */
-  lastHitter: 0 | 1 | null = null;
+  lastHitter: number | null = null;
   /** Rebonds au sol dans le camp du receveur depuis la dernière frappe. */
   bounces = 0;
   touchedNet = false;
@@ -342,13 +389,53 @@ export class Duel {
   /** Après la pause, le service est rejoué (faute de premier service ou let) au lieu d'un nouveau point. */
   private replayServe = false;
 
-  /** Règles du match, ou `null` en échange libre. Changées, elles s'appliquent à la prochaine partie (`restart`). */
-  constructor(public rules: MatchRules | null = null) {
+  /**
+   * Attribution de la balle dans chaque équipe (`owner`), recalculée tous les `OWNER_TICKS` pas, ou plus tôt si la
+   * balle a été frappée, a rebondi ou touché une vitre depuis.
+   */
+  private readonly ownerCache: ({ tick: number; key: string; owner: number } | null)[] = [null, null];
+
+  /**
+   * Règles du match, ou `null` en échange libre. Changées, elles s'appliquent à la prochaine partie (`restart`).
+   * `format` : simple (2 joueurs) ou double (4 joueurs) ; changé, il s'applique aussi au `restart`.
+   */
+  constructor(
+    public rules: MatchRules | null = null,
+    public format: DuelFormat = 'simple',
+  ) {
     this.restart();
+  }
+
+  get doubles(): boolean {
+    return this.players.length === 4;
+  }
+
+  /** Partenaire du joueur `index` en double, sinon `null`. */
+  partnerOf(index: number): number | null {
+    return this.doubles ? (index + 2) % 4 : null;
+  }
+
+  /** Joueurs de l'équipe `team`. */
+  teamPlayers(team: Team): number[] {
+    return this.players.map((_, i) => i).filter((i) => teamOf(i) === team);
   }
 
   /** Nouvelle partie : score à zéro, premier service au joueur 0. */
   restart(): void {
+    const count = this.format === 'double' ? 4 : 2;
+    if (this.players.length !== count) {
+      // Les réglages propres aux joueurs (assistance, taille) survivent au changement de format.
+      const old = this.players;
+      this.players = Array.from({ length: count }, (_, i): DuelPlayer => {
+        const player = createDuelPlayer(i, this.format);
+        const previous = old[i] ?? old[teamOf(i)];
+        if (previous) {
+          player.assist = previous.assist;
+          player.height = previous.height;
+        }
+        return player;
+      }) as [DuelPlayer, DuelPlayer, ...DuelPlayer[]];
+    }
     this.match = this.rules ? new Match(this.rules) : null;
     this.bestRally = 0;
     this.rallies = 0;
@@ -362,14 +449,74 @@ export class Duel {
     return this.tick * SIM_DT;
   }
 
-  /** Le joueur `index` attend la balle : c'est à lui de frapper le prochain coup. */
-  isReceiving(index: 0 | 1): boolean {
-    return this.phase === 'rally' && this.lastHitter !== null && this.lastHitter !== index;
+  /**
+   * Le joueur `index` attend la balle : c'est à son équipe de frapper le prochain coup. En double, les deux
+   * partenaires peuvent la jouer (le premier qui la touche), sauf le service, que seul le receveur renvoie.
+   */
+  isReceiving(index: number): boolean {
+    if (this.phase !== 'rally' || this.lastHitter === null || teamOf(this.lastHitter) === teamOf(index)) return false;
+    return !this.doubles || this.hits !== 1 || index === this.receiver;
+  }
+
+  /**
+   * Qui doit prendre la balle dans l'équipe `team` qui la reçoit (`TACTIQUE_2V2.md` §3.0 et §3.4) : celui qui
+   * s'est engagé le premier ; sinon le propriétaire de la moitié où elle se joue ; au milieu, celui qui arrive
+   * nettement le premier, sinon le joueur de gauche (son coup droit est au centre) ; si celui-là ne peut pas
+   * l'atteindre et son partenaire si, le partenaire (cambio). En simple, le joueur de l'équipe ; `null` hors
+   * échange. Les IA partenaires s'en servent pour ne pas se gêner ; un humain reste libre de la prendre.
+   */
+  owner(team: Team): number | null {
+    if (this.phase !== 'rally' || !this.ball || this.lastHitter === null || teamOf(this.lastHitter) === team) return null;
+    if (!this.doubles) return team;
+    if (this.hits === 1) return this.receiver;
+    const [a, b] = this.teamPlayers(team) as [number, number];
+    const pa = this.players[a]!;
+    const pb = this.players[b]!;
+    if (pa.engagement && !pb.engagement) return a;
+    if (pb.engagement && !pa.engagement) return b;
+    if (pa.engagement && pb.engagement) return pa.engagement.pressTick <= pb.engagement.pressTick ? a : b;
+    const key = `${this.hits}:${this.bounces}:${this.glassWalls.length}`;
+    const cached = this.ownerCache[team];
+    if (cached && cached.key === key && this.tick - cached.tick < OWNER_TICKS) return cached.owner;
+    const owner = this.computeOwner(a, b);
+    this.ownerCache[team] = { tick: this.tick, key, owner };
+    return owner;
+  }
+
+  private computeOwner(a: number, b: number): number {
+    const pa = this.players[a]!;
+    const pb = this.players[b]!;
+    const side = pa.side;
+    const right = rightFor(side).x;
+    const planOf = (p: DuelPlayer): Intercept | null =>
+      planIntercept(this.ball!, p.pos, p.side, this.tick, this.profile, 0, this.bounces > 0, false, p.height);
+    const plans = new Map([
+      [a, planOf(pa)],
+      [b, planOf(pb)],
+    ]);
+    // Joueur de gauche : le plus à gauche maintenant (après un cambio, les rôles suivent les places).
+    const [left, rightPlayer] = pa.pos.x * right <= pb.pos.x * right ? [a, b] : [b, a];
+    const contact = (plans.get(a) ?? plans.get(b))?.contact;
+    if (!contact) return left;
+    const offset = (contact.x - (pa.pos.x + pb.pos.x) / 2) * right;
+    let owner: number;
+    if (Math.abs(offset) > MIDDLE_BAND) owner = offset < 0 ? left : rightPlayer;
+    else {
+      const time = (i: number): number => {
+        const plan = plans.get(i);
+        return plan ? runTime(pathDistance(this.players[i]!.pos, plan.stand, side), this.profile) : Infinity;
+      };
+      const [tl, tr] = [time(left), time(rightPlayer)];
+      owner = Math.abs(tl - tr) > MIDDLE_TIE ? (tl < tr ? left : rightPlayer) : left;
+    }
+    const mate = owner === a ? b : a;
+    if (!plans.get(owner)?.reachable && plans.get(mate)?.reachable) owner = mate;
+    return owner;
   }
 
   /** Position de la balle tenue par le serveur, avant le service : côté coup droit. */
   servePosition(): Vec3 {
-    const player = this.players[this.server];
+    const player = this.players[this.server]!;
     return vec3(
       player.pos.x + rightFor(player.side).x * this.profile.rally.standLateral,
       SERVE_HEIGHT,
@@ -377,13 +524,14 @@ export class Duel {
     );
   }
 
-  step(commands: readonly [ArcadeCommands, ArcadeCommands] = [NEUTRAL_ARCADE, NEUTRAL_ARCADE]): void {
+  step(commands: readonly ArcadeCommands[] = []): void {
     this.contacts.length = 0;
     this.shot = null;
     this.result = null;
     this.serveCall = null;
 
-    for (const index of [0, 1] as const) this.updatePlayer(index, commands[index]);
+    for (let index = 0; index < this.players.length; index++) this.updatePlayer(index, commands[index] ?? NEUTRAL_ARCADE);
+    if (this.doubles) this.separatePartners();
 
     if (this.ball) {
       this.prevBallPos = this.ball.pos;
@@ -393,22 +541,50 @@ export class Duel {
       this.updateToss();
     } else if (this.phase === 'rally') {
       this.judge();
-      if (this.phase === 'rally') for (const index of [0, 1] as const) this.tryHit(index);
+      for (let index = 0; index < this.players.length && this.phase === 'rally'; index++) this.tryHit(index);
       if (this.phase === 'rally' && this.tick - this.lastHitTick() > STALL_TIME / SIM_DT) {
-        this.endPoint(this.lastHitter ?? 0, 'not-returned');
+        this.endPoint(teamOf(this.lastHitter ?? 0), 'not-returned');
       }
     } else if (this.phase === 'dead' && this.tick - this.phaseTick >= (this.replayServe ? FAULT_TIME : DEAD_TIME) / SIM_DT) {
       if (this.replayServe) this.startServe(this.server, false);
       else if (this.match?.winner != null) {
         this.phase = 'over';
         this.phaseTick = this.tick;
-      } else this.startServe(this.match ? this.match.server : this.server === 0 ? 1 : 0);
+      } else this.startServe(this.nextServer());
     }
     this.tick++;
   }
 
+  /**
+   * Serveur du prochain point. En simple, celui du match (ou chacun son tour en échange libre). En double,
+   * un joueur de chaque équipe à tour de rôle, à chaque jeu (A1, B1, A2, B2), en jeu décisif aussi.
+   */
+  private nextServer(): number {
+    if (!this.doubles) return this.match ? this.match.server : this.server === 0 ? 1 : 0;
+    const turn = this.match ? this.match.serveTurn : this.rallies;
+    return DOUBLE_ROTATION[turn % 4]!;
+  }
+
   private lastHitTick(): number {
-    return Math.max(this.players[0].lastHitTick, this.players[1].lastHitTick);
+    return Math.max(...this.players.map((p) => p.lastHitTick));
+  }
+
+  /** En double, deux partenaires qui se rentrent dedans s'écartent l'un de l'autre, chacun de la moitié. */
+  private separatePartners(): void {
+    const radius = this.profile.player.radius;
+    for (const team of [0, 1] as const) {
+      const [a, b] = this.teamPlayers(team).map((i) => this.players[i]!) as [DuelPlayer, DuelPlayer];
+      const dx = b.pos.x - a.pos.x;
+      const dz = b.pos.z - a.pos.z;
+      const gap = Math.sqrt(dx * dx + dz * dz);
+      if (gap >= PARTNER_GAP) continue;
+      // L'un exactement sur l'autre : on les écarte en largeur, chacun vers sa moitié.
+      const toRight = rightFor(a.side).x;
+      const [ux, uz] = gap > 1e-6 ? [dx / gap, dz / gap] : [a.half === 'right' ? -toRight : toRight, 0];
+      const push = (PARTNER_GAP - gap) / 2;
+      a.pos = moveWithin(a.pos, vec3(a.pos.x - ux * push, 0, a.pos.z - uz * push), a.side, radius);
+      b.pos = moveWithin(b.pos, vec3(b.pos.x + ux * push, 0, b.pos.z + uz * push), b.side, radius);
+    }
   }
 
   /** Prépare un service : nouveau point, ou service rejoué (second service, let). */
@@ -418,14 +594,15 @@ export class Duel {
    * joue ensuite normalement. Avec `kind` = `serve`, le point repart d'un service de `hitter`.
    */
   playSituation(
-    hitter: 0 | 1,
-    positions: readonly [Vec3, Vec3],
+    hitter: number,
+    positions: readonly Vec3[],
     /** `error` : coup raté exprès (balle plus haute et plus lente, comme une défense sous pression). */
     opening: { kind: ShotKind; contact: Vec3; target: Vec3; perfect?: boolean; overhead?: OverheadKind; error?: number } | 'serve',
   ): void {
     this.startServe(hitter);
     for (const [i, pos] of positions.entries()) {
-      const player = this.players[i as 0 | 1];
+      const player = this.players[i];
+      if (!player) continue;
       player.pos = player.prevPos = pos;
       player.lastHit = null;
     }
@@ -437,27 +614,41 @@ export class Duel {
     this.ball = createBall(contact, vec3(0, 0, 0));
     this.prevBallPos = contact;
     // Une volée si le frappeur est près du filet : l'IA en déduit qu'elle y reste.
-    const volley = Math.abs(positions[hitter].z) < this.profile.rally.volleyZone;
+    const volley = Math.abs(positions[hitter]!.z) < this.profile.rally.volleyZone;
     this.hit(hitter, kind, contact, target, perfect, 0, volley, false, false, overhead ? { overhead, error } : { error });
   }
 
-  private startServe(server: 0 | 1, newPoint = true): void {
+  private startServe(server: number, newPoint = true): void {
     this.phase = 'serve';
     this.phaseTick = this.tick;
     this.server = server;
     this.replayServe = false;
     if (newPoint) this.serveNumber = 1;
     this.serveSide = this.match ? this.match.serveSide : this.rallies % 2 === 0 ? 'right' : 'left';
-    // Serveur et receveur prennent place en diagonale.
-    const spots = servePositions(this.players[server].side, this.serveSide, this.profile);
-    const receiver = server === 0 ? 1 : 0;
-    for (const [index, pos] of [
+    // Serveur et receveur prennent place en diagonale. En double, reçoit le joueur adverse de ce côté.
+    const serverSide = this.players[server]!.side;
+    const spots = servePositions(serverSide, this.serveSide, this.profile);
+    const receiving = otherTeam(teamOf(server));
+    const receiver = this.doubles ? this.teamPlayers(receiving).find((i) => this.players[i]!.half === this.serveSide)! : receiving;
+    this.receiver = receiver;
+    const places: [number, Vec3][] = [
       [server, spots.server],
       [receiver, spots.receiver],
-    ] as const) {
-      const player = this.players[index];
+    ];
+    // Le partenaire du serveur attend au filet, de l'autre côté ; celui du receveur, un pas derrière la ligne de service.
+    const partnerServer = this.partnerOf(server);
+    const partnerReceiver = this.partnerOf(receiver);
+    if (partnerServer !== null) {
+      places.push([partnerServer, vec3(-Math.sign(spots.server.x) * DOUBLE_LATERAL, 0, serverSide * SERVER_PARTNER_DEPTH)]);
+    }
+    if (partnerReceiver !== null) {
+      places.push([partnerReceiver, vec3(-Math.sign(spots.receiver.x) * DOUBLE_LATERAL, 0, -serverSide * RECEIVER_PARTNER_DEPTH)]);
+    }
+    for (const [index, pos] of places) {
+      const player = this.players[index]!;
       player.pos = player.prevPos = pos;
       player.vel = vec3(0, 0, 0);
+      player.call = null;
     }
     this.toss = null;
     this.ball = null;
@@ -468,7 +659,7 @@ export class Duel {
     for (const player of this.players) player.engagement = null;
   }
 
-  private endPoint(winner: 0 | 1, reason: PointReason): void {
+  private endPoint(winner: Team, reason: PointReason): void {
     const result: PointResult = { winner, reason, hits: this.hits };
     this.result = this.lastResult = result;
     if (this.match) this.lastOutcome = this.match.awardPoint(winner);
@@ -481,13 +672,14 @@ export class Duel {
     for (const player of this.players) player.engagement = null;
   }
 
-  private updatePlayer(index: 0 | 1, cmd: ArcadeCommands): void {
-    const player = this.players[index];
+  private updatePlayer(index: number, cmd: ArcadeCommands): void {
+    const player = this.players[index]!;
     const r = this.profile.rally;
     player.prevPos = player.pos;
     player.stick = cmd.stick;
     const pressed = cmd.shot !== null && cmd.shot !== player.heldShot ? cmd.shot : null;
     player.heldShot = cmd.shot;
+    if (cmd.call) player.call = { kind: cmd.call, tick: this.tick };
     // Relâcher le bouton déclenche le coup préparé.
     if (player.engagement && player.engagement.releaseTick === null && cmd.shot === null) {
       player.engagement.releaseTick = this.tick;
@@ -523,6 +715,8 @@ export class Duel {
         if (cmd.swing) player.engagement.swing = { ...cmd.swing };
         else delete player.engagement.swing;
       } else {
+        // En double, s'engager sur une balle à recevoir, c'est l'annoncer à son partenaire.
+        if (this.doubles && this.isReceiving(index)) player.call = { kind: 'mia', tick: this.tick };
         player.engagement = {
           kind: pressed,
           pressTick: this.tick,
@@ -678,7 +872,7 @@ export class Duel {
     }
     const timing = (toss.releaseTick - toss.idealTick) * SIM_DT;
     const perfect = timing >= -r.perfectBefore && timing <= r.perfectAfter;
-    const player = this.players[this.server];
+    const player = this.players[this.server]!;
     const aimed = serveTarget(player.side, this.serveSide, player.stick, perfect, this.profile);
     const target = lateDrift(aimed, player.side, timing, this.profile);
     this.phase = 'rally';
@@ -694,7 +888,7 @@ export class Duel {
     const call: ServeCall = { call: reason ? 'fault' : 'let', reason, serveNumber: this.serveNumber };
     this.serveCall = this.lastServeCall = call;
     this.toss = null;
-    if (reason && this.serveNumber === 2) return this.endPoint(this.server === 0 ? 1 : 0, 'double-fault');
+    if (reason && this.serveNumber === 2) return this.endPoint(otherTeam(teamOf(this.server)), 'double-fault');
     if (reason) this.serveNumber = 2;
     this.replayServe = true;
     this.phase = 'dead';
@@ -710,8 +904,8 @@ export class Duel {
    * passage au point idéal (à côté du joueur). En avance : coup normal ; autour : frappe parfaite ;
    * en retard : la balle part plus large et plus long ; au-delà de `lateWindow`, elle a passé le joueur.
    */
-  private tryHit(index: 0 | 1): void {
-    const player = this.players[index];
+  private tryHit(index: number): void {
+    const player = this.players[index]!;
     const engagement = player.engagement;
     const ball = this.ball;
     if (!engagement || engagement.releaseTick === null || !ball || !this.isReceiving(index)) return;
@@ -803,8 +997,11 @@ export class Duel {
    * Pression de la balle que le joueur `index` frappe, ou va frapper : temps depuis la frappe adverse,
    * hauteur et vitesse de la balle, course du joueur, coin.
    */
-  pressureOf(index: 0 | 1, kind: ShotKind, height: number, speed: number, running: number, tick = this.tick): number {
-    const opponent = this.players[index === 0 ? 1 : 0];
+  pressureOf(index: number, kind: ShotKind, height: number, speed: number, running: number, tick = this.tick): number {
+    // L'adversaire qui a frappé la balle ; avant le premier coup, le premier joueur de l'autre équipe.
+    const team = teamOf(index);
+    const opponent =
+      this.lastHitter !== null && teamOf(this.lastHitter) !== team ? this.players[this.lastHitter]! : this.players[otherTeam(team)]!;
     const doubleGlass = this.glassWalls.length >= 2;
     // Un coup frappé fort met la pression même après la vitre, qui le ralentit : on garde une part de sa vitesse de départ.
     const struck = (opponent.lastHit?.speed ?? 0) * this.profile.rally.pressure.struckSpeed;
@@ -851,8 +1048,8 @@ export class Duel {
    * Remate préparé : au stick, tout geste préparé (smash, víbora, feinte : même préparation) ; sinon stick vers
    * l'avant à l'appui (ou maintenant, avec `now`). La course assistée vise alors la hauteur du remate.
    */
-  rematePrepared(index: 0 | 1, now = false): boolean {
-    const player = this.players[index];
+  rematePrepared(index: number, now = false): boolean {
+    const player = this.players[index]!;
     const swing = player.engagement?.swing;
     if (swing) return swing.prepared;
     const r = this.profile.rally;
@@ -864,8 +1061,8 @@ export class Duel {
    * droit ; bajada sur la balle sortie de la vitre), víbora (en arc), feinte (lâché). Sinon, d'après le stick
    * de déplacement.
    */
-  overheadVariant(index: 0 | 1, contact: Vec3): OverheadKind {
-    const player = this.players[index];
+  overheadVariant(index: number, contact: Vec3): OverheadKind {
+    const player = this.players[index]!;
     const swing = player.engagement?.swing;
     const afterGlass = this.bounces > 0 && this.touchedGlass;
     if (swing) {
@@ -882,8 +1079,8 @@ export class Duel {
    * (bandeja, víbora), ou plus haut pour le remate (`smash` : stick vers l'avant, à l'appui ou maintenant).
    * `null` hors coup haut.
    */
-  overheadReleaseTick(index: 0 | 1, smash = this.rematePrepared(index, true)): number | null {
-    const player = this.players[index];
+  overheadReleaseTick(index: number, smash = this.rematePrepared(index, true)): number | null {
+    const player = this.players[index]!;
     const plan = player.engagement?.plan;
     const ball = this.ball;
     if (player.engagement?.kind !== 'overhead' || !plan || !ball) return null;
@@ -899,8 +1096,8 @@ export class Duel {
   }
 
   /** Pression prévue pour le coup préparé (point d'impact de la course assistée), pour l'affichage. */
-  plannedPressure(index: 0 | 1): number | null {
-    const engagement = this.players[index].engagement;
+  plannedPressure(index: number): number | null {
+    const engagement = this.players[index]!.engagement;
     const plan = engagement?.plan;
     if (!engagement || !plan || !this.ball) return null;
     const speed = Math.sqrt(this.ball.vel.x ** 2 + this.ball.vel.z ** 2);
@@ -909,8 +1106,8 @@ export class Duel {
   }
 
   /** Coup dans le vide : relâché sans balle à portée. Le joueur peut réarmer. */
-  private whiff(index: 0 | 1): void {
-    const player = this.players[index];
+  private whiff(index: number): void {
+    const player = this.players[index]!;
     player.lastWhiffKind = player.engagement?.kind ?? null;
     const plan = player.engagement?.plan;
     player.lastWhiffLate = plan !== null && plan !== undefined && (player.engagement?.releaseTick ?? 0) > plan.tick;
@@ -919,7 +1116,7 @@ export class Duel {
   }
 
   private hit(
-    index: 0 | 1,
+    index: number,
     kind: ShotKind,
     contact: Vec3,
     target: Vec3,
@@ -930,7 +1127,7 @@ export class Duel {
     manual: boolean,
     extra: HitExtra = {},
   ): void {
-    const player = this.players[index];
+    const player = this.players[index]!;
     const r = this.profile.rally;
     const { overhead = null, outside = false, pressure = 0, error = 0, style = null, prepared = Infinity, heightOff = 0 } = extra;
     const tuning: ShotTuningKey = overhead ?? (style === 'cut' || style === 'chiquita' ? style : kind === 'overhead' ? 'bandeja' : kind);
@@ -954,6 +1151,9 @@ export class Duel {
     ball.out = false;
     this.exit = null;
     player.engagement = null;
+    // En double, le partenaire qui préparait aussi la balle n'a plus rien à frapper.
+    const partner = this.partnerOf(index);
+    if (partner !== null) this.players[partner]!.engagement = null;
     player.lastHitTick = this.tick;
     this.lastHitter = index;
     this.bounces = 0;
@@ -983,10 +1183,11 @@ export class Duel {
 
   /** Règles du padel appliquées aux contacts du pas. */
   private judge(): void {
-    const hitter = this.lastHitter;
-    if (hitter === null) return;
-    const receiver = hitter === 0 ? 1 : 0;
-    const hitterSide = this.players[hitter].side;
+    const hitterIndex = this.lastHitter;
+    if (hitterIndex === null) return;
+    const hitter = teamOf(hitterIndex);
+    const receiver = otherTeam(hitter);
+    const hitterSide = this.players[hitterIndex]!.side;
     for (const contact of this.contacts) {
       const hitterHalf = contact.pos.z * hitterSide > 0;
       // Sortie après le rebond : point pour le frappeur quand elle touche le sol dehors, sauf si
@@ -1043,7 +1244,7 @@ export class Duel {
           break;
         case 'out':
           if (this.bounces === 0) return this.endPoint(receiver, 'out');
-          this.exit = this.lastExit = { hitter, wall: contact.wall ?? 'backFar', tick: this.tick, pos: contact.pos };
+          this.exit = this.lastExit = { hitter: hitterIndex, wall: contact.wall ?? 'backFar', tick: this.tick, pos: contact.pos };
           break;
       }
     }

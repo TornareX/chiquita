@@ -7,14 +7,15 @@ import type { PhysicsProfile } from '../sim/profile';
 import { buttonsEnabled } from '../input/gamepad';
 import type { SwingStick } from '../input/swingStick';
 import { buttonIcon, escapeHtml, keysFor, type InputSource } from './buttonIcons';
+import { playerName } from './duelSettings';
 import { createSwingGuide, type SwingContext } from './swingGuide';
 
 /**
  * Situation de la balle que le joueur `index` va jouer, comme la simulation la jugera : au-dessus du seuil des
  * coups hauts, coup haut ; avant le rebond, volée ; sinon, coup au sol.
  */
-export function swingContext(duel: Duel, index: 0 | 1): SwingContext {
-  const me = duel.players[index];
+export function swingContext(duel: Duel, index: number): SwingContext {
+  const me = duel.players[index]!;
   const plan = me.engagement?.plan;
   const ball = duel.ball;
   const height = plan ? plan.contact.y : (ball?.pos.y ?? 0);
@@ -110,11 +111,11 @@ export class ReleaseTracker {
   noteTick = -Infinity;
   readonly history: ReleaseNote[] = [];
 
-  constructor(private readonly index: 0 | 1) {}
+  constructor(private readonly index: number) {}
 
   /** À appeler après chaque `duel.step`, avec l'état lu pour ce joueur à ce pas. */
   step(duel: Duel, state: PadState): void {
-    const player = duel.players[this.index];
+    const player = duel.players[this.index]!;
     const released = this.held;
     if (player.lastHitTick !== this.lastHitTick) {
       this.lastHitTick = player.lastHitTick;
@@ -164,13 +165,15 @@ export class ReleaseTracker {
 
 export interface InputDisplay {
   /** Après chaque pas de simulation : état lu pour chaque joueur, `null` pour une IA. */
-  step(duel: Duel, states: readonly [PadState | null, PadState | null]): void;
+  step(duel: Duel, states: readonly (PadState | null)[]): void;
   /** À chaque image : `sources[i]` est `null` pour une IA (pas d'affichage). */
-  render(duel: Duel, states: readonly [PadState | null, PadState | null], sources: readonly [InputSource | null, InputSource | null], visible: boolean): void;
+  render(duel: Duel, states: readonly (PadState | null)[], sources: readonly (InputSource | null)[], visible: boolean): void;
 }
 
-const NAMES = ['Bleu', 'Rouge'] as const;
-const TEAM = ['#6fb2ff', '#ff8a94'] as const;
+/** Couleur de chaque joueur : celle de son équipe, plus claire pour le partenaire en double. */
+const TEAM = ['#6fb2ff', '#ff8a94', '#b5d8ff', '#ffc2c8'] as const;
+/** Joueurs suivis au plus (double). */
+const MAX_PLAYERS = 4;
 const BUTTON_XY: Record<ButtonPosition, [number, number]> = { bottom: [30, 50], right: [50, 30], left: [10, 30], top: [30, 10] };
 const KINDS: readonly ShotKind[] = ['normal', 'overhead', 'slice', 'lob'];
 
@@ -210,7 +213,7 @@ function sourceName(source: InputSource): string {
 /** Centre du stick droit dans le dessin : après les boutons quand ils sont affichés (`?boutons=1`). */
 const swingX = (): number => (buttonsEnabled() ? 160 : 98);
 
-function createWidget(index: 0 | 1): Widget {
+function createWidget(index: number): Widget {
   const withButtons = buttonsEnabled();
   const SWING_X = swingX();
   const root = document.createElement('div');
@@ -219,7 +222,7 @@ function createWidget(index: 0 | 1): Widget {
   root.style.cssText =
     'position:fixed;left:16px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;' +
     'background:rgba(10,16,24,.6);color:#f2f5f7;font:12px/1.35 system-ui,sans-serif;pointer-events:none;' +
-    `border-left:3px solid ${TEAM[index]};width:min(400px,calc(100vw - 32px));box-sizing:border-box`;
+    `border-left:3px solid ${TEAM[index]!};width:min(400px,calc(100vw - 32px));box-sizing:border-box`;
   const pads = document.createElement('div');
   pads.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px';
   const width = SWING_X + 30;
@@ -228,7 +231,7 @@ function createWidget(index: 0 | 1): Widget {
   row.append(svg('circle', { cx: 30, cy: 30, r: 26, fill: 'rgba(255,255,255,.06)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
   row.append(svg('line', { x1: 30, y1: 6, x2: 30, y2: 54, stroke: '#3a4a58', 'stroke-width': 1 }));
   row.append(svg('line', { x1: 6, y1: 30, x2: 54, y2: 30, stroke: '#3a4a58', 'stroke-width': 1 }));
-  const dot = svg('circle', { cx: 30, cy: 30, r: 7, fill: TEAM[index] });
+  const dot = svg('circle', { cx: 30, cy: 30, r: 7, fill: TEAM[index]! });
   row.append(dot);
   // Boutons de face, en losange, à droite du stick.
   const group = svg('g', { transform: 'translate(68,0)' });
@@ -284,40 +287,48 @@ function noteHtml(note: ReleaseNote, source: InputSource): string {
  * relâcher), ce que le dernier relâcher a donné, et les 5 précédents.
  */
 export function createInputDisplay(swings?: readonly (SwingStick | null)[] | null): InputDisplay {
-  const trackers = [new ReleaseTracker(0), new ReleaseTracker(1)] as const;
-  const widgets: (Widget | null)[] = [null, null];
+  const trackers = Array.from({ length: MAX_PLAYERS }, (_, i) => new ReleaseTracker(i));
+  const widgets: (Widget | null)[] = Array.from({ length: MAX_PLAYERS }, () => null);
   /** Guide du geste au stick droit, à droite du retour des entrées de chaque joueur. */
-  const guides = [createSwingGuide(), createSwingGuide()] as const;
+  const guides = Array.from({ length: MAX_PLAYERS }, () => createSwingGuide());
 
   return {
     step(duel, states) {
-      states.forEach((state, i) => state && trackers[i as 0 | 1].step(duel, state));
+      states.forEach((state, i) => state && i < duel.players.length && trackers[i]!.step(duel, state));
     },
     render(duel, states, sources, visible) {
-      const shown = ([0, 1] as const).filter((i) => visible && sources[i] && states[i]);
-      ([0, 1] as const).forEach((i) => {
+      const indices = trackers.map((_, i) => i);
+      const shown = indices.filter((i) => visible && i < duel.players.length && sources[i] && states[i]);
+      // En bas à gauche, au-dessus des noms des joueurs, empilés dans l'ordre des joueurs (Bleu en bas). À plus de
+      // deux (double à 3 ou 4 manettes), sans l'historique : ils tiennent dans l'écran sans cacher le score.
+      const base = (document.getElementById('players')?.offsetHeight ?? 36) + 22;
+      const compact = shown.length > 2;
+      let stack = base;
+      indices.forEach((i) => {
         const source = sources[i];
         const state = states[i];
+        const guide = guides[i]!;
         if (!shown.includes(i) || !source || !state) {
           if (widgets[i]) widgets[i]!.root.style.display = 'none';
-          guides[i].render(null, null, false, 0, 0, 'sol');
+          guide.render(null, null, false, 0, 0, 'sol');
           return;
         }
         const w = (widgets[i] ??= createWidget(i));
         w.root.style.display = 'flex';
-        // En bas à gauche, au-dessus des noms des joueurs : Bleu en bas, Rouge au-dessus.
-        const below = i === 1 && shown.includes(0) ? widgets[0]!.root.offsetHeight + 8 : 0;
-        w.root.style.bottom = `${58 + below}px`;
-        const lastNote = trackers[i].history[0];
-        const recent = lastNote?.bySwing && (duel.tick - trackers[i].noteTick) * SIM_DT < NOTE_TIME ? lastNote.text : null;
-        guides[i].render(swings?.[i] ?? null, state.swing ?? null, true, 16 + w.root.offsetWidth + 10, 58 + below, swingContext(duel, i), recent);
+        const bottom = stack;
+        w.history.style.display = compact ? 'none' : '';
+        w.root.style.bottom = `${bottom}px`;
+        stack += w.root.offsetHeight + 8;
+        const tracker = trackers[i]!;
+        const lastNote = tracker.history[0];
+        const recent = lastNote?.bySwing && (duel.tick - tracker.noteTick) * SIM_DT < NOTE_TIME ? lastNote.text : null;
+        guide.render(swings?.[i] ?? null, state.swing ?? null, true, 16 + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent);
 
-        const tracker = trackers[i];
         const key = source.kind === 'pad' ? source.family : `kbd${source.player}${source.layout?.size ?? 0}`;
         if (key !== w.key) {
           w.key = key;
           w.historyHtml = '';
-          w.title.innerHTML = `<span style="color:${TEAM[i]}">●</span> ${NAMES[i]} · ${escapeHtml(sourceName(source))}`;
+          w.title.innerHTML = `<span style="color:${TEAM[i]!}">●</span> ${playerName(i, duel.doubles)} · ${escapeHtml(sourceName(source))}`;
           for (const kind of KINDS) {
             const label = shortLabel(kind, source);
             w.buttons[kind].label.textContent = label;

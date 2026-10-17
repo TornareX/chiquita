@@ -3,6 +3,7 @@ import type { OverheadKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
 import type { AssistLevel, Duel, DuelShot, PointReason, ServeFault } from '../sim/duel';
 import { buttonIcon, escapeHtml, formatButtons, sourceKey, type InputSource } from './buttonIcons';
+import { playerName } from './duelSettings';
 
 export interface DuelHud {
   /**
@@ -10,10 +11,11 @@ export interface DuelHud {
    * `buttons` : manette ou clavier de chaque joueur humain (`null` pour une IA), pour afficher ses symboles
    * dans l'aide (celle du premier humain) et les consignes (celle du joueur concerné).
    */
-  update(duel: Duel, sources: readonly [string, string], buttons?: readonly [InputSource | null, InputSource | null]): void;
+  update(duel: Duel, sources: readonly string[], buttons?: readonly (InputSource | null)[]): void;
 }
 
-const NAMES = ['Bleu', 'Rouge'] as const;
+/** Nom d'une équipe : le joueur en simple, la paire en double. */
+const teamName = (team: 0 | 1, doubles: boolean): string => (doubles ? ['Bleus', 'Rouges'] : ['Bleu', 'Rouge'])[team]!;
 /** Durée d'affichage du retour « parfait ! » / « trop tard ! » (s). */
 const FEEDBACK_TIME = 0.9;
 
@@ -45,6 +47,8 @@ const SERVE_FAULTS: Record<ServeFault, string> = {
 };
 
 const COLORS = ['#8cc4ff', '#ff9aa3'] as const;
+/** Couleur des pastilles de joueur : celle de l'équipe, plus claire pour le partenaire (joueurs 2 et 3). */
+const DOTS = ['#6fb2ff', '#ff8a94', '#b5d8ff', '#ffc2c8'] as const;
 
 /** Aide en bas à droite, tout aux sticks (les boutons sont cachés). */
 const STICK_HELP = [
@@ -116,8 +120,10 @@ export function createDuelHud(): DuelHud {
   let helpKey = '';
 
   return {
-    update(duel: Duel, sources: readonly [string, string], buttons: readonly [InputSource | null, InputSource | null] = [null, null]): void {
-      const main: InputSource = buttons[0] ?? buttons[1] ?? { kind: 'keyboard', player: 0 };
+    update(duel: Duel, sources: readonly string[], buttons: readonly (InputSource | null)[] = []): void {
+      const doubles = duel.doubles;
+      const name = (index: number): string => playerName(index, doubles);
+      const main: InputSource = buttons.find((b) => b !== null && b !== undefined) ?? { kind: 'keyboard', player: 0 };
       const key = sourceKey(main);
       if (key !== helpKey) {
         helpKey = key;
@@ -135,7 +141,7 @@ export function createDuelHud(): DuelHud {
           const sets = match.sets.map((set) => `<td style="padding:0 6px;opacity:.75">${set[i]}</td>`).join('');
           return (
             `<tr><td style="color:#ffe27a;width:14px">${serving}</td>` +
-            `<td style="color:${COLORS[i]};padding-right:10px">${NAMES[i]}</td>${sets}` +
+            `<td style="color:${COLORS[i]};padding-right:10px">${teamName(i, doubles)}</td>${sets}` +
             (over
               ? ''
               : `<td style="padding:0 6px">${match.games[i]}</td>` +
@@ -154,19 +160,16 @@ export function createDuelHud(): DuelHud {
           `<span style="font-size:13px;font-weight:400">Record : ${duel.bestRally}</span>`;
       }
       players.innerHTML = sources
-        .map(
-          (source, i) =>
-            `<span style="color:${i === 0 ? '#6fb2ff' : '#ff8a94'}">●</span> ${NAMES[i]} : ${source} · ` +
-            ASSIST_LABELS[duel.players[i]!.assist],
-        )
+        .slice(0, duel.players.length)
+        .map((source, i) => `<span style="color:${DOTS[i]}">●</span> ${name(i)} : ${source} · ` + ASSIST_LABELS[duel.players[i]!.assist])
         .join('<br>');
 
       // Retour sur la dernière frappe ou le dernier coup raté, pendant un court instant.
       const recent = (tick: number): boolean => (duel.tick - tick) * SIM_DT < FEEDBACK_TIME;
       const notes = duel.players.map((player, i) => {
-        if (recent(player.lastWhiffTick)) return `<span style="color:#ffb35c">${NAMES[i]} : dans le vide !</span>`;
+        if (recent(player.lastWhiffTick)) return `<span style="color:#ffb35c">${name(i)} : dans le vide !</span>`;
         const label = player.lastHit && recent(player.lastHitTick) ? shotLabel(player.lastHit) : null;
-        if (label) return `<span style="color:#fff">${NAMES[i]} : ${label}</span>`;
+        if (label) return `<span style="color:#fff">${name(i)} : ${label}</span>`;
         return '';
       });
       feedback.innerHTML = notes.filter(Boolean).join('<br>');
@@ -176,17 +179,17 @@ export function createDuelHud(): DuelHud {
         message.style.color = '#f2f5f7';
         const second = duel.serveNumber === 2 ? ' (second service)' : '';
         message.innerHTML = buttonsEnabled()
-          ? `${NAMES[duel.server]} au service${second} : maintiens ${buttonIcon('normal', buttons[duel.server] ?? main)}`
-          : `${NAMES[duel.server]} au service${second} : tire le stick droit vers toi`;
+          ? `${name(duel.server)} au service${second} : maintiens ${buttonIcon('normal', buttons[duel.server] ?? main)}`
+          : `${name(duel.server)} au service${second} : tire le stick droit vers toi`;
       } else if (duel.phase === 'dead' && call) {
         message.style.color = '#ffe27a';
         message.textContent = call.call === 'let' ? 'Let : service à rejouer' : `Faute : ${SERVE_FAULTS[call.reason!]}`;
       } else if (duel.phase === 'dead' && duel.lastResult) {
         const { winner, reason, hits } = duel.lastResult;
         const outcome = duel.lastOutcome;
-        const won = outcome?.set ? ` · set ${NAMES[winner]}` : outcome?.game ? ` · jeu ${NAMES[winner]}` : '';
+        const won = outcome?.set ? ` · set ${teamName(winner, doubles)}` : outcome?.game ? ` · jeu ${teamName(winner, doubles)}` : '';
         message.style.color = COLORS[winner];
-        message.textContent = `Point ${NAMES[winner]} : ${REASONS[reason]} (${hits} coups)${won}`;
+        message.textContent = `Point ${teamName(winner, doubles)} : ${REASONS[reason]} (${hits} coups)${won}`;
       } else if (duel.phase === 'rally' && duel.exit) {
         // Balle sortie après son rebond : encore jouable dehors, jusqu'à ce qu'elle touche le sol.
         const side = duel.exit.wall === 'sidePosX' || duel.exit.wall === 'sideNegX';
@@ -197,7 +200,7 @@ export function createDuelHud(): DuelHud {
         const sets = duel.match.sets.map((set) => `${set[winner]}-${set[winner === 0 ? 1 : 0]}`).join(' ');
         message.style.color = COLORS[winner];
         message.innerHTML =
-          `${NAMES[winner]} gagne le match ${sets}<br>` +
+          `${teamName(winner, doubles)} ${doubles ? 'gagnent' : 'gagne'} le match ${sets}<br>` +
           '<span style="font-size:15px;color:#f2f5f7">Appuie sur un bouton de coup pour rejouer</span>';
       } else {
         message.textContent = '';

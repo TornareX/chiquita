@@ -389,3 +389,40 @@ préparer, plus le coup est fort et précis. Le coup se choisit à la fin du ges
   guidés. La consigne de la démo le rappelle.
 - Pas encore fait : l'adversaire qui lit la préparation (lob caché), le lob raté sur une balle basse et tendue,
   la volée préparée lâchée ou en arc (amortie, lob de volée : volontairement absents pour l'instant).
+
+## Étape C : 2 contre 2 local (17/10/2026, branche `feat/etape-c`)
+
+D'après `research/tactique/TACTIQUE_2V2.md`. 431 tests OK (dont `tests/sim/doubles.test.ts`, 8 tests), typecheck
+OK, 20 tests navigateur OK (dont `tests/e2e/doubles.spec.ts` : quatre manettes virtuelles jouent des points, chacune
+frappe). Le simple ne bouge pas (mêmes échanges, mêmes tests). **Pas encore joué à quatre vraies manettes.**
+
+- **Lancer** : Réglages → Match → « 2 contre 2 », puis « Nouvelle partie » ; ou `?double=1`. Manette 1 = Bleu 1,
+  2 = Rouge 1, 3 = Bleu 2, 4 = Rouge 2 ; les places sans manette prennent une IA (Bleu 2 et Rouge 2 en IA normale
+  par défaut). `?bot=none` : tout le monde humain ; `?bot=2,3,4` : ces joueurs en IA.
+- **Simulation** (`Duel`, format `simple` | `double`) : le joueur `i` est dans l'équipe `i % 2` ; 0 et 1 jouent à
+  droite (drive), 2 et 3 à gauche (revés), et gardent leur côté. Le premier des deux partenaires qui touche la
+  balle la joue ; seul le receveur renvoie le service. Score par équipe.
+- **Service** : rotation A1, B1, A2, B2 à chaque jeu, jeu décisif compris (`Match.serveTurn`). Reçoit le joueur
+  adverse du côté servi. Le partenaire du serveur attend au filet, celui du receveur un pas derrière la ligne de
+  service.
+- **Qui prend la balle** (`Duel.owner`) : celui qui s'est engagé le premier ; sinon le propriétaire de la moitié ;
+  au milieu (±0,7 m), celui qui arrive nettement le premier (0,15 s), sinon le joueur de gauche ; si l'un ne peut
+  pas l'atteindre et l'autre si, l'autre (cambio). Les IA s'en servent ; un humain reste libre.
+- **Annonces** : s'engager sur une balle affiche « ¡Mía! » au-dessus du joueur (humain aussi) ; l'IA qui laisse
+  la balle à son partenaire annonce « ¡Tuya! ».
+- **IA en double** : les deux au filet (2,8 m) ou les deux au fond (8,2 m), décidé sur le dernier coup de la
+  paire ; lobée, la paire recule ensemble. Elle glisse vers le frappeur adverse (`doubles.shift` : 0,15 facile,
+  0,3 normal, 0,4 fort), écart de 3,2 m au filet et 3 m au fond. Vise le milieu entre les deux adversaires
+  (`doubles.middle` : 30 / 55 / 70 %) ou le plus grand trou. Avec un partenaire humain, elle se cale sur sa
+  profondeur.
+- **Rendu** : partenaires en teinte plus claire de la couleur d'équipe ; la caméra suit à peine le milieu de la
+  paire bleue. HUD : « Bleus / Rouges », noms Bleu 1, Rouge 2… ; à plus de deux humains, le retour des entrées
+  passe en compact (sans historique).
+
+Mesuré, quatre IA normales, un set : 80 points, 7,8 coups/point, coups par joueur 125 / 123 / 196 / 189 (le joueur
+de gauche prend le milieu), paire coupée filet/fond 2,4 % du temps, jamais deux partenaires sur la même balle ni
+l'un sur l'autre. Les fins de point ressemblent au simple (deuxième rebond surtout, volées gagnantes au filet).
+
+Reste : jouer à 4 vraies manettes (critère de l'étape) ; calibrer les profondeurs et l'écart ; escalonné, poach
+du joueur de gauche, recroisement après un cambio, lecture du lob adverse (demi-pas en arrière) ; la caméra quand
+les quatre sont au filet.

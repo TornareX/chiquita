@@ -55,6 +55,8 @@ export interface ArcadeCommands {
    * relâcher. La simulation choisit alors le coup selon la balle (`Duel.swingShot`).
    */
   swing?: { prepared: boolean; end?: SwingEnd };
+  /** En double : annonce au partenaire (« ¡Mía! », « ¡Tuya! »), affichée au-dessus du joueur. */
+  call?: 'mia' | 'tuya';
 }
 
 export const NEUTRAL_ARCADE: ArcadeCommands = { stick: { forward: 0, right: 0 }, shot: null };
