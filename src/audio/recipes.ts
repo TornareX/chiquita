@@ -1,6 +1,6 @@
 import type { Contact } from '../sim/collisions';
 import { HALF_LENGTH, HALF_WIDTH } from '../sim/constants';
-import type { PointResult } from '../sim/duel';
+import type { Duel, PointResult } from '../sim/duel';
 import type { Vec3 } from '../sim/vec3';
 
 /**
@@ -297,4 +297,23 @@ export function crowdReaction(
   if (result.hits >= 12) return { kind: 'applause', intensity: clamp(0.45 + (result.hits - 12) * 0.04, 0.45, 0.9) };
   if (winner && winnerShot?.perfect && winnerShot.volley) return { kind: 'applause', intensity: 0.4 };
   return null;
+}
+
+/**
+ * Réactions du public au dernier pas de simulation : souffle retenu quand la balle passe le mur après son rebond
+ * (por tres en vue), puis réaction au point. Partagé par le son (`sounds.crowd`) et la foule dessinée (`arena.ts`).
+ */
+export function stepCrowdReactions(duel: Duel): CrowdReaction[] {
+  const reactions: CrowdReaction[] = [];
+  for (const contact of duel.contacts) {
+    if (contact.surface === 'out' && duel.exit) reactions.push({ kind: 'ooh', intensity: 0.8 });
+  }
+  if (duel.result) {
+    // Dernière frappe de l'équipe gagnante (en double, celle des deux partenaires qui a frappé le plus tard).
+    const winners = duel.teamPlayers(duel.result.winner).map((i) => duel.players[i]!);
+    const winnerShot = winners.reduce((a, b) => (b.lastHitTick > a.lastHitTick ? b : a)).lastHit;
+    const reaction = crowdReaction(duel.result, winnerShot);
+    if (reaction) reactions.push(reaction);
+  }
+  return reactions;
 }

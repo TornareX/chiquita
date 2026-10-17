@@ -3,6 +3,7 @@ import type { PlayerCommands } from './sim/commands';
 import type { Duel } from './sim/duel';
 import type { Effects } from './render/effects';
 import type { World } from './sim/world';
+import type { Arena } from './render/arena';
 import type { Aids } from './ui/aids';
 
 declare global {
@@ -22,6 +23,8 @@ declare global {
     __effects?: Effects;
     /** Visionneur d'animations (`?mode=animations`) : aller à un instant du geste, phase affichée. */
     __anim?: { seek(t: number): void; readonly phase: string };
+    /** Arène et public (étape E6), exposés en mode debug. */
+    __arena?: Arena;
   }
 }
 

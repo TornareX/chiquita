@@ -6,6 +6,8 @@ import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
 import { createEffectsView, effectsEnabled } from './effectsView';
+import { arenaEnabled, createArena } from './arena';
+import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { loadModel, modelsEnabled } from './models';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
@@ -259,7 +261,20 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1b2733);
+  // Salle sombre autour d'un terrain très éclairé (étape E6) ; sans l'arène, le fond d'avant.
+  const arena = arenaEnabled() ? createArena() : null;
+  scene.background = new THREE.Color(arena ? 0x07090d : 0x1b2733);
+  // Le haut des tribunes se perd dans la pénombre ; le terrain (à moins de 42 m de la caméra) n'est pas touché.
+  if (arena) scene.fog = new THREE.Fog(0x07090d, 46, 95);
+  if (arena) {
+    scene.add(arena.object);
+    if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__arena = arena;
+    // Le terrain sous les projecteurs : un cône de lumière au-dessus, qui laisse les tribunes dans la pénombre.
+    const spot = new THREE.SpotLight(0xdfe8ff, 2.2, 0, Math.atan2(13, 20), 0.35, 0);
+    spot.position.set(0, 20, 0);
+    spot.target.position.set(0, 0, 0);
+    scene.add(spot, spot.target);
+  }
   scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4450, 2.2));
   const sun = new THREE.DirectionalLight(0xffffff, 1.2);
   sun.position.set(6, 12, -4);
@@ -461,6 +476,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   return {
     afterStep(): void {
       effects?.effects.fromStep(duel);
+      if (arena) {
+        for (const reaction of stepCrowdReactions(duel)) arena.react(reaction);
+        if (duel.result?.reason === 'por-tres' || duel.result?.reason === 'por-cuatro') arena.porTres();
+      }
     },
 
     shake(strength: number): void {
@@ -476,6 +495,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
 
     render(alpha: number, frameTime: number, frozen = false): void {
       syncPlayers();
+      arena?.update(frozen ? 0 : frameTime);
       const near = duel.players[0];
       // Caméra partagée : elle suit à peine l'équipe proche (en double, le milieu de la paire bleue).
       const nearTeam = duel.players.filter((p) => p.side < 0);

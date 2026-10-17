@@ -628,3 +628,23 @@ graphique), le jeu tourne à 15 images/s sur cette machine, avant comme après E
 - Suite Playwright complète : 18 passés, 2 ignorés (mesure et captures, sur demande), 4 en échec sans affichage.
   Trois (`aids`, `inputs`, `machine`) dépassent leur délai à 15 images/s et passent avec `--headed` ; le dernier
   (`models`, mode entraîneur, qui n'utilise pas la vue du match) relève un 404 sur `/favicon.ico`, absent du projet.
+
+## Étape E6 : arène et public (17/10/2026, branche `feat/etape-e`)
+
+D'après les images de grands tournois envoyées par Xavier (Paris, Milan, Acapulco). E4 (replay) et E5 (célébrations)
+sont mises de côté à sa demande. 471 tests OK (dont `tests/render/arena.test.ts`), typecheck OK, tests navigateur
+(`tests/e2e/arena.spec.ts`, duel, double, effets, visionneur) OK, `src/sim` inchangé. **Pas encore joué à la manette.**
+
+- `src/render/arena.ts`, branchée dans la vue du match (`?arene=0` la retire) : salle sombre et brume au loin, sol
+  noir autour du terrain, terrain sous un cône de lumière ; trois tribunes raides (fond lointain et côtés) de 12 rangs
+  avec ~2 400 spectateurs assis, en deux maillages instanciés (corps, têtes), couleurs ternes dans la pénombre.
+- **Aucun obstacle dans la zone où le joueur peut sortir par la porte** (retour de Xavier) : les tribunes commencent
+  0,6 m au-delà de `RUNOFF_SIDE` (8 m) et `RUNOFF_BACK` (6 m) ; une seule rangée de panneaux LED, sur leur muret.
+- Le public réagit comme le son (`stepCrowdReactions`, partagé avec `sounds.crowd`) : balancement permanent ;
+  souffle retenu et applaudissements = agitation ; clameur = debout, sauts en ola le long des tribunes et flashs de
+  téléphones. Bandeau lumineux des tribunes du bleu au violet selon l'ambiance. Por tres : tous les panneaux passent à
+  « ¡POR TRES! » en orange, clignotant, 3 s. Panneaux aux noms inventés (« PADEL SMASH », « COPA CANAPÉ »).
+- Fluidité, navigateur de l'app (vraie carte graphique) : 16,7 ms par image (60 images/s) en simple et en double,
+  pendant une clameur aussi, comme sans arène. Le navigateur de test sans carte graphique passe de 67 à 133 ms (rendu
+  logiciel, non représentatif).
+- Capture pendant une clameur : `screenshots/50-arene-clameur.png`.

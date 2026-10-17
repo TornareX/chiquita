@@ -1,4 +1,4 @@
-import { crowdReaction } from '../audio/recipes';
+import { stepCrowdReactions } from '../audio/recipes';
 import { createSounds } from '../audio/sounds';
 import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
@@ -145,18 +145,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     duel.step(sample());
     view.afterStep();
     inputs.step(duel, states);
-    for (const contact of duel.contacts) {
-      sounds.contact(contact);
-      // Balle qui passe le mur après son rebond : le public retient son souffle (por tres en vue).
-      if (contact.surface === 'out' && duel.exit) sounds.crowd({ kind: 'ooh', intensity: 0.8 });
-    }
-    if (duel.result) {
-      // Dernière frappe de l'équipe gagnante (en double, celle des deux partenaires qui a frappé le plus tard).
-      const winners = duel.teamPlayers(duel.result.winner).map((i) => duel.players[i]!);
-      const winnerShot = winners.reduce((a, b) => (b.lastHitTick > a.lastHitTick ? b : a)).lastHit;
-      const reaction = crowdReaction(duel.result, winnerShot);
-      if (reaction) sounds.crowd(reaction);
-    }
+    for (const contact of duel.contacts) sounds.contact(contact);
+    for (const reaction of stepCrowdReactions(duel)) sounds.crowd(reaction);
     if (duel.shot) {
       const { shot } = duel;
       // Le contact sonne plein quand le relâcher est bien placé, creux quand il est très en avance ou en retard.
