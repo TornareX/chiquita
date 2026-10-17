@@ -2,6 +2,7 @@ import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { FEEL_LIMITS, FEEL_PRESETS, type FeelTuning } from '../sim/feel';
 import { ARCADE } from '../sim/profile';
 import { SITUATIONS, type Situation } from '../sim/situations';
+import { formatButtons, sourceKey, type InputSource } from './buttonIcons';
 import type { StoredFeel } from './feelStorage';
 
 export interface LaboActions {
@@ -13,8 +14,8 @@ export interface LaboActions {
 }
 
 export interface LaboPanel {
-  /** Score de la situation en cours. */
-  update(won: number, played: number): void;
+  /** Score de la situation en cours ; `buttons` : manette ou clavier du joueur, pour les indices. */
+  update(won: number, played: number, buttons: InputSource): void;
 }
 
 const FEEL_LABELS: Record<keyof FeelTuning, string> = {
@@ -74,9 +75,12 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
     b.dataset.situation = situation.id;
     return b;
   });
+  let current: Situation | null = null;
+  let hintKey = '';
   const select = (situation: Situation): void => {
     for (const b of situationButtons) b.classList.toggle('selected', b.dataset.situation === situation.id);
-    hint.textContent = situation.hint;
+    current = situation;
+    hintKey = '';
     actions.chooseSituation(situation);
   };
   panel.append(hint, score);
@@ -183,7 +187,12 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
   document.body.append(panel);
   select(SITUATIONS[0]!);
   return {
-    update(won: number, played: number): void {
+    update(won: number, played: number, buttons: InputSource): void {
+      const key = `${current?.id}|${sourceKey(buttons)}`;
+      if (current && key !== hintKey) {
+        hintKey = key;
+        hint.innerHTML = formatButtons(current.hint, buttons);
+      }
       score.textContent = played > 0 ? `Points gagnés : ${won} sur ${played}` : 'Joue le point ; il recommence tout seul.';
     },
   };

@@ -1,10 +1,15 @@
 import type { OverheadKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
 import type { AssistLevel, Duel, DuelShot, PointReason, ServeFault } from '../sim/duel';
+import { buttonIcon, formatButtons, sourceKey, type InputSource } from './buttonIcons';
 
 export interface DuelHud {
-  /** `sources` : d'où viennent les commandes de chaque joueur (« Manette 1 », « Clavier »…). */
-  update(duel: Duel, sources: readonly [string, string]): void;
+  /**
+   * `sources` : d'où viennent les commandes de chaque joueur (« Manette 1 », « Clavier »…) ;
+   * `buttons` : manette ou clavier de chaque joueur humain (`null` pour une IA), pour afficher ses symboles
+   * dans l'aide (celle du premier humain) et les consignes (celle du joueur concerné).
+   */
+  update(duel: Duel, sources: readonly [string, string], buttons?: readonly [InputSource | null, InputSource | null]): void;
 }
 
 const NAMES = ['Bleu', 'Rouge'] as const;
@@ -39,6 +44,19 @@ const SERVE_FAULTS: Record<ServeFault, string> = {
 };
 
 const COLORS = ['#8cc4ff', '#ff9aa3'] as const;
+
+/** Aide en bas à droite : les jetons `{normal}`… deviennent les boutons de la manette ou du clavier du joueur. */
+const HELP = [
+  '{normal} coup normal · {slice} coupé · {lob} lob : maintiens, relâche quand l’anneau se referme',
+  'Anneau vert : balle facile (lob, chiquita, attaque) · jaune : transition · rouge : balle dure, remets-la bas',
+  '{slice} de volée sur une balle flottante : volée coupée qui meurt · {slice} stick vers soi : chiquita · appuie tôt pour armer, sinon tu bloques',
+  '{overhead} balle haute : bandeja · stick sur le côté : víbora · stick en avant près du filet : remate',
+  'Remate parfait près du filet : il peut sortir du terrain (por tres) ; sors par la porte pour la rattraper',
+  'Service : maintiens pour lâcher la balle, relâche au sommet du rebond',
+  'Stick : se placer, puis viser au moment de l’impact (haut = profond)',
+  'Clavier : ZQSD + J K L, I (bleu) ; flèches + 1 2 3 4 du pavé, ou M , ; : en AZERTY (rouge)',
+  'Assistance : bouton Affichage, U (bleu) ou 0 du pavé (rouge) · Réglages : Échap ou Start',
+];
 
 const OVERHEADS: Record<OverheadKind, string> = {
   bandeja: 'bandeja',
@@ -78,20 +96,20 @@ export function createDuelHud(): DuelHud {
   const message = element('point', 'top:16%;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600');
   const feedback = element('feedback', 'top:24%;left:50%;transform:translateX(-50%);font-size:20px;font-weight:700');
   const players = element('players', 'bottom:14px;left:18px;font-size:13px');
-  const help = element('help', 'bottom:14px;right:18px;font-size:13px;text-align:right;color:#c9d3db');
-  help.innerHTML =
-    'A coup normal · X coupé · Y lob : maintiens, relâche quand l’anneau se referme<br>' +
-    'Anneau vert : balle facile (lob, chiquita, attaque) · jaune : transition · rouge : balle dure, remets-la bas<br>' +
-    'X de volée sur une balle flottante : volée coupée qui meurt · X stick vers soi : chiquita · appuie tôt pour armer, sinon tu bloques<br>' +
-    'B balle haute : bandeja · stick sur le côté : víbora · stick en avant près du filet : remate<br>' +
-    'Remate parfait près du filet : il peut sortir du terrain (por tres) ; sors par la porte pour la rattraper<br>' +
-    'Service : maintiens pour lâcher la balle, relâche au sommet du rebond<br>' +
-    'Stick : se placer, puis viser au moment de l’impact (haut = profond)<br>' +
-    'Clavier : ZQSD + J K L, I pour B (bleu) ; flèches + 1 2 3 4 du pavé, ou M , ; : en AZERTY (rouge)<br>' +
-    'Assistance : bouton Affichage, U (bleu) ou 0 du pavé (rouge) · Réglages : Échap ou Start';
+  const help = element(
+    'help',
+    'bottom:14px;right:18px;font-size:12px;text-align:right;color:#c9d3db;max-width:min(680px,calc(100vw - 390px))',
+  );
+  let helpKey = '';
 
   return {
-    update(duel: Duel, sources: readonly [string, string]): void {
+    update(duel: Duel, sources: readonly [string, string], buttons: readonly [InputSource | null, InputSource | null] = [null, null]): void {
+      const main: InputSource = buttons[0] ?? buttons[1] ?? { kind: 'keyboard', player: 0 };
+      const key = sourceKey(main);
+      if (key !== helpKey) {
+        helpKey = key;
+        help.innerHTML = HELP.map((line) => formatButtons(line, main)).join('<br>');
+      }
       const match = duel.match;
       score.style.display = match ? '' : 'none';
       if (match) {
@@ -144,7 +162,7 @@ export function createDuelHud(): DuelHud {
       if (duel.phase === 'serve') {
         message.style.color = '#f2f5f7';
         const second = duel.serveNumber === 2 ? ' (second service)' : '';
-        message.textContent = `${NAMES[duel.server]} au service${second} : maintiens A`;
+        message.innerHTML = `${NAMES[duel.server]} au service${second} : maintiens ${buttonIcon('normal', buttons[duel.server] ?? main)}`;
       } else if (duel.phase === 'dead' && call) {
         message.style.color = '#ffe27a';
         message.textContent = call.call === 'let' ? 'Let : service à rejouer' : `Faute : ${SERVE_FAULTS[call.reason!]}`;

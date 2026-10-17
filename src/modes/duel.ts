@@ -2,6 +2,7 @@ import { crowdReaction } from '../audio/recipes';
 import { createSounds } from '../audio/sounds';
 import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands, type PadState } from '../input/gamepad';
 import { createKeyboardPads } from '../input/keyboardArcade';
+import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
 import { AI_LEVELS, Bot } from '../sim/bot';
 import type { ArcadeCommands } from '../sim/commands';
@@ -9,8 +10,11 @@ import { SIM_DT } from '../sim/constants';
 import { ASSIST_LEVELS, Duel } from '../sim/duel';
 import { FixedStepLoop } from '../sim/loop';
 import type { MatchRules } from '../sim/score';
+import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
-import { createSettingsMenu, loadSettings, type DuelSettings } from '../ui/duelSettings';
+import { createInputDisplay } from '../ui/inputDisplay';
+import { createPadTest } from '../ui/padTest';
+import { createSettingsMenu, loadSettings, saveSettings, type DuelSettings } from '../ui/duelSettings';
 import { loadFeel } from '../ui/feelStorage';
 import { applyFeel } from '../sim/feel';
 
@@ -70,7 +74,20 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     }
   };
   apply(settings, false);
-  const menu = createSettingsMenu(settings, apply);
+  const padTest = createPadTest(
+    () => settings.padStyle,
+    (style) => {
+      settings.padStyle = style;
+      saveSettings(settings);
+    },
+  );
+  const menu = createSettingsMenu(settings, apply, () => padTest.open());
+  const inputs = createInputDisplay();
+  let keyboardLayout: ReadonlyMap<string, string> | null = null;
+  void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
+  /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
+  const states: [PadState | null, PadState | null] = [null, null];
+  const buttons: [InputSource | null, InputSource | null] = [null, null];
 
   /** Bouton d'assistance maintenu au pas précédent : un appui fait passer au niveau suivant. */
   const assistHeld = [false, false];
@@ -83,11 +100,16 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const controller = settings.players[index];
       if (bot && controller !== 'humain') {
         sources[index] = AI_NAMES[controller];
+        states[index] = buttons[index] = null;
         return bot.commands(duel);
       }
       const pad = pads[index];
       sources[index] = pad ? `Manette ${index + 1}` : 'Clavier';
       const state: PadState = mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(index));
+      states[index] = state;
+      buttons[index] = pad
+        ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
+        : { kind: 'keyboard', player: index, layout: keyboardLayout };
       if (state.assistButton && !assistHeld[index]) {
         const player = duel.players[index];
         player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;
@@ -103,6 +125,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   let hitstopUntil = 0;
   const loop = new FixedStepLoop(SIM_DT, () => {
     duel.step(sample());
+    inputs.step(duel, states);
     for (const contact of duel.contacts) {
       sounds.contact(contact);
       // Balle qui passe le mur après son rebond : le public retient son souffle (por tres en vue).
@@ -138,12 +161,13 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     last = now;
     // Start sur n'importe quelle manette : ouvre ou ferme les réglages.
     const start = connectedGamepads().some((pad) => pad.buttons[START_BUTTON]?.pressed ?? false);
-    if (start && !startHeld) menu.toggle();
+    if (start && !startHeld && !padTest.isOpen) menu.toggle();
     startHeld = start;
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
-    if (!menu.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
+    if (!menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
     view.render(alpha, frameTime);
-    hud.update(duel, sources);
+    hud.update(duel, sources, buttons);
+    inputs.render(duel, states, buttons, settings.inputDisplay && !menu.isOpen && !padTest.isOpen);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

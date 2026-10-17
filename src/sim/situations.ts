@@ -3,6 +3,9 @@ import { overheadTarget } from './shots';
 import { vec3, type Vec3 } from './vec3';
 
 /**
+ * Les indices écrivent les boutons en jetons (`{normal}`, `{overhead}`, `{slice}`, `{lob}`) : l'interface
+ * les affiche avec les symboles de la manette du joueur (`src/ui/buttonIcons.ts`).
+ *
  * Situations de match du labo de sensations (`?mode=labo`) : Bleu (joueur 0, humain) face à Rouge
  * (joueur 1, IA). Chaque situation place les deux joueurs et fait jouer à Rouge un coup d'ouverture
  * typique ; le point se joue ensuite normalement, puis la même situation recommence, identique.
@@ -48,7 +51,7 @@ export const SITUATIONS: readonly Situation[] = [
   {
     id: 'balle-flottante',
     name: 'Balle flottante au filet',
-    hint: 'Défense ratée de Rouge, balle haute et lente : X de volée pour la couper et la tuer.',
+    hint: 'Défense ratée de Rouge, balle haute et lente : {slice} de volée pour la couper et la tuer.',
     start: opening(at(0.4, -3.2), at(0, 8.8), { kind: 'normal', contact: vec3(0, 1, 8.6), target: vec3(1, 0.03, -5.5), error: 0.8 }),
   },
   {
@@ -66,7 +69,7 @@ export const SITUATIONS: readonly Situation[] = [
   {
     id: 'lob-court',
     name: 'Lob court : à smasher',
-    hint: 'B, stick vers l’avant, relâche au bon moment : le remate parfait sort par trois.',
+    hint: '{overhead}, stick vers l’avant, relâche au bon moment : le remate parfait sort par trois.',
     start: opening(at(0, -3.5), at(0, 8.6), { kind: 'lob', contact: vec3(0.3, 0.9, 8.6), target: vec3(0.5, 0.03, -5) }),
   },
   {

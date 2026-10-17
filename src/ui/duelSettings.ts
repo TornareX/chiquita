@@ -1,3 +1,4 @@
+import { PAD_FAMILY_NAMES, PAD_STYLES, type PadStyle } from '../input/padStyle';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { ASSIST_LEVELS, type AssistLevel } from '../sim/duel';
 import { DEFAULT_RULES } from '../sim/score';
@@ -22,6 +23,10 @@ export interface DuelSettings {
   sound: boolean;
   /** Le joueur d'en face voit les directions de son côté plutôt que celles de l'écran. */
   farOwnView: boolean;
+  /** Symboles des boutons : détectés sur la manette, ou imposés (manette mal reconnue). */
+  padStyle: PadStyle;
+  /** Affiche les boutons pressés et le stick de chaque joueur humain, avec le résultat de ses frappes. */
+  inputDisplay: boolean;
   match: MatchSettings;
 }
 
@@ -31,6 +36,8 @@ export const DEFAULT_SETTINGS: DuelSettings = {
   pressure: 1,
   sound: true,
   farOwnView: false,
+  padStyle: 'auto',
+  inputDisplay: true,
   match: { free: false, ...DEFAULT_RULES },
 };
 
@@ -67,6 +74,8 @@ function sanitize(raw: unknown): DuelSettings {
   if (typeof r.pressure === 'number' && r.pressure >= 0 && r.pressure <= 2) s.pressure = r.pressure;
   if (typeof r.sound === 'boolean') s.sound = r.sound;
   if (typeof r.farOwnView === 'boolean') s.farOwnView = r.farOwnView;
+  if (PAD_STYLES.includes(r.padStyle as PadStyle)) s.padStyle = r.padStyle as PadStyle;
+  if (typeof r.inputDisplay === 'boolean') s.inputDisplay = r.inputDisplay;
   const m = r.match;
   if (m && typeof m === 'object') {
     if (typeof m.free === 'boolean') s.match.free = m.free;
@@ -106,6 +115,9 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
   const pressure = Number(params.get('pression'));
   if (params.has('pression') && Number.isFinite(pressure) && pressure >= 0) s.pressure = pressure;
   if (params.get('far') === 'own') s.farOwnView = true;
+  const style = params.get('manette');
+  if (PAD_STYLES.includes(style as PadStyle)) s.padStyle = style as PadStyle;
+  if (params.has('entrees')) s.inputDisplay = params.get('entrees') !== '0';
   if (params.has('free')) s.match.free = true;
   const positive = (name: string): number | null => {
     const value = Number(params.get(name));
@@ -117,7 +129,7 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
   return s;
 }
 
-function saveSettings(settings: DuelSettings): void {
+export function saveSettings(settings: DuelSettings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
@@ -134,7 +146,12 @@ export interface SettingsMenu {
  * Menu de réglages du match. `onChange` reçoit les réglages à chaque modification ; `restart` est vrai
  * quand il faut relancer une partie (règles du match changées).
  */
-export function createSettingsMenu(settings: DuelSettings, onChange: (settings: DuelSettings, restart: boolean) => void): SettingsMenu {
+export function createSettingsMenu(
+  settings: DuelSettings,
+  onChange: (settings: DuelSettings, restart: boolean) => void,
+  /** Ouvre l'écran « Teste ta manette » (le menu se ferme). */
+  onTestPad?: () => void,
+): SettingsMenu {
   const changed = (restart = false): void => {
     saveSettings(settings);
     onChange(settings, restart);
@@ -261,6 +278,22 @@ export function createSettingsMenu(settings: DuelSettings, onChange: (settings: 
     }),
   );
 
+  const controls = section('Manette');
+  const padSelect = select(PAD_STYLES, (p) => (p === 'auto' ? 'Détectés sur la manette' : `Manette ${PAD_FAMILY_NAMES[p]}`), settings.padStyle, (p) => {
+      settings.padStyle = p;
+      changed();
+    },
+  );
+  row(controls, 'Symboles des boutons', padSelect);
+  row(
+    controls,
+    'Afficher les boutons pressés',
+    check(settings.inputDisplay, (on) => {
+      settings.inputDisplay = on;
+      changed();
+    }),
+  );
+
   const match = section('Match (appliqué à la prochaine partie)');
   const draft = structuredClone(settings.match);
   row(match, 'Échange libre, sans score', check(draft.free, (on) => (draft.free = on)));
@@ -282,7 +315,12 @@ export function createSettingsMenu(settings: DuelSettings, onChange: (settings: 
   labo.textContent = 'Labo de sensations';
   labo.title = 'Rejouer une situation de match en boucle et régler la physique';
   labo.addEventListener('click', () => (location.search = '?mode=labo'));
-  actions.append(labo, resume, restart);
+  const testPad = document.createElement('button');
+  testPad.type = 'button';
+  testPad.textContent = 'Tester ma manette';
+  testPad.title = 'Vérifier quel bouton est lequel sur ta manette, et le stick';
+  testPad.hidden = !onTestPad;
+  actions.append(testPad, labo, resume, restart);
   panel.append(actions);
 
   document.body.append(gear, overlay);
@@ -293,6 +331,8 @@ export function createSettingsMenu(settings: DuelSettings, onChange: (settings: 
     },
     toggle(): void {
       overlay.hidden = !overlay.hidden;
+      // Les symboles peuvent avoir été changés dans « Teste ta manette ».
+      if (!overlay.hidden) padSelect.value = settings.padStyle;
       gear.hidden = !overlay.hidden;
       // Le menu ne doit pas garder le focus : les touches de jeu repartent vers la partie.
       if (overlay.hidden && document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -300,6 +340,10 @@ export function createSettingsMenu(settings: DuelSettings, onChange: (settings: 
   };
   gear.addEventListener('click', () => menu.toggle());
   resume.addEventListener('click', () => menu.toggle());
+  testPad.addEventListener('click', () => {
+    menu.toggle();
+    onTestPad?.();
+  });
   restart.addEventListener('click', () => {
     settings.match = structuredClone(draft);
     changed(true);

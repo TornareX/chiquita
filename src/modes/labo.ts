@@ -1,6 +1,7 @@
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands } from '../input/gamepad';
+import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands, type PadState } from '../input/gamepad';
 import { createKeyboardPads } from '../input/keyboardArcade';
+import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
 import { AI_LEVELS, Bot, type AiLevel } from '../sim/bot';
 import type { ArcadeCommands } from '../sim/commands';
@@ -9,7 +10,9 @@ import { Duel } from '../sim/duel';
 import { applyFeel } from '../sim/feel';
 import { FixedStepLoop } from '../sim/loop';
 import type { Situation } from '../sim/situations';
+import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
+import { createInputDisplay } from '../ui/inputDisplay';
 import { loadSettings } from '../ui/duelSettings';
 import { loadFeel, saveFeel } from '../ui/feelStorage';
 import { createLaboPanel } from '../ui/laboPanel';
@@ -74,16 +77,25 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     if (event.code === 'KeyR' && !event.repeat) replay();
   });
 
+  const inputs = createInputDisplay();
+  let keyboardLayout: ReadonlyMap<string, string> | null = null;
+  void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
+  const states: [PadState | null, null] = [null, null];
+  const buttons: [InputSource, null] = [{ kind: 'keyboard', player: 0 }, null];
+
   const sample = (): [ArcadeCommands, ArcadeCommands] => {
     const pad = connectedGamepads()[0];
     sources[0] = pad ? 'Manette 1' : 'Clavier';
     const state = mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(0));
+    states[0] = state;
+    buttons[0] = pad ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) } : { kind: 'keyboard', player: 0, layout: keyboardLayout };
     return [toCommands(state, true), bot.commands(duel)];
   };
 
   let hitstopUntil = 0;
   const loop = new FixedStepLoop(SIM_DT, () => {
     duel.step(sample());
+    inputs.step(duel, states);
     if (settings.sound) {
       for (const contact of duel.contacts) sounds.contact(contact);
       if (duel.shot) sounds.shot({ ...duel.shot, quality: duel.shot.perfect ? 1 : 0.7 });
@@ -109,8 +121,9 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     last = now;
     if (now >= hitstopUntil) alpha = loop.advance(frameTime);
     view.render(alpha, frameTime);
-    hud.update(duel, sources);
-    panel.update(won, played);
+    hud.update(duel, sources, buttons);
+    panel.update(won, played, buttons[0]);
+    inputs.render(duel, states, buttons, settings.inputDisplay);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
