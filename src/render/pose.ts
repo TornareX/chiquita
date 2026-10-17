@@ -66,17 +66,22 @@ interface Key {
   /** Saut (m), et coup de pied de la jambe droite vers l'avant, jambe tendue (rad) : le ciseau du smash. */
   jump: number;
   kick: number;
+  /** Écart des jambes (rad par jambe) : position d'attente, pieds larges. */
+  stance: number;
 }
 
 const FORWARD: V3 = [0, 0, 1];
 
-type Optional = 'face' | 'elbowR' | 'stepL' | 'stepR' | 'jump' | 'kick';
+type Optional = 'face' | 'elbowR' | 'stepL' | 'stepR' | 'jump' | 'kick' | 'stance';
 function key(k: Omit<Key, Optional> & Partial<Pick<Key, Optional>>): Key {
-  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, jump: 0, kick: 0, ...k };
+  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, jump: 0, kick: 0, stance: 0, ...k };
 }
 
-/** Entre deux points : en attente dans l'échange, raquette devant soi, genoux fléchis. */
-const READY = key({ twist: 0, lean: 0.14, crouch: 0.09, armR: [-0.3, -0.7, 0.6], armL: [0.3, -0.6, 0.7], elbowR: 0.5, racket: [0.25, 0.85, 0.4] });
+/**
+ * En attente dans l'échange, d'après les images de Xavier : pieds larges, jambes fléchies, raquette devant soi à
+ * hauteur de poitrine, tête en haut, la main gauche sur l'extérieur du cadre pour aider à la porter.
+ */
+const READY = key({ twist: 0, lean: 0.12, crouch: 0.15, armR: [0.05, -0.6, 0.8], armL: [-0.3, -0.1, 0.95], elbowR: 1.35, racket: [0.05, 0.95, 0.3], stance: 0.5 });
 /** Hors de l'échange (pause entre les points, service adverse pas encore lâché). */
 const REST = key({ twist: 0, lean: 0.03, crouch: 0, armR: [-0.2, -0.95, 0.15], armL: [0.2, -0.97, 0.05], elbowR: 0.2, racket: [-0.1, -0.5, 0.85], face: [-1, 0, 0] });
 
@@ -177,6 +182,7 @@ function mixKey(a: Key, b: Key, t: number): Key {
     stepR: mix(a.stepR, b.stepR, t),
     jump: mix(a.jump, b.jump, t),
     kick: mix(a.kick, b.kick, t),
+    stance: mix(a.stance, b.stance, t),
   };
 }
 
@@ -275,9 +281,14 @@ export function computePose(input: PoseInput): Pose {
     elbowR: upper.elbowR,
     racket: upper.racket,
     face: upper.face,
-    legR: kickLeg(step(leg(1), upper.stepR, upper.stepL), upper.kick),
-    legL: step(leg(-1), upper.stepL, upper.stepR),
+    legR: spread(kickLeg(step(leg(1), upper.stepR, upper.stepL), upper.kick), -upper.stance * (1 - run)),
+    legL: spread(step(leg(-1), upper.stepL, upper.stepR), upper.stance * (1 - run)),
   };
+}
+
+/** Jambe écartée sur le côté (+ vers la gauche du joueur). */
+function spread(leg: LegPose, amount: number): LegPose {
+  return { ...leg, spread: leg.spread + amount };
 }
 
 /** Jambe droite lancée vers l'avant, tendue (ciseau du smash). */

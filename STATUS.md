@@ -556,3 +556,14 @@ un personnage seul au milieu de son camp, sans simulation.
 - Tous les coups ont maintenant un geste calé sur des images : coup droit, revers, volées, bandeja/víbora, smash,
   service. Restent sans images propres : lob et chiquita (geste du coup droit ou du revers), bajada et feinte (geste
   de la bandeja), volée bloquée (geste de la volée).
+
+### E2 : position d'attente dans l'échange d'après les images de Xavier (17/10/2026)
+
+455 tests OK (dont 1 de plus dans `tests/render/pose.test.ts`), typecheck OK, tests navigateur du visionneur et du
+duel OK, `src/sim` inchangé. **À rejouer à la manette.**
+
+- Attente (`READY`) : pieds larges (`Key.stance`, écart des jambes, qui s'efface en courant), jambes fléchies,
+  raquette devant soi à hauteur de poitrine, tête en haut, main gauche tendue vers le cadre. Au repos entre les
+  points, pieds sous le corps.
+- Pas encore parfait : la main gauche arrive à côté du cadre, pas dessus (il faudrait une cinématique inverse du bras).
+- Planche (face, trois quarts, côté) : `screenshots/47-attente.png`.

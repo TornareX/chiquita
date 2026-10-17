@@ -66,7 +66,7 @@ describe('poses du personnage', () => {
     const run = computePose({ ...still, speed: 5, heading: 0, stride: Math.PI / 2 });
     expect(run.legR.swing).toBeCloseTo(-run.legL.swing, 6);
     expect(Math.abs(run.legR.swing)).toBeGreaterThan(0.4);
-    const stand = computePose(still);
+    const stand = computePose({ ...still, inPlay: false });
     expect(stand.legR.swing).toBeCloseTo(0, 9);
     expect(stand.legL.spread).toBeCloseTo(0, 9);
     // Pas chassé : en se déplaçant sur le côté, les jambes s'écartent au lieu de se balancer.
@@ -238,5 +238,18 @@ describe('service à la cuillère (images de Xavier)', () => {
     expect(follow.racket[0]).toBeGreaterThan(0.2);
     expect(follow.racket[2]).toBeLessThan(-0.5);
     expect(follow.legR.swing).toBeLessThan(follow.legL.swing);
+  });
+});
+
+describe('attente dans l’échange (images de Xavier)', () => {
+  it('pieds larges, jambes fléchies, raquette devant tête en haut, main gauche sur le cadre', () => {
+    const ready = computePose(still);
+    expect(ready.legR.spread).toBeLessThan(-0.15);
+    expect(ready.legL.spread).toBeGreaterThan(0.15);
+    expect(ready.crouch).toBeGreaterThan(0.1);
+    expect(ready.racket[1]).toBeGreaterThan(0.9);
+    expect(ready.armL[2]).toBeGreaterThan(0.8);
+    // Au repos, entre les points : pieds sous le corps.
+    expect(computePose({ ...still, inPlay: false }).legR.spread).toBeCloseTo(0, 9);
   });
 });
