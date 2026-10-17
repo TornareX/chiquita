@@ -13,7 +13,7 @@ import { bandejaHeight } from '../sim/shots';
 export type V3 = readonly [number, number, number];
 
 /** Famille du geste : coup droit, revers, au-dessus de la tête, service à la cuillère. */
-export type SwingFamily = 'fore' | 'back' | 'overhead' | 'serve';
+export type SwingFamily = 'fore' | 'back' | 'voleeFore' | 'voleeBack' | 'overhead' | 'serve';
 
 export interface Pose {
   /** Abaissement du bassin (m) : flexion des genoux. */
@@ -56,12 +56,15 @@ interface Key {
   elbowR: number;
   racket: V3;
   face: V3;
+  /** Pas en avant de la jambe gauche ou droite (rad de balancier) : la jambe opposée au coup, à la volée. */
+  stepL: number;
+  stepR: number;
 }
 
 const FORWARD: V3 = [0, 0, 1];
 
-function key(k: Omit<Key, 'face' | 'elbowR'> & { face?: V3; elbowR?: number }): Key {
-  return { face: FORWARD, elbowR: 0.15, ...k };
+function key(k: Omit<Key, 'face' | 'elbowR' | 'stepL' | 'stepR'> & { face?: V3; elbowR?: number; stepL?: number; stepR?: number }): Key {
+  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, ...k };
 }
 
 /** Entre deux points : en attente dans l'échange, raquette devant soi, genoux fléchis. */
@@ -83,6 +86,19 @@ const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
     prep: key({ twist: 1.2, lean: 0.2, crouch: 0.14, armR: [0.65, -0.35, -0.25], armL: [0.45, -0.25, 0.3], elbowR: 0.6, racket: [0.25, 0.8, -0.55], face: [1, 0, 0] }),
     impact: key({ twist: 0.2, lean: 0.35, crouch: 0.17, armR: [0.55, -0.6, 0.55], armL: [0.55, -0.45, -0.7], elbowR: 0.05, racket: [0.8, -0.15, 0.55] }),
     follow: key({ twist: -0.6, lean: 0.15, crouch: 0.1, armR: [-0.6, 0.15, 0.75], armL: [0.6, -0.5, -0.6], elbowR: 0.3, racket: [-0.55, 0.75, 0.1], face: [-1, 0, 0] }),
+  },
+  // Volées d'après les images de Xavier : tête de raquette toujours au-dessus du poignet ; préparation courte
+  // (la main, la hanche et les épaules s'ouvrent, tête de raquette en haut) ; à l'impact, devant soi, pas en avant
+  // avec la jambe opposée ; geste court, la raquette accompagne vers l'avant et un peu vers le bas (coupé).
+  voleeFore: {
+    prep: key({ twist: -0.7, lean: 0.12, crouch: 0.12, armR: [-0.7, -0.05, -0.15], armL: [0.5, 0.1, 0.85], elbowR: 1.1, racket: [-0.2, 0.9, -0.3], face: [-1, 0, 0.3] }),
+    impact: key({ twist: -0.25, lean: 0.2, crouch: 0.15, armR: [-0.45, -0.2, 0.85], armL: [0.8, -0.1, 0.3], elbowR: 0.35, racket: [-0.35, 0.75, 0.55], face: [0, 0.1, 1], stepL: 0.45 }),
+    follow: key({ twist: 0, lean: 0.22, crouch: 0.14, armR: [-0.25, -0.35, 0.9], armL: [0.75, -0.3, 0.2], elbowR: 0.3, racket: [-0.2, 0.55, 0.8], face: [0, -0.3, 1], stepL: 0.5 }),
+  },
+  voleeBack: {
+    prep: key({ twist: 0.8, lean: 0.12, crouch: 0.12, armR: [0.55, -0.25, 0.2], armL: [0.45, -0.1, 0.4], elbowR: 1.2, racket: [0.35, 0.85, -0.3], face: [1, 0, 0.2] }),
+    impact: key({ twist: 0.25, lean: 0.2, crouch: 0.15, armR: [0.5, -0.2, 0.85], armL: [0.6, -0.3, -0.75], elbowR: 0.3, racket: [0.45, 0.7, 0.55], face: [0, 0.1, 1], stepR: 0.45 }),
+    follow: key({ twist: 0.05, lean: 0.22, crouch: 0.14, armR: [0.3, -0.35, 0.9], armL: [0.6, -0.35, -0.7], elbowR: 0.3, racket: [0.3, 0.5, 0.8], face: [0, -0.3, 1], stepR: 0.5 }),
   },
   overhead: {
     prep: key({ twist: -0.7, lean: -0.12, crouch: 0.04, armR: [-0.5, 0.8, -0.3], armL: [0.35, 0.9, 0.3], elbowR: 0.9, racket: [0.1, -0.3, -0.95], face: [-1, 0, 0] }),
@@ -130,6 +146,8 @@ function mixKey(a: Key, b: Key, t: number): Key {
     elbowR: mix(a.elbowR, b.elbowR, t),
     racket: mixDir(a.racket, b.racket, t),
     face: mixDir(a.face, b.face, t),
+    stepL: mix(a.stepL, b.stepL, t),
+    stepR: mix(a.stepR, b.stepR, t),
   };
 }
 
@@ -227,9 +245,20 @@ export function computePose(input: PoseInput): Pose {
     elbowR: upper.elbowR,
     racket: upper.racket,
     face: upper.face,
-    legR: leg(1),
-    legL: leg(-1),
+    legR: step(leg(1), upper.stepR, upper.stepL),
+    legL: step(leg(-1), upper.stepL, upper.stepR),
   };
+}
+
+/** Pas en avant (`forward`) de cette jambe, ou en arrière quand c'est l'autre qui avance (`other`). */
+function step(leg: LegPose, forward: number, other: number): LegPose {
+  return { swing: leg.swing - forward + other * 0.5, spread: leg.spread, knee: leg.knee + forward * 0.6 };
+}
+
+/** Coup au sol ou de volée, côté coup droit ou revers. */
+export function lowFamily(side: 'fore' | 'back', volley: boolean): SwingFamily {
+  if (!volley) return side;
+  return side === 'fore' ? 'voleeFore' : 'voleeBack';
 }
 
 /**

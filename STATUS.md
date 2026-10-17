@@ -491,3 +491,14 @@ tutoriel) OK. **À rejouer à la manette.**
   hanches prennent 45 % de la rotation des épaules (`Pose.hipTwist`).
 - Planche des phases (préparation, impact, fin du geste, retour ; coup droit en haut, revers en bas) :
   `screenshots/41-coup-droit-revers.png`, rendue en figeant la simulation et en déplaçant le pas de la frappe.
+
+### E2 (début) : volées d'après les images de Xavier (17/10/2026)
+
+447 tests OK (dont 4 de plus dans `tests/render/pose.test.ts`), typecheck OK. **À rejouer à la manette.**
+
+- Nouvelles familles de geste `voleeFore` et `voleeBack` (`src/render/pose.ts`), choisies quand la balle est prise
+  avant le rebond (`Intercept.volley`, puis `DuelShot.volley`). Règles de Xavier : tête de raquette toujours
+  au-dessus du poignet ; préparation courte (la main, la hanche et les épaules s'ouvrent, tête de raquette en haut) ;
+  à l'impact, devant soi, pas en avant avec la jambe opposée (`Key.stepL` / `stepR`) ; geste court, légèrement coupé.
+- `?camera=dos` : caméra de debug derrière le joueur 1 (en plus de `?camera=proche`, trois quarts face).
+- Planche : `screenshots/42-volees.png` (coup droit de face et de dos, revers de face).

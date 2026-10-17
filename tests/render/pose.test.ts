@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyYawTarget, computePose, FOLLOW_TIME, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
 import { NEUTRAL_ARCADE } from '../../src/sim/commands';
 import { Duel, type HighFloor } from '../../src/sim/duel';
 import { vec3 } from '../../src/sim/vec3';
@@ -9,7 +9,7 @@ const length = (v: V3): number => Math.hypot(v[0], v[1], v[2]);
 
 describe('poses du personnage', () => {
   it('donne des directions unitaires et aucune valeur NaN, dans tous les états', () => {
-    const families = ['fore', 'back', 'overhead', 'serve'] as const;
+    const families = ['fore', 'back', 'voleeFore', 'voleeBack', 'overhead', 'serve'] as const;
     for (const family of families) {
       for (const seconds of [0, 0.1, 0.3, 0.6, 2]) {
         for (const strike of [null, { family, seconds }]) {
@@ -112,5 +112,52 @@ describe('préparation au stick : geste au sol ou au-dessus de la tête, comme l
   it('seuil « lob » : la balle flottante haute se prépare comme une volée', () => {
     expect(prepared(floaty, 'epaules')).toBe(true);
     expect(prepared(floaty, 'lob')).toBe(false);
+  });
+});
+
+describe('volées (images de Xavier)', () => {
+  const phases = (family: 'voleeFore' | 'voleeBack') => [
+    computePose({ ...still, prep: { family, seconds: 0.15 } }),
+    computePose({ ...still, prep: { family, seconds: 1 } }),
+    computePose({ ...still, strike: { family, seconds: 0 } }),
+    computePose({ ...still, strike: { family, seconds: FOLLOW_TIME / 2 } }),
+    computePose({ ...still, strike: { family, seconds: FOLLOW_TIME } }),
+  ];
+
+  it('la tête de raquette reste au-dessus du poignet, de la préparation à la fin du geste', () => {
+    for (const family of ['voleeFore', 'voleeBack'] as const) {
+      for (const pose of phases(family)) expect(pose.racket[1], family).toBeGreaterThan(0.3);
+    }
+  });
+
+  it('préparation courte : moins de rotation qu’un coup de fond', () => {
+    const volley = computePose({ ...still, prep: { family: 'voleeFore', seconds: 1 } });
+    const ground = computePose({ ...still, prep: { family: 'fore', seconds: 1 } });
+    expect(Math.abs(volley.twist)).toBeLessThan(Math.abs(ground.twist));
+  });
+
+  it('à l’impact, pas en avant avec la jambe opposée au coup', () => {
+    // Coup droit (droitier) : la jambe gauche avance ; revers : la droite. Balancier négatif = vers l'avant.
+    const fore = computePose({ ...still, strike: { family: 'voleeFore', seconds: 0 } });
+    expect(fore.legL.swing).toBeLessThan(-0.3);
+    expect(fore.legL.swing).toBeLessThan(fore.legR.swing);
+    const back = computePose({ ...still, strike: { family: 'voleeBack', seconds: 0 } });
+    expect(back.legR.swing).toBeLessThan(-0.3);
+    expect(back.legR.swing).toBeLessThan(back.legL.swing);
+    // Pas de pas en préparation ni au fond de court.
+    expect(computePose({ ...still, prep: { family: 'voleeFore', seconds: 1 } }).legL.swing).toBeCloseTo(0, 9);
+    expect(computePose({ ...still, strike: { family: 'fore', seconds: 0 } }).legL.swing).toBeCloseTo(0, 9);
+  });
+
+  it('balle prise avant le rebond : geste de volée, du côté de la balle', () => {
+    expect(lowFamily('fore', true)).toBe('voleeFore');
+    expect(lowFamily('back', true)).toBe('voleeBack');
+    expect(lowFamily('fore', false)).toBe('fore');
+    const duel = new Duel(null);
+    duel.playSituation(1, [vec3(0, 0, -2.5), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 1, 8.5), target: vec3(0.8, 0.03, -8) });
+    for (let i = 0; i < 3; i++) duel.step([{ stick: { forward: 0, right: 0 }, shot: 'overhead', swing: { prepared: true } }, NEUTRAL_ARCADE]);
+    const me = duel.players[0];
+    expect(me.engagement!.plan!.volley).toBe(true);
+    expect(plansHighShot(duel, me, me.engagement!)).toBe(false);
   });
 });

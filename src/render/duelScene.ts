@@ -7,7 +7,7 @@ import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { loadModel, modelsEnabled } from './models';
-import { bodyYawTarget, computePose, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
+import { bodyYawTarget, computePose, lowFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
 export interface DuelView {
   render(alpha: number, frameTime: number): void;
@@ -85,7 +85,7 @@ interface PlayerView {
   object: THREE.Group;
   /** Personnage cartoon et son état d'animation, propre au rendu. */
   rig: CharacterRig;
-  anim: { yaw: number; stride: number; side: 'fore' | 'back'; high: boolean; last: { x: number; z: number } | null };
+  anim: { yaw: number; stride: number; side: 'fore' | 'back'; high: boolean; volley: boolean; last: { x: number; z: number } | null };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
    * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
@@ -166,7 +166,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', high: false, last: null };
+  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', high: false, volley: false, last: null };
   return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
@@ -311,8 +311,11 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   }
 
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 200);
-  /** `?camera=proche` : caméra de côté, près du joueur 1, pour juger les poses du personnage. */
-  const closeCamera = new URLSearchParams(location.search).get('camera') === 'proche';
+  /**
+   * `?camera=proche` : de trois quarts face, côté coup droit, près du joueur 1 ; `?camera=dos` : derrière lui.
+   * Pour juger les poses du personnage.
+   */
+  const closeCamera = new URLSearchParams(location.search).get('camera');
   let cameraX = 0;
   let shake = 0;
   let shakeTime = 0;
@@ -350,7 +353,9 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const target = engagement.plan?.contact ?? duel.ball?.pos ?? null;
       if (target) view.anim.side = swingSide(localX(target), view.anim.side);
       view.anim.high = plansHighShot(duel, player, engagement);
-      prep = { family: view.anim.high ? 'overhead' : view.anim.side, seconds: (now - engagement.pressTick) * SIM_DT };
+      view.anim.volley = engagement.plan?.volley ?? false;
+      const family = view.anim.high ? 'overhead' : lowFamily(view.anim.side, view.anim.volley);
+      prep = { family, seconds: (now - engagement.pressTick) * SIM_DT };
     }
 
     // Dernière frappe, ou coup dans le vide.
@@ -364,7 +369,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       // Le coup joué dit la famille ; un coup dans le vide garde celle de sa préparation (au stick, la commande
       // est toujours celle d'un coup haut : c'est la hauteur de la balle qui décide).
       const high = hit ? kind === 'overhead' : view.anim.high;
-      const family: SwingFamily = hit?.serve ? 'serve' : high ? 'overhead' : view.anim.side;
+      const volley = hit ? hit.volley : view.anim.volley;
+      const family: SwingFamily = hit?.serve ? 'serve' : high ? 'overhead' : lowFamily(view.anim.side, volley);
       strike = { family, seconds: (now - strikeTick) * SIM_DT };
     }
 
@@ -464,9 +470,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const jitter = shake * 0.06 * Math.sin(shakeTime * 70);
       camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
       camera.lookAt(cameraX * 0.6, 0, CAMERA_LOOK_Z);
-      if (closeCamera) {
+      if (closeCamera === 'proche' || closeCamera === 'dos') {
         const p = lerp(near.prevPos, near.pos, alpha);
-        camera.position.set(p.x - 3.4, 1.5, p.z + 2.6);
+        if (closeCamera === 'dos') camera.position.set(p.x + 0.6, 1.7, p.z - 4.2);
+        else camera.position.set(p.x - 3.4, 1.5, p.z + 2.6);
         camera.lookAt(p.x, 1.0, p.z);
         if (camera.fov !== 40) {
           camera.fov = 40;
