@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PLAYER_HEIGHT } from '../sim/constants';
-import type { Pose, V3 } from './pose';
+import { hammerFace, type Pose, type V3 } from './pose';
 
 /**
  * Personnages cartoon (GAME_DESIGN.md §9, étape E) : grosse tête façon Wii Sports, maillot à la couleur
@@ -255,9 +255,13 @@ export function createCharacter(look: CharacterLook, jersey: number, height = PL
       pointLimb(armL.root, pose.armL);
       armL.joint.rotation.x = -0.4;
 
-      // Raquette : manche le long de `racket`, tamis tourné vers `face`, dans le repère du buste.
+      // Raquette : manche le long de `racket`, dans le repère du buste ; tamis en prise marteau (`hammerFace`),
+      // perpendiculaire au plan de l'avant-bras et du manche, du côté de `face`.
       ay.set(pose.racket[0], pose.racket[1], pose.racket[2]).normalize();
-      az.set(pose.face[0], pose.face[1], pose.face[2]);
+      tmpQ.copy(armR.root.quaternion).multiply(armR.joint.quaternion);
+      tmpDir.copy(DOWN).applyQuaternion(tmpQ);
+      const face = hammerFace([tmpDir.x, tmpDir.y, tmpDir.z], [ay.x, ay.y, ay.z], pose.face);
+      az.set(face[0], face[1], face[2]);
       az.addScaledVector(ay, -az.dot(ay));
       if (az.lengthSq() < 1e-6) az.set(0, 0, 1).addScaledVector(ay, -ay.z);
       az.normalize();

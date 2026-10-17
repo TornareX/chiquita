@@ -79,9 +79,10 @@ function key(k: Omit<Key, Optional> & Partial<Pick<Key, Optional>>): Key {
 
 /**
  * En attente dans l'échange, d'après les images de Xavier : pieds larges, jambes fléchies, raquette devant soi à
- * hauteur de poitrine, tête en haut, la main gauche sur l'extérieur du cadre pour aider à la porter.
+ * hauteur de poitrine, tête en haut, la main gauche sur l'extérieur du cadre pour aider à la porter. Prise marteau :
+ * la tranche de la raquette fait face au joueur, le tamis regarde sur le côté.
  */
-const READY = key({ twist: 0, lean: 0.12, crouch: 0.15, armR: [0.05, -0.6, 0.8], armL: [-0.3, -0.1, 0.95], elbowR: 1.35, racket: [0.05, 0.95, 0.3], stance: 0.5 });
+const READY = key({ twist: 0, lean: 0.12, crouch: 0.15, armR: [0.05, -0.6, 0.8], armL: [-0.3, -0.1, 0.95], elbowR: 1.35, racket: [0.05, 0.95, 0.3], face: [-1, 0, 0], stance: 0.5 });
 /** Hors de l'échange (pause entre les points, service adverse pas encore lâché). */
 const REST = key({ twist: 0, lean: 0.03, crouch: 0, armR: [-0.2, -0.95, 0.15], armL: [0.2, -0.97, 0.05], elbowR: 0.2, racket: [-0.1, -0.5, 0.85], face: [-1, 0, 0] });
 
@@ -326,4 +327,21 @@ export function plansHighShot(duel: Duel, player: DuelPlayer, engagement: Engage
   // `swingFloor` infini : seuil `lob`, pas de coup haut sur cette balle, aux boutons non plus.
   if (!engagement.swing) return engagement.kind === 'overhead' && floor !== Infinity && plan.contact.y >= duel.profile.rally.overheadLow;
   return plan.contact.y >= (plan.volley ? floor : Math.max(floor, bandejaHeight(duel.profile, player.height) - 0.02));
+}
+
+/**
+ * Orientation du tamis en prise marteau (toujours, comme au padel) : le poignet plie la raquette dans le plan de
+ * l'avant-bras et du manche, la tranche en avant ; le tamis est donc perpendiculaire à ce plan. `hint` (la face
+ * voulue par l'image clé) ne choisit que de quel côté il regarde. Avant-bras dans l'axe du manche : `hint`.
+ */
+export function hammerFace(forearm: V3, racket: V3, hint: V3): V3 {
+  const n: V3 = [
+    forearm[1] * racket[2] - forearm[2] * racket[1],
+    forearm[2] * racket[0] - forearm[0] * racket[2],
+    forearm[0] * racket[1] - forearm[1] * racket[0],
+  ];
+  const size = Math.hypot(n[0], n[1], n[2]);
+  if (size < 0.2) return normalize(hint);
+  const sign = n[0] * hint[0] + n[1] * hint[1] + n[2] * hint[2] < 0 ? -1 : 1;
+  return [(sign * n[0]) / size, (sign * n[1]) / size, (sign * n[2]) / size];
 }

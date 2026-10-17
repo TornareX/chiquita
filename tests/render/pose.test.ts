@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, hammerFace, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
 import { NEUTRAL_ARCADE } from '../../src/sim/commands';
 import { Duel, type HighFloor } from '../../src/sim/duel';
 import { vec3 } from '../../src/sim/vec3';
@@ -249,7 +249,20 @@ describe('attente dans l’échange (images de Xavier)', () => {
     expect(ready.crouch).toBeGreaterThan(0.1);
     expect(ready.racket[1]).toBeGreaterThan(0.9);
     expect(ready.armL[2]).toBeGreaterThan(0.8);
+    // Prise marteau : le tamis regarde sur le côté, la tranche face au joueur.
+    expect(Math.abs(ready.face[0])).toBeGreaterThan(0.9);
     // Au repos, entre les points : pieds sous le corps.
     expect(computePose({ ...still, inPlay: false }).legR.spread).toBeCloseTo(0, 9);
+  });
+});
+
+describe('prise marteau', () => {
+  it('le tamis est perpendiculaire au plan de l’avant-bras et du manche, du côté voulu', () => {
+    // Avant-bras vers l'avant, raquette vers le haut (attente) : le tamis regarde sur le côté, pas vers le joueur.
+    const face = hammerFace([0, 0, 1], [0, 1, 0], [-1, 0, 0.2]);
+    expect(face[0]).toBeCloseTo(-1, 6);
+    expect(hammerFace([0, 0, 1], [0, 1, 0], [1, 0, 0])[0]).toBeCloseTo(1, 6);
+    // Avant-bras dans l'axe du manche : on garde la face voulue.
+    expect(hammerFace([0, 1, 0], [0, 1, 0], [0, 0, 1])).toEqual([0, 0, 1]);
   });
 });

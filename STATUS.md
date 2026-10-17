@@ -567,3 +567,14 @@ duel OK, `src/sim` inchangé. **À rejouer à la manette.**
   points, pieds sous le corps.
 - Pas encore parfait : la main gauche arrive à côté du cadre, pas dessus (il faudrait une cinématique inverse du bras).
 - Planche (face, trois quarts, côté) : `screenshots/47-attente.png`.
+
+### Prise marteau sur tous les gestes (17/10/2026)
+
+Retour de Xavier : au padel, la raquette est toujours tenue en prise marteau ; en attente, c'est la tranche qui fait
+face au joueur, pas le tamis. 456 tests OK, typecheck OK, tests navigateur du visionneur et du duel OK.
+
+- Le tamis n'est plus donné image clé par image clé : il est calculé (`hammerFace`, `src/render/pose.ts`),
+  perpendiculaire au plan de l'avant-bras et du manche (le poignet plie la raquette dans ce plan, tranche en avant).
+  La face de l'image clé ne choisit plus que de quel côté il regarde.
+- Attente : tamis sur le côté, tranche face au joueur.
+- Planche de tous les gestes (préparation, impact, fin du geste) : `screenshots/48-prise-marteau.png`.
