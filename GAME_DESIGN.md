@@ -86,18 +86,19 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 
 ### Le plafond (découvert en jouant)
 
-- **Fenêtre de timing, pas de charge de puissance** (décision §13, d'après la mesure VT4) :
-  maintenir le bouton prépare le coup, mais la durée de maintien ne change quasiment rien à la
-  vitesse de sortie. Ce qui compte, c'est de relâcher/connecter **dans la fenêtre** : trop tôt
-  ou dans la fenêtre large = coup normal, trop tard = **faute**, pas un coup juste plus faible.
-- **Frappe parfaite** : une sous-fenêtre étroite à l'intérieur de la fenêtre de réussite,
-  soulignée par un arrêt sur image, un son et un éclat. La balle part plus vite et plus précise.
-  **[VT4 : fenêtre de réussite confirmée entre 800 ms et 1500 ms de maintien sur un service ;
-  largeur exacte et position de la sous-fenêtre « parfaite » non mesurées — à caler en jouant]**
+- **Préparer tôt, mais sans jauge** (décision §13) : le temps entre le début de la préparation et
+  la frappe compte. Sous 0,3 s, le coup est seulement bloqué (60 % de la vitesse, angles réduits) ;
+  la vitesse monte ensuite jusqu'à être pleine à 0,6 s, et au-delà plus rien ne change. Le temps
+  laissé par l'adversaire compte aussi : moins on en a, plus le coup est imprécis (pression).
+- **Fenêtre de timing** : finir son geste avant la balle donne un coup normal ; en retard, la balle
+  part large et long ; trop tard, elle est passée, c'est un coup dans le vide.
+- **Frappe parfaite** : une fenêtre étroite autour du point idéal (de 70 ms avant à 50 ms après,
+  resserrée sous pression), soulignée par un arrêt sur image, un son et un éclat. La balle part
+  plus vite et plus précise. [à calibrer en jouant]
 - **Placement manuel** : toucher au stick pendant la préparation coupe l'assistance. Le joueur
   qui se place lui-même frappe plus tôt et ouvre de meilleurs angles. Risque/récompense.
-- **Famille du smash selon la direction au stick et la précision du timing** : bandeja (sûre,
-  garde le filet), víbora (effet latéral qui longe la vitre), remate (plat, puissant, risqué).
+- **Famille du smash selon le geste** : bandeja au coup sec (sûre, garde le filet), víbora en arc
+  (effet latéral qui longe la vitre), remate tout droit (plat, puissant, risqué).
   Le « smash parfait » qui sort la balle du court n'est pas une variante à part : c'est le
   résultat d'une frappe parfaite sur un remate bien dirigé.
 - **Feinte de smash** : préparer comme un smash puis lâcher le stick ; l'adversaire recule et la
@@ -182,9 +183,9 @@ Chaque palier doit être **découvrable sans tutoriel** et **enseigné** dans le
 
 Par ordre de priorité (détail dans `research/vt4/PLAN.md`, constats dans
 `research/vt4/MECANIQUES.md`) :
-1. ~~Fenêtres de timing, charge~~ **Résolu** : pas de charge progressive, une fenêtre de
-   réussite/échec (voir §13 et `MECANIQUES.md` §5). Lecture de la direction au moment de
-   l'impact : pas encore mesurée.
+1. ~~Fenêtres de timing, charge~~ **Tranché** (voir §13 et `MECANIQUES.md` §5) : VT4 n'a pas de
+   charge progressive ; nous gardons un bonus de préparation plafonné, en plus de la fenêtre de
+   timing. Lecture de la direction au moment de l'impact : pas encore mesurée.
 2. Course assistée : comment le joueur est amené au point d'impact (vitesse, freinage,
    pas d'ajustement, « aimant »).
 3. Trajectoires : simulées ou calculées depuis une cible ? Temps de vol, hauteur au filet.
@@ -212,15 +213,15 @@ Les mesures de VT4 alimentent surtout l'étape A (feeling de frappe et de course
 
 ## 13. Décisions prises
 
-- **Pas de charge progressive de puissance par durée de maintien** (révise le §4). Mesuré en jeu
-  sur VT4 (`research/vt4/MECANIQUES.md` §5) : tenir le bouton de coup plus longtemps ne change
-  quasiment pas la vitesse de sortie (~3 % d'écart, dans le bruit), mais un maintien trop long
-  fait complètement rater le coup. Ce n'est pas un curseur de puissance continu, c'est une
-  **fenêtre de réussite/échec**. Cohérent avec le pilier n°4 (« pas de super-coup gagné par une
-  jauge ») et avec la directive n°1 (une fenêtre de timing est plus simple à comprendre qu'une
-  courbe de charge cachée, tout en gardant de la profondeur via la sous-fenêtre « frappe
-  parfaite », qui elle existait déjà dans le design). La famille de smash (bandeja/víbora/remate)
-  se choisit par la direction et le contexte, pas par un niveau de charge.
+- **Bonus de préparation plafonné, plus une fenêtre de timing** (détail au §4 ; le code fait foi :
+  `preparation()` dans `src/sim/duel.ts`, réglages `blockPrep`, `fullPrep`, `blockSpeed`,
+  `perfectBefore`, `perfectAfter`, `lateWindow` dans `src/sim/profile.ts`). VT4 n'a pas de charge
+  progressive (`research/vt4/MECANIQUES.md` §5 : tenir plus longtemps ne change quasiment pas la
+  vitesse, trop tard fait rater). Nous nous en écartons volontairement : préparer tôt rend le coup
+  plus fort, ce qui récompense la lecture du jeu et donne au coup sec sans préparation un rôle
+  défensif clair (bloquer). Ce n'est pas une jauge : le bonus plafonne à 0,6 s, ce qui reste
+  cohérent avec le pilier n°4. La famille du coup se choisit par la fin du geste et la hauteur de
+  la balle, pas par un niveau de préparation.
 
 ## 14. Questions ouvertes
 
