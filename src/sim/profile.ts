@@ -174,6 +174,12 @@ export interface RallyTuning {
   /** Une volée n'est proposée que si le joueur est à moins de cette distance du filet (m). */
   volleyZone: number;
   /**
+   * Plus basse hauteur de volée prévue par la course assistée (m) : une balle qui plonge aux pieds du
+   * joueur au filet (chiquita) se joue après le rebond, sous le filet, et doit remonter. Prévue de volée
+   * juste avant le rebond, le moindre retard la faisait rater.
+   */
+  volleyLow: number;
+  /**
    * Balle qui va jusqu'à la vitre : la course assistée ne la prend avant que si le point d'impact
    * laisse au moins cette place devant la vitre (m) ; plus près, le joueur la laisse passer.
    */
@@ -269,8 +275,8 @@ export interface RallyTuning {
   /** Bajada : attaque depuis le fond sur la balle haute qui ressort de la vitre, à plat, profonde. */
   bajada: ShotTypeTuning;
   /**
-   * Volée coupée (X de volée sur une balle flottante : verte et prise au-dessus de `cutLow`) : courte,
-   * rasante et coupée, elle s'écrase au rebond et meurt avant la vitre. Sous pression, X reste un blocage.
+   * Volée coupée (X de volée) : aussi rapide que la volée normale, plus coupée, elle s'écrase au rebond.
+   * L'IA la choisit sur une balle flottante (verte, prise au-dessus de `cutLow`).
    */
   cut: ShotTypeTuning;
   cutLow: number;
@@ -331,6 +337,14 @@ export interface PressureTuning {
   lobShort: number;
   /** Erreur maximale : coup normal ou coupé plus long de tant (m) ; avec du retard, il finit dans la vitre. */
   long: number;
+  /**
+   * Balle prise très bas, sous `netLow` (m), aux pieds (après une chiquita) : au-delà d'une erreur de 0,5,
+   * le coup perd jusqu'à `netDip` m/s de vitesse verticale à l'erreur maximale, et finit parfois dans le filet.
+   */
+  netLow: number;
+  netDip: number;
+  /** Volée coupée : l'erreur est multipliée par 1 + `cutRush` × pression (balle pressée, coupé raté). */
+  cutRush: number;
   /** Au-dessus de la tête, l'erreur est multipliée par ce facteur (balle haute = balle d'attaque). */
   overheadFactor: number;
 }
@@ -464,6 +478,7 @@ export const REALISTIC: PhysicsProfile = {
     arriveMargin: 0.06,
     recoverTime: 0.3,
     volleyZone: 4.5,
+    volleyLow: 0.6, // [à calibrer en jouant]
     glassRoom: 1.8,
     magnetRadius: 1.5,
     magnetNear: 0.6,
@@ -481,7 +496,7 @@ export const REALISTIC: PhysicsProfile = {
     overheadIdeal: 2.55,
     overheadLateral: 0.35,
     overheadStick: 0.5,
-    remateZone: 4,
+    remateZone: 5, // un lob tombé avant la ligne de service (6,95 m) passe à 2,55 m vers 4,9 m du filet : remate
     remateLow: 2.2,
     remateKillDepth: 3,
     remateWidth: 3.2,
@@ -526,6 +541,9 @@ export const REALISTIC: PhysicsProfile = {
       speedLoss: 0.1,
       lobShort: 2,
       long: 0.7,
+      netLow: 0.35, // [à calibrer en jouant]
+      netDip: 3,
+      cutRush: 1.5, // [à calibrer en jouant]
       overheadFactor: 0.5,
     },
     lobPerfectDepth: 0.5,
@@ -601,16 +619,18 @@ export const REALISTIC: PhysicsProfile = {
       spin: -0.1,
     },
     cut: {
-      speed: 10,
-      speedPerfect: 12,
+      // Comme la volée normale (coup normal × `volleySpeed`) : au padel, la volée se joue coupée, aussi fort.
+      speed: 26,
+      speedPerfect: 30,
       clearance: 0.12,
       flightTime: 0,
       flightTimePerfect: 0,
-      depthShort: 3,
-      depthNeutral: 4.5,
-      depthLong: 6.5,
-      spin: -0.6,
-      spinPerfect: -0.95,
+      depthShort: 3.5,
+      depthNeutral: 6.5,
+      depthLong: 8.5,
+      // Plus coupée que la volée normale (-0,25) : rebond bas. À -0,6 (-0,95 parfaite), elle tuait un point sur deux.
+      spin: -0.4,
+      spinPerfect: -0.6,
     },
     cutLow: 0.9,
     chiquita: {

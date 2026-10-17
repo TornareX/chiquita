@@ -98,7 +98,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     release: { offset: 0.01, spread: 0.12 },
     overheadRelease: { offset: 0, spread: 0.02 },
     tactics: true,
-    overhead: { maxDepth: 7, remate: 0.35, vibora: 0.2, bajada: 0.4 },
+    overhead: { maxDepth: 7, remate: 0.85, vibora: 0.2, bajada: 0.4 },
     choices: { lob: 0.55, chiquita: 0.2, body: 0.15, cut: 0.5 },
   },
   fort: {
@@ -237,8 +237,10 @@ export class Bot {
     }
     this.kind = 'overhead';
     // Remate : près du filet, sur une balle qui monte assez haut pour être frappée bras tendu.
-    const nearNet = Math.abs(plan.contact.z) <= r.remateZone - 0.3 && plan.contact.y >= r.remateLow + 0.1;
-    if (nearNet && roll < remate) this.overheadStick = { forward: 1, right: right * this.prng.range(0.3, 0.8) * this.options.aim };
+    const nearNet = Math.abs(plan.contact.z) <= r.remateZone - 0.15 && plan.contact.y >= r.remateLow + 0.1;
+    // Vers le côté libre, assez ouvert pour que la balle sorte par la vitre latérale (por tres) : visé
+    // près de l'axe, le défenseur la reprend après son rebond.
+    if (nearNet && roll < remate) this.overheadStick = { forward: 1, right: right * Math.min(1, this.prng.range(0.8, 1.3) * this.options.aim) };
     else if (this.prng.next() < vibora) this.overheadStick = { forward: 0, right };
     // Bandeja : sans direction, elle part profonde vers le coin, le long de la ligne.
     else this.overheadStick = { forward: 0.2, right: 0 };

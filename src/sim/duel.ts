@@ -125,8 +125,9 @@ interface HitExtra {
 
 /**
  * Toucher d'un coup, choisi par la situation et le stick (comme les variantes au-dessus de la tête) :
- * - `cut` : volée coupée, X de volée sur une balle flottante (verte, prise haute) : courte, rasante,
- *   coupée, elle s'écrase au rebond et meurt avant la vitre ;
+ * - `cut` : volée coupée, X de volée : aussi rapide que la volée normale, plus coupée, elle reste basse
+ *   au rebond. Elle demande du temps : sur une balle pressée (rapide, basse, sans préparation), elle rate
+ *   plus souvent que la volée normale (`pressure.cutRush`) ;
  * - `chiquita` : X stick vers soi, balle après rebond : lente et basse, elle plonge aux pieds du joueur
  *   au filet, qui doit remonter la balle ;
  * - `block` : coup normal ou coupé armé trop tard (moins de `blockPrep` s) : on ne fait que bloquer.
@@ -137,17 +138,16 @@ export function shotStyle(
   kind: ShotKind,
   volley: boolean,
   outside: boolean,
-  height: number,
-  pressure: number,
   stick: ArcadeCommands['stick'],
   prepared: number,
   profile: PhysicsProfile,
 ): ShotStyle | null {
   const r = profile.rally;
   if (outside || (kind !== 'slice' && kind !== 'normal')) return null;
-  if (kind === 'slice' && volley && height >= r.cutLow && pressure < 1 / 3) return 'cut';
-  if (kind === 'slice' && !volley && stick.forward <= -r.overheadStick) return 'chiquita';
-  return prepared < r.blockPrep ? 'block' : null;
+  if (prepared < r.blockPrep) return 'block';
+  if (kind === 'slice' && volley) return 'cut';
+  if (kind === 'slice' && stick.forward <= -r.overheadStick) return 'chiquita';
+  return null;
 }
 
 /** Part de la vitesse du coup selon la préparation : `blockSpeed` sans préparation, pleine à `fullPrep` s. */
@@ -746,7 +746,9 @@ export class Duel {
     }
     // Toucher : volée coupée sur une balle flottante, chiquita au stick vers soi, ou blocage sans préparation.
     const prepared = (this.tick - engagement.pressTick) * SIM_DT;
-    const style = shotStyle(kind, volley, outside, ball.pos.y, pressure, player.stick, prepared, this.profile);
+    const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile);
+    // La volée coupée demande du temps : pressée, elle rate plus souvent (plus haute, plus longue).
+    if (style === 'cut') error = Math.min(1, error * (1 + r.pressure.cutRush * pressure));
     const tuning = style === 'cut' || style === 'chiquita' ? style : kind;
     const bonus = (engagement.manual ? r.manualAimBonus : 1) * (volley ? r.volleyWidth : 1) * (style === 'block' ? r.blockWidth : 1);
     let aimed = aimTarget(tuning, player.side, player.stick, perfect, this.profile, bonus);
@@ -840,8 +842,11 @@ export class Duel {
     const spinScale = 1 - Math.max(0, heightOff) * r.overheadHighSpin;
     const solved = solveShot(tuning, contact, target, perfect, this.profile, speedFactor, error * r.pressure.clearance, spin, spinScale);
     const ball = this.ball!;
-    // Prise trop basse : la balle part plus à plat, vers le filet.
-    const dip = Math.max(0, -heightOff) * r.overheadLowDip;
+    // Prise trop basse : la balle part plus à plat, vers le filet. Coup haut sous la hauteur des yeux, ou
+    // balle ramassée aux pieds et mal frappée.
+    const p = r.pressure;
+    const scooped = !overhead && kind !== 'lob' && contact.y < p.netLow ? Math.max(0, (error - 0.5) / 0.5) * p.netDip : 0;
+    const dip = Math.max(0, -heightOff) * r.overheadLowDip + scooped;
     ball.vel = dip > 0 ? vec3(solved.vel.x, solved.vel.y - dip, solved.vel.z) : solved.vel;
     ball.spin = solved.spin;
     // Renvoyée de dehors, la balle rentre par-dessus le mur : les murs ne la gênent qu'une fois rentrée.

@@ -100,7 +100,7 @@ export function planIntercept(
     // Marge sous les hauteurs limites : un relâcher un peu décalé doit encore trouver la balle.
     if (p.y < low + PLAN_MARGIN || p.y > high - PLAN_MARGIN) continue;
     // Au-dessus de la tête, la volée se joue partout ; sinon seulement près du filet.
-    if (volley ? !overhead && (!nearNet || Math.abs(p.z) > r.volleyZone + 1) : !bouncesHere) continue;
+    if (volley ? !overhead && (!nearNet || Math.abs(p.z) > r.volleyZone + 1 || p.y < r.volleyLow) : !bouncesHere) continue;
     const afterGlass = glassStep !== null && step > glassStep;
     // Avant la vitre, coincé contre elle : on la laisse passer. Après, on attend qu'elle s'en décolle.
     const room = HALF_LENGTH - Math.abs(p.z);

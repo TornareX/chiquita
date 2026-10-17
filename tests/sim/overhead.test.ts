@@ -310,7 +310,7 @@ describe('IA au filet', () => {
 });
 
 /**
- * Mesure, IA normale contre IA normale (3 × 15 min simulées), comme `glass.test.ts`. Repères pros
+ * Mesure, IA normale contre IA normale (6 × 15 min simulées), comme `glass.test.ts`. Repères pros
  * (research/padel-pro/NOTES.md) : 8 à 11 coups par point ; le smash fait 35 à 43 % des coups gagnants ;
  * environ 30 % des lobs passent le joueur au filet.
  */
@@ -371,7 +371,7 @@ describe('IA contre IA : le jeu au-dessus de la tête', () => {
 
   it('les smashes concluent, les lobs passent parfois, ~9 coups par point', () => {
     const t = { points: 0, hits: 0, winners: 0, smashWinners: 0, overheadWinners: 0, lobs: 0, lobsPassed: 0, exits: 0, catches: 0 };
-    for (const seed of [3, 11, 29]) {
+    for (const seed of [3, 11, 29, 41, 57, 73]) {
       const s = measure(900, seed, AI_LEVELS.normal);
       for (const key of Object.keys(t) as (keyof typeof t)[]) t[key] += s[key];
     }
@@ -381,16 +381,16 @@ describe('IA contre IA : le jeu au-dessus de la tête', () => {
         `dont remate ${((100 * t.smashWinners) / t.winners).toFixed(0)} % (au-dessus de la tête ${((100 * t.overheadWinners) / t.winners).toFixed(0)} %), ` +
         `lobs qui passent ${((100 * t.lobsPassed) / t.lobs).toFixed(0)} % sur ${t.lobs}, sorties ${t.exits}, rattrapées dehors ${t.catches}`,
     );
-    // Bandeja et víbora à hauteur des yeux (17/10, demandé par Xavier) : prises plus bas, elles concluent
-    // moins (~9 % des gagnants, pros 5-13 % ; avant, ~28 %, trop) ; le remate reste rare (3-8 %, pros 35-43 %,
-    // déjà le cas avant). 6 parties : 6,8 coups/point, coups hauts 17 % des gagnants, lobs qui passent 42 %.
-    // [à recaler en jouant]
-    expect(perPoint).toBeGreaterThan(6.3);
-    expect(perPoint).toBeLessThan(11.5);
-    expect(t.overheadWinners / t.winners).toBeGreaterThan(0.1);
-    expect(t.smashWinners).toBeGreaterThan(0);
-    expect(t.lobsPassed / t.lobs).toBeGreaterThan(0.05);
+    // Le lob court (tombé avant la ligne de service) se fait punir d'un remate, qui sort par la vitre latérale
+    // (17/10) : remate 27 % des gagnants (avant, 3 % ; pros 35-43 %). Puis la volée coupée (X) devient aussi
+    // rapide que la volée normale : elle prend des points au remate (20 %) et raccourcit les échanges (6,9 → 6,4
+    // coups/point ; pros 8-11). Coups hauts 30 %, lobs qui passent 35 % (pros ~35 %). [à recaler en jouant]
+    expect(perPoint).toBeGreaterThan(6.2);
+    expect(perPoint).toBeLessThan(11);
+    expect(t.smashWinners / t.winners).toBeGreaterThan(0.17);
+    expect(t.overheadWinners / t.winners).toBeGreaterThan(0.22);
+    expect(t.lobsPassed / t.lobs).toBeGreaterThan(0.2);
     expect(t.lobsPassed / t.lobs).toBeLessThan(0.55);
     expect(t.exits).toBeGreaterThan(0);
-  }, 120000);
+  }, 240000);
 });
