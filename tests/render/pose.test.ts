@@ -224,3 +224,19 @@ describe('smash (images de Xavier)', () => {
     expect(follow.legR.knee).toBeLessThan(0.1);
   });
 });
+
+describe('service à la cuillère (images de Xavier)', () => {
+  it('balle lâchée devant, raquette armée derrière tête en haut, impact bas devant, fin par-dessus l’épaule gauche', () => {
+    const prep = computePose({ ...still, prep: { family: 'serve', seconds: 1 } });
+    expect(prep.racket[1]).toBeGreaterThan(0.8);
+    expect(prep.armL[2]).toBeGreaterThan(0.6);
+    expect(prep.twist).toBeLessThan(-0.8);
+    const impact = computePose({ ...still, strike: { family: 'serve', seconds: 0 } });
+    expect(impact.armR[1]).toBeLessThan(-0.6);
+    expect(impact.racket[2]).toBeGreaterThan(0.4);
+    const follow = computePose({ ...still, strike: { family: 'serve', seconds: FOLLOW_TIME } });
+    expect(follow.racket[0]).toBeGreaterThan(0.2);
+    expect(follow.racket[2]).toBeLessThan(-0.5);
+    expect(follow.legR.swing).toBeLessThan(follow.legL.swing);
+  });
+});

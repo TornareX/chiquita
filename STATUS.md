@@ -543,3 +543,16 @@ un personnage seul au milieu de son camp, sans simulation.
 - La bajada et la feinte prennent le geste de la bandeja/víbora (`overheadFamily`) : ce ne sont pas des smashes sautés.
 - Visionneur : champ plus haut (40°, visée à 1,3 m) pour garder le saut et la raquette dans le cadre.
 - Planche (de dos et de côté) : `screenshots/45-smash.png`.
+
+### E2 : service à la cuillère d'après les images de Xavier (17/10/2026)
+
+454 tests OK (dont 1 de plus dans `tests/render/pose.test.ts`), typecheck OK, test navigateur du visionneur OK,
+`src/sim` inchangé. **À rejouer à la manette.**
+
+- Geste du service (famille `serve`) : la main gauche lâche la balle devant soi pendant que la raquette monte
+  derrière, tête en haut, coude haut, de profil, genoux fléchis ; impact bas, sous la taille, devant soi ; la raquette
+  continue vers l'avant et vers le haut et finit par-dessus l'épaule gauche, pied droit qui avance.
+- Planche (trois quarts face et de dos) : `screenshots/46-service.png`.
+- Tous les coups ont maintenant un geste calé sur des images : coup droit, revers, volées, bandeja/víbora, smash,
+  service. Restent sans images propres : lob et chiquita (geste du coup droit ou du revers), bajada et feinte (geste
+  de la bandeja), volée bloquée (geste de la volée).

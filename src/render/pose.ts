@@ -125,10 +125,14 @@ const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
     impact: key({ twist: -0.1, lean: -0.05, crouch: 0, armR: [-0.15, 0.98, 0.15], armL: [0.5, -0.3, 0.5], elbowR: 0, racket: [-0.05, 0.9, 0.4], face: [0, 0.2, 1], jump: 0.3 }),
     follow: key({ twist: 0.8, lean: 0.55, crouch: 0.05, armR: [0.45, -0.7, 0.5], armL: [0.3, -0.7, -0.5], elbowR: 0.2, racket: [0.45, -0.75, 0.35], face: [1, 0, 0], kick: 1.3 }),
   },
+  // Service à la cuillère d'après les images de Xavier : la main gauche lâche la balle devant soi pendant que la
+  // raquette monte derrière, tête en haut, coude haut, de profil, genoux fléchis ; impact bas, sous la taille,
+  // devant soi ; la raquette continue vers l'avant et vers le haut et finit par-dessus l'épaule gauche, pied droit
+  // qui avance.
   serve: {
-    prep: key({ twist: -0.8, lean: 0.25, crouch: 0.11, armR: [-0.45, -0.75, -0.45], armL: [0.3, -0.3, 0.9], racket: [-0.2, -0.6, -0.75], face: [-1, 0, 0] }),
-    impact: key({ twist: -0.2, lean: 0.25, crouch: 0.1, armR: [-0.6, -0.7, 0.4], armL: [0.5, -0.5, 0.4], elbowR: 0.05, racket: [-0.7, -0.3, 0.6] }),
-    follow: key({ twist: 0.6, lean: 0.15, crouch: 0.08, armR: [0.05, 0.25, 1], armL: [0.3, -0.7, 0.3], elbowR: 0.5, racket: [0.6, 0.75, 0], face: [0, 0, -1] }),
+    prep: key({ twist: -1.0, lean: 0.3, crouch: 0.14, armR: [-0.7, 0.25, -0.55], armL: [0.3, -0.45, 0.85], elbowR: 1.1, racket: [-0.1, 0.95, -0.2], face: [-1, 0, 0] }),
+    impact: key({ twist: -0.2, lean: 0.35, crouch: 0.17, armR: [-0.45, -0.8, 0.4], armL: [0.6, -0.4, 0.3], elbowR: 0.05, racket: [-0.75, -0.2, 0.6] }),
+    follow: key({ twist: 0.85, lean: 0.15, crouch: 0.08, armR: [0.35, 0.6, 0.7], armL: [0.5, -0.6, -0.3], elbowR: 1.2, racket: [0.3, 0.5, -0.8], face: [1, 0, 0], stepR: 0.4 }),
   },
 };
 
