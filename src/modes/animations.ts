@@ -70,7 +70,8 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
     holder.add(rig.object);
   };
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+  // Champ assez haut pour le smash : saut et bras tendu, la raquette monte vers 3 m.
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   const resize = (): void => {
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     camera.aspect = canvas.clientWidth / canvas.clientHeight;
@@ -304,8 +305,8 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
 
     // Assez près pour rester dans le terrain en vue de côté (le grillage masquerait le joueur).
     const distance = 4.4;
-    camera.position.set(spot.x + Math.sin(state.angle) * distance, 1.5, spot.z + Math.cos(state.angle) * distance);
-    camera.lookAt(spot.x, 0.95, spot.z);
+    camera.position.set(spot.x + Math.sin(state.angle) * distance, 1.6, spot.z + Math.cos(state.angle) * distance);
+    camera.lookAt(spot.x, 1.3, spot.z);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   };

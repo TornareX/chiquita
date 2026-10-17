@@ -530,3 +530,16 @@ un personnage seul au milieu de son camp, sans simulation.
   annoncé (stick de déplacement vers l'avant à l'appui) arme le smash.
 - Visionneur : « Bandeja / víbora » et « Smash » ; caméra rapprochée (4,4 m) pour rester dans le terrain en vue de côté.
 - Planche (face et côté) : `screenshots/44-bandeja-vibora.png`.
+
+### E2 : smash d'après les images de Xavier (17/10/2026)
+
+453 tests OK (dont 3 de plus dans `tests/render/pose.test.ts`), typecheck OK, test navigateur du visionneur OK,
+`src/sim` inchangé. **À rejouer à la manette.**
+
+- Geste du smash (famille `overhead`, remate seulement) : la raquette monte à deux mains, puis tombe derrière le dos,
+  dos cambré, genoux fléchis, bras gauche vers la balle ; **impact en l'air** (saut de 30 cm, `Pose.jump`, rendu
+  seulement : le joueur simulé reste au sol, son ombre aussi), bras tendu au plus haut ; puis le corps se plie vers
+  l'avant, la raquette descend à gauche et la jambe droite part devant, tendue (ciseau, `Key.kick`).
+- La bajada et la feinte prennent le geste de la bandeja/víbora (`overheadFamily`) : ce ne sont pas des smashes sautés.
+- Visionneur : champ plus haut (40°, visée à 1,3 m) pour garder le saut et la raquette dans le cadre.
+- Planche (de dos et de côté) : `screenshots/45-smash.png`.

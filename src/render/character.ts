@@ -235,7 +235,7 @@ export function createCharacter(look: CharacterLook, jersey: number, height = PL
     racketMount,
     apply(pose: Pose): void {
       body.rotation.y = pose.bodyYaw;
-      hips.position.y = HIP_Y - pose.crouch + pose.bob;
+      hips.position.y = HIP_Y - pose.crouch + pose.bob + pose.jump;
       // Les hanches tournent avec les épaules (jambes comprises : les pieds pivotent), le buste fait le reste.
       hips.rotation.y = pose.hipTwist;
       torso.rotation.set(pose.lean, pose.twist - pose.hipTwist, 0, 'YXZ');

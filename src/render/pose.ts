@@ -14,7 +14,7 @@ import { bandejaHeight } from '../sim/shots';
 export type V3 = readonly [number, number, number];
 
 /** Famille du geste : coup droit, revers, au-dessus de la tête, service à la cuillère. */
-/** `overhead` : smash (remate), bajada et feinte ; `bandeja` : bandeja et víbora, même geste. */
+/** `overhead` : smash (remate), en sautant ; `bandeja` : bandeja et víbora, même geste, et aussi bajada et feinte. */
 export type SwingFamily = 'fore' | 'back' | 'voleeFore' | 'voleeBack' | 'bandeja' | 'overhead' | 'serve';
 
 export interface Pose {
@@ -22,6 +22,8 @@ export interface Pose {
   crouch: number;
   /** Rebond du bassin (m), positif vers le haut. */
   bob: number;
+  /** Saut (m) : tout le corps quitte le sol (smash). Rendu seulement : le joueur simulé reste au sol. */
+  jump: number;
   /** Rotation du corps entier par rapport à la direction du filet (rad, + vers la gauche du joueur). */
   bodyYaw: number;
   /** Rotation des épaules (rad) : négative = épaule droite en arrière (coup droit armé). */
@@ -61,12 +63,16 @@ interface Key {
   /** Pas en avant de la jambe gauche ou droite (rad de balancier) : la jambe opposée au coup, à la volée. */
   stepL: number;
   stepR: number;
+  /** Saut (m), et coup de pied de la jambe droite vers l'avant, jambe tendue (rad) : le ciseau du smash. */
+  jump: number;
+  kick: number;
 }
 
 const FORWARD: V3 = [0, 0, 1];
 
-function key(k: Omit<Key, 'face' | 'elbowR' | 'stepL' | 'stepR'> & { face?: V3; elbowR?: number; stepL?: number; stepR?: number }): Key {
-  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, ...k };
+type Optional = 'face' | 'elbowR' | 'stepL' | 'stepR' | 'jump' | 'kick';
+function key(k: Omit<Key, Optional> & Partial<Pick<Key, Optional>>): Key {
+  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, jump: 0, kick: 0, ...k };
 }
 
 /** Entre deux points : en attente dans l'échange, raquette devant soi, genoux fléchis. */
@@ -111,10 +117,13 @@ const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
     impact: key({ twist: -0.2, lean: 0.1, crouch: 0.08, armR: [-0.75, 0.35, 0.55], armL: [0.85, 0.2, 0.2], elbowR: 0.1, racket: [-0.75, 0.25, 0.6], face: [0, 0.1, 1], stepL: 0.3 }),
     follow: key({ twist: 1.0, lean: 0.3, crouch: 0.12, armR: [0.8, -0.5, 0.3], armL: [0.4, -0.6, -0.6], elbowR: 0.3, racket: [0.6, -0.3, -0.7], face: [1, 0, 0], stepR: 0.35 }),
   },
+  // Smash (remate) d'après les images de Xavier : la raquette monte à deux mains, puis tombe derrière le dos, dos
+  // cambré, genoux fléchis, bras gauche vers la balle ; impact en l'air, bras tendu au plus haut ; puis le corps se
+  // plie vers l'avant, la raquette descend à gauche et la jambe droite part devant en ciseau.
   overhead: {
-    prep: key({ twist: -0.7, lean: -0.12, crouch: 0.04, armR: [-0.5, 0.8, -0.3], armL: [0.35, 0.9, 0.3], elbowR: 0.9, racket: [0.1, -0.3, -0.95], face: [-1, 0, 0] }),
-    impact: key({ twist: -0.05, lean: 0.08, crouch: 0.02, armR: [-0.2, 0.97, 0.15], armL: [0.5, -0.2, 0.6], elbowR: 0.05, racket: [-0.05, 0.85, 0.5], face: [0, 0.3, 1] }),
-    follow: key({ twist: 0.5, lean: 0.32, crouch: 0.1, armR: [0.35, -0.45, 0.8], armL: [0.4, -0.8, 0.2], elbowR: 0.3, racket: [0.5, -0.7, 0.5] }),
+    prep: key({ twist: -1.0, lean: -0.3, crouch: 0.14, armR: [-0.55, 0.75, -0.35], armL: [0.2, 0.97, 0.15], elbowR: 1.6, racket: [0.15, -0.6, -0.75], face: [-1, 0, 0], stepL: 0.25 }),
+    impact: key({ twist: -0.1, lean: -0.05, crouch: 0, armR: [-0.15, 0.98, 0.15], armL: [0.5, -0.3, 0.5], elbowR: 0, racket: [-0.05, 0.9, 0.4], face: [0, 0.2, 1], jump: 0.3 }),
+    follow: key({ twist: 0.8, lean: 0.55, crouch: 0.05, armR: [0.45, -0.7, 0.5], armL: [0.3, -0.7, -0.5], elbowR: 0.2, racket: [0.45, -0.75, 0.35], face: [1, 0, 0], kick: 1.3 }),
   },
   serve: {
     prep: key({ twist: -0.8, lean: 0.25, crouch: 0.11, armR: [-0.45, -0.75, -0.45], armL: [0.3, -0.3, 0.9], racket: [-0.2, -0.6, -0.75], face: [-1, 0, 0] }),
@@ -162,6 +171,8 @@ function mixKey(a: Key, b: Key, t: number): Key {
     face: mixDir(a.face, b.face, t),
     stepL: mix(a.stepL, b.stepL, t),
     stepR: mix(a.stepR, b.stepR, t),
+    jump: mix(a.jump, b.jump, t),
+    kick: mix(a.kick, b.kick, t),
   };
 }
 
@@ -249,6 +260,7 @@ export function computePose(input: PoseInput): Pose {
   const runBob = Math.abs(Math.cos(input.stride)) * 0.05 * run;
   return {
     crouch: upper.crouch + run * 0.05,
+    jump: upper.jump,
     bob: moving ? runBob : idleBob,
     bodyYaw: input.bodyYaw,
     twist: upper.twist,
@@ -259,9 +271,14 @@ export function computePose(input: PoseInput): Pose {
     elbowR: upper.elbowR,
     racket: upper.racket,
     face: upper.face,
-    legR: step(leg(1), upper.stepR, upper.stepL),
+    legR: kickLeg(step(leg(1), upper.stepR, upper.stepL), upper.kick),
     legL: step(leg(-1), upper.stepL, upper.stepR),
   };
+}
+
+/** Jambe droite lancée vers l'avant, tendue (ciseau du smash). */
+function kickLeg(leg: LegPose, kick: number): LegPose {
+  return { swing: leg.swing - kick, spread: leg.spread, knee: leg.knee * (1 - Math.min(1, kick)) };
 }
 
 /** Pas en avant (`forward`) de cette jambe, ou en arrière quand c'est l'autre qui avance (`other`). */
@@ -269,9 +286,10 @@ function step(leg: LegPose, forward: number, other: number): LegPose {
   return { swing: leg.swing - forward + other * 0.5, spread: leg.spread, knee: leg.knee + forward * 0.6 };
 }
 
-/** Geste d'un coup au-dessus de la tête joué : bandeja et víbora d'un côté, smash, bajada et feinte de l'autre. */
+/** Geste d'un coup au-dessus de la tête joué : le smash (remate) a le sien, les autres celui de la bandeja. */
 export function overheadFamily(variant: OverheadKind | null): SwingFamily {
-  return variant === 'bandeja' || variant === 'vibora' ? 'bandeja' : 'overhead';
+  // Seul le remate se joue en sautant ; la bajada (après la vitre) et la feinte prennent le geste de la bandeja.
+  return variant === 'remate' ? 'overhead' : 'bandeja';
 }
 
 /** Coup au sol ou de volée, côté coup droit ou revers. */

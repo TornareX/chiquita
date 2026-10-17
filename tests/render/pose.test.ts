@@ -163,12 +163,12 @@ describe('volées (images de Xavier)', () => {
 });
 
 describe('bandeja et víbora (images de Xavier)', () => {
-  it('même geste pour la bandeja et la víbora ; le smash, la bajada et la feinte ont le leur', () => {
+  it('même geste pour la bandeja et la víbora (et la bajada, la feinte) ; le smash a le sien', () => {
     expect(overheadFamily('bandeja')).toBe('bandeja');
     expect(overheadFamily('vibora')).toBe('bandeja');
+    expect(overheadFamily('bajada')).toBe('bandeja');
+    expect(overheadFamily('feinte')).toBe('bandeja');
     expect(overheadFamily('remate')).toBe('overhead');
-    expect(overheadFamily('bajada')).toBe('overhead');
-    expect(overheadFamily('feinte')).toBe('overhead');
   });
 
   it('armé : de profil, bras droit levé, raquette derrière la tête, bras gauche tendu vers la balle', () => {
@@ -189,5 +189,38 @@ describe('bandeja et víbora (images de Xavier)', () => {
     expect(follow.armR[0]).toBeGreaterThan(0.5);
     expect(follow.armR[1]).toBeLessThan(0);
     expect(follow.legR.swing).toBeLessThan(follow.legL.swing);
+  });
+});
+
+describe('smash (images de Xavier)', () => {
+  it('armé : raquette tombée derrière le dos, dos cambré, genoux fléchis, bras gauche vers la balle', () => {
+    const prep = computePose({ ...still, prep: { family: 'overhead', seconds: 1 } });
+    expect(prep.racket[1]).toBeLessThan(-0.4);
+    expect(prep.racket[2]).toBeLessThan(-0.4);
+    expect(prep.lean).toBeLessThan(-0.2);
+    expect(prep.crouch).toBeGreaterThan(0.1);
+    expect(prep.armL[1]).toBeGreaterThan(0.9);
+    expect(prep.jump).toBe(0);
+  });
+
+  it('impact en l’air, bras tendu au plus haut ; il retombe pendant la fin du geste', () => {
+    const impact = computePose({ ...still, strike: { family: 'overhead', seconds: 0 } });
+    expect(impact.jump).toBeGreaterThan(0.2);
+    expect(impact.armR[1]).toBeGreaterThan(0.95);
+    expect(impact.racket[1]).toBeGreaterThan(0.8);
+    const half = computePose({ ...still, strike: { family: 'overhead', seconds: FOLLOW_TIME / 2 } });
+    expect(half.jump).toBeLessThan(impact.jump);
+    expect(computePose({ ...still, strike: { family: 'overhead', seconds: FOLLOW_TIME } }).jump).toBeCloseTo(0, 9);
+    // Les autres coups ne sautent pas.
+    expect(computePose({ ...still, strike: { family: 'bandeja', seconds: 0 } }).jump).toBe(0);
+  });
+
+  it('fin du geste : corps plié vers l’avant, raquette en bas à gauche, jambe droite lancée devant, tendue', () => {
+    const follow = computePose({ ...still, strike: { family: 'overhead', seconds: FOLLOW_TIME } });
+    expect(follow.lean).toBeGreaterThan(0.4);
+    expect(follow.racket[0]).toBeGreaterThan(0.3);
+    expect(follow.racket[1]).toBeLessThan(-0.5);
+    expect(follow.legR.swing).toBeLessThan(-1);
+    expect(follow.legR.knee).toBeLessThan(0.1);
   });
 });
