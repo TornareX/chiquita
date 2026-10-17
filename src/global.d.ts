@@ -1,6 +1,7 @@
 import type { Bot } from './sim/bot';
 import type { PlayerCommands } from './sim/commands';
 import type { Duel } from './sim/duel';
+import type { Effects } from './render/effects';
 import type { World } from './sim/world';
 import type { Aids } from './ui/aids';
 
@@ -17,6 +18,8 @@ declare global {
     __duel?: { duel: Duel; Bot: typeof Bot };
     /** Tutoriel, exposé en mode debug (Playwright) : étape en cours, réussites, essai. */
     __tutorial?: { readonly phase: string; readonly successes: number; readonly attempt: number };
+    /** Effets de balle et de vitre de la vue du match, exposés en mode debug (compteurs, ralenti pour les captures). */
+    __effects?: Effects;
     /** Visionneur d'animations (`?mode=animations`) : aller à un instant du geste, phase affichée. */
     __anim?: { seek(t: number): void; readonly phase: string };
   }

@@ -5,12 +5,16 @@ import { predictBall } from '../sim/predict';
 import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
+import { createEffectsView, effectsEnabled } from './effectsView';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { loadModel, modelsEnabled } from './models';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
 export interface DuelView {
-  render(alpha: number, frameTime: number): void;
+  /** `frozen` : micro-pause en cours, les effets restent figés. */
+  render(alpha: number, frameTime: number, frozen?: boolean): void;
+  /** À appeler après chaque pas de simulation : lance les effets de ses événements (contacts, frappe, point). */
+  afterStep(): void;
   /** Léger tremblement de caméra ; `strength` de 0 à 1. */
   shake(strength: number): void;
   /** Zone à viser, dessinée au sol (tutoriel), ou `null` pour l'effacer. */
@@ -266,6 +270,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   clipNearWall(court.object);
   const ball = createBallView();
   scene.add(ball.object);
+  // Effets de balle et de vitre (étape E3), coupés par `?effets=0`.
+  const effects = effectsEnabled() ? createEffectsView(scene, NEAR_CLIP_PLANES) : null;
+  if (effects && (import.meta.env.DEV || new URLSearchParams(location.search).has('debug'))) window.__effects = effects.effects;
+  const drawingSize = new THREE.Vector2();
   /** Un joueur dessiné par joueur simulé : créés au besoin (le format peut passer du simple au double). */
   const players: PlayerView[] = [];
   const syncPlayers = (): void => {
@@ -451,6 +459,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   };
 
   return {
+    afterStep(): void {
+      effects?.effects.fromStep(duel);
+    },
+
     shake(strength: number): void {
       shake = Math.max(shake, strength);
     },
@@ -462,7 +474,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       targetZone.position.set((zone.x0 + zone.x1) / 2, 0.009, (zone.z0 + zone.z1) / 2);
     },
 
-    render(alpha: number, frameTime: number): void {
+    render(alpha: number, frameTime: number, frozen = false): void {
       syncPlayers();
       const near = duel.players[0];
       // Caméra partagée : elle suit à peine l'équipe proche (en double, le milieu de la paire bleue).
@@ -503,6 +515,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
           bounceMaterial.opacity = near.engagement?.kind === 'overhead' ? 0.25 : 0.85;
         }
       }
+      effects?.update(frozen ? 0 : frameTime, camera, renderer.getDrawingBufferSize(drawingSize).y);
       renderer.render(scene, camera);
     },
   };

@@ -99,6 +99,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   let hitstopUntil = 0;
   const loop = new FixedStepLoop(SIM_DT, () => {
     duel.step(sample());
+    view.afterStep();
     inputs.step(duel, states);
     if (settings.sound) {
       for (const contact of duel.contacts) sounds.contact(contact);
@@ -124,7 +125,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     const frameTime = (now - last) / 1000;
     last = now;
     if (now >= hitstopUntil) alpha = loop.advance(frameTime);
-    view.render(alpha, frameTime);
+    view.render(alpha, frameTime, now < hitstopUntil);
     hud.update(duel, sources, buttons);
     panel.update(won, played, buttons[0]);
     inputs.render(duel, states, buttons, settings.inputDisplay);

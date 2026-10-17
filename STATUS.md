@@ -578,3 +578,52 @@ face au joueur, pas le tamis. 456 tests OK, typecheck OK, tests navigateur du vi
   La face de l'image clé ne choisit plus que de quel côté il regarde.
 - Attente : tamis sur le côté, tranche face au joueur.
 - Planche de tous les gestes (préparation, impact, fin du geste) : `screenshots/48-prise-marteau.png`.
+
+## Étape E3 : effets de balle et de vitre (17/10/2026, branche `claude/etape-e3-effets-287910`)
+
+Tout dans le rendu : `src/render/effects.ts` (logique pure, sans Three.js) et `src/render/effectsView.ts` (dessin),
+pilotés par les événements de chaque pas (`duel.contacts`, `duel.shot`, `duel.exit`, `duel.result`), lus sans rien
+modifier. `src/sim` inchangé (`git diff src/sim` vide). 464 tests OK (dont 8 dans `tests/render/effects.test.ts`),
+joueur automatique compris, typecheck OK. **Rien n'est encore joué à la manette : à juger par Xavier.**
+
+- **Frappe** : anneau qui s'ouvre et étoile qui tourne au point de contact, face à la caméra, avec des étincelles.
+  Blanc sinon, doré, plus gros et plus long sur une frappe parfaite ; plus grand encore sur un smash (remate).
+- **Vitre** : deux ondes sur le plan de la vitre touchée, plus fortes et plus larges si la balle va vite.
+- **Rebond au sol** : petit nuage de poussière (bleu clair sur le gazon, gris dehors), proportionné à la vitesse
+  verticale ; rien quand la balle roule.
+- **Grillage** : tache de losanges qui s'éclaire et vibre à l'endroit touché, avec quelques éclats. Le grillage
+  latéral étant vu presque de profil, la tache se tourne à moitié vers la caméra pour rester lisible.
+- **Por tres / por cuatro** : éclat au sommet du mur quand la balle sort après son rebond (`duel.exit`), puis, au
+  point (`duel.result`), éclair à l'écran et « ¡POR TRES! » (ou « ¡POR CUATRO! ») qui jaillit et s'efface en 1,4 s.
+  L'annonce attend le point plutôt que la sortie : l'adversaire peut encore rattraper la balle dehors.
+- Au fond du terrain, les effets grandissent comme la balle pour rester lisibles. Ils suivent le temps réel du rendu
+  et restent figés pendant la micro-pause des frappes parfaites (`render(alpha, frameTime, frozen)`). Les modes
+  appellent `view.afterStep()` après chaque pas : match, tutoriel et labo. `?effets=0` les coupe.
+- Coût : réserves de taille fixe (32 effets, 256 particules) réutilisées en tourniquet, aucune allocation par image ;
+  4 appels de dessin au plus (anneaux, étoiles, grillage instanciés en mélange additif ; un nuage de points), aucun
+  quand rien ne se passe. Éclair et annonce en HTML par-dessus le canevas.
+
+**Mesuré** (`tests/e2e/effects.spec.ts`, IA contre IA, 1280 × 720, fenêtre affichée : `MESURE=1 npx playwright test
+effects -g fluidité --headed`) :
+
+| | intervalle médian / 95e | travail par image médian / 95e |
+|---|---|---|
+| simple, avant E3 | 16,7 / 16,7 ms | 0,7 / 1,4 ms |
+| simple, effets | 16,7 / 16,8 ms | 0,6 / 1,5 ms |
+| simple, `?effets=0` | 16,7 / 16,8 ms | 0,6 / 1,3 ms |
+| double, avant E3 | 16,7 / 16,8 ms | 1,1 / 2,0 ms |
+| double, effets | 16,7 / 16,8 ms | 1,0 / 1,9 ms |
+| double, `?effets=0` | 16,7 / 16,8 ms | 0,9 / 1,7 ms |
+
+60 images/s partout ; les effets coûtent au plus 0,2 ms par image. Sans affichage (Chromium headless, sans carte
+graphique), le jeu tourne à 15 images/s sur cette machine, avant comme après E3 : mesurer avec `--headed`.
+
+- Test navigateur : les effets apparaissent (frappes, poussière, vitres, por tres provoqué) en simple et en double,
+  sans erreur de console, et `?effets=0` n'en crée aucun.
+- Planche avant / après, au même pas de l'échange (la simulation est figée au pas de l'événement) :
+  `screenshots/49-effets-avant-apres.png` ; à refaire avec `CAPTURES=dossier npx playwright test effects -g captures --headed`.
+- Pas encore : rien sur le filet ni la bande ; pas de son nouveau (E7) ; le flash du por tres n'est pas encore relié
+  au ralenti (E4). Intensités et durées marquées à calibrer en jouant.
+- Suite Playwright complète : 18 passés, 2 ignorés (mesure et captures, sur demande), 4 en échec sans affichage.
+  Trois (`aids`, `inputs`, `machine`) dépassent leur délai à 15 images/s et passent avec `--headed` ; le dernier
+  (`models`, mode entraîneur, qui n'utilise pas la vue du match) relève un 404 sur `/favicon.ico`, absent du projet.

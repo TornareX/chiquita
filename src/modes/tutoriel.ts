@@ -301,6 +301,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
       states[0] = { stick: { up: blue.stick.forward, right: blue.stick.right }, shot: blue.shot, assistButton: false };
     } else states[0] = state;
     duel.step([blue, NEUTRAL_ARCADE]);
+    view.afterStep();
     inputs.step(duel, states);
     if (settings.sound) {
       for (const contact of duel.contacts) sounds.contact(contact);
@@ -384,7 +385,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     const speed = SPEED[phase];
     const paused = speed === undefined || padTest.isOpen;
     if (!paused && now >= hitstopUntil) alpha = loop.advance(frameTime * speed);
-    view.render(alpha, frameTime);
+    view.render(alpha, frameTime, now < hitstopUntil);
     inputs.render(duel, states, buttons, settings.inputDisplay && !paused);
     updateStatus();
     requestAnimationFrame(frame);

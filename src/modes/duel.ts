@@ -143,6 +143,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   let hitstopUntil = 0;
   const loop = new FixedStepLoop(SIM_DT, () => {
     duel.step(sample());
+    view.afterStep();
     inputs.step(duel, states);
     for (const contact of duel.contacts) {
       sounds.contact(contact);
@@ -185,7 +186,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     startHeld = start;
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
     if (!menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
-    view.render(alpha, frameTime);
+    view.render(alpha, frameTime, now < hitstopUntil);
     hud.update(duel, sources, buttons);
     inputs.render(duel, states, buttons, settings.inputDisplay && !menu.isOpen && !padTest.isOpen);
     requestAnimationFrame(frame);
