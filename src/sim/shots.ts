@@ -55,7 +55,7 @@ export function aimTarget(
 
 /**
  * Variante du coup au-dessus de la tête, choisie par la situation et le stick au moment de l'impact
- * (GAME_DESIGN.md §4 et §13, pas de charge) : stick vers l'avant près du filet, sur une balle assez
+ * (GAME_DESIGN.md §4 et §13, pas par le temps de préparation) : stick vers l'avant près du filet, sur une balle assez
  * haute : remate ; stick sur le côté : víbora ; sinon, ou loin du filet : bandeja.
  */
 /**
