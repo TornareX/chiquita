@@ -23,8 +23,18 @@ export const NEUTRAL_COMMANDS: PlayerCommands = {
   softShot: false,
 };
 
-/** Boutons de coup arcade (GAME_DESIGN.md §4) : A = normal (lift), X = coupé, Y = lob. */
-export type ShotKind = 'normal' | 'slice' | 'lob';
+/**
+ * Boutons de coup arcade (GAME_DESIGN.md §4) : A = normal (lift), X = coupé, Y = lob,
+ * B = au-dessus de la tête (bandeja, víbora ou remate selon la situation et le stick).
+ */
+export type ShotKind = 'normal' | 'slice' | 'lob' | 'overhead';
+
+/**
+ * Coups au-dessus de la tête (GAME_DESIGN.md §4) : la bandeja par défaut, sûre et profonde ; la víbora
+ * au stick latéral, plus rapide, avec un effet qui longe la vitre latérale ; le remate au stick vers
+ * l'avant, à plat, seulement près du filet.
+ */
+export type OverheadKind = 'bandeja' | 'vibora' | 'remate';
 
 /**
  * Commandes d'un joueur de l'échange arcade pour un pas de simulation, quelle que soit la source

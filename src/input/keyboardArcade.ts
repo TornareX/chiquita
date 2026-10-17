@@ -25,6 +25,8 @@ export const KEY_LAYOUTS: readonly [KeyLayout, KeyLayout] = [
       ['KeyJ', 'normal'],
       ['KeyK', 'slice'],
       ['KeyL', 'lob'],
+      // Au-dessus de J et K : coup au-dessus de la tête.
+      ['KeyI', 'overhead'],
     ],
     assist: 'KeyU',
   },
@@ -37,10 +39,13 @@ export const KEY_LAYOUTS: readonly [KeyLayout, KeyLayout] = [
       ['Numpad1', 'normal'],
       ['Numpad2', 'slice'],
       ['Numpad3', 'lob'],
+      ['Numpad4', 'overhead'],
       // Sans pavé numérique : les trois touches à gauche de Maj droite.
       ['Comma', 'normal'],
       ['Period', 'slice'],
       ['Slash', 'lob'],
+      // Et celle juste à leur gauche (M en QWERTY, virgule en AZERTY) : au-dessus de la tête.
+      ['KeyM', 'overhead'],
     ],
     assist: 'Numpad0',
   },

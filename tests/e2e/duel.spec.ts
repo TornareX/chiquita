@@ -13,7 +13,7 @@ test('deux manettes tiennent un échange de 10 coups', async ({ page }) => {
   await page.evaluate(() => {
     const { duel, Bot } = window.__duel!;
     const bots = [new Bot(0, 11), new Bot(1, 12)];
-    const buttonOf = { normal: 0, slice: 2, lob: 3 } as const;
+    const buttonOf = { normal: 0, overhead: 1, slice: 2, lob: 3 } as const;
     let lastTick = -1;
     let pads: Gamepad[] = [];
     navigator.getGamepads = () => {

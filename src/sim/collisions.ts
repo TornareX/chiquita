@@ -109,10 +109,24 @@ function findEarliestHit(p0: Vec3, p1: Vec3, out: boolean): Hit | null {
   return best;
 }
 
+/**
+ * Sol vu par la balle : une balle coupée s'écrase sur le gazon et le sable, elle rebondit moins haut
+ * (`slicedBounce`). Le rapport de coupe est la vitesse de surface due à l'effet rétro, rapportée à la
+ * vitesse horizontale ; à 1, la restitution baisse de `slicedBounce`.
+ */
+function groundFor(ball: Ball, p: PhysicsProfile): SurfaceParams {
+  const h = Math.sqrt(ball.vel.x * ball.vel.x + ball.vel.z * ball.vel.z);
+  if (!p.slicedBounce || h < 0.5) return p.ground;
+  // Axe du lift pour une balle qui avance dans la direction (x, z) : UP × direction.
+  const lift = (ball.spin.x * ball.vel.z - ball.spin.z * ball.vel.x) / h;
+  const cut = Math.min(1, Math.max(0, (-lift * BALL_RADIUS) / h));
+  return cut > 0 ? { ...p.ground, restitution: p.ground.restitution * (1 - p.slicedBounce * cut) } : p.ground;
+}
+
 function bounceOnGround(ball: Ball, p: PhysicsProfile, contacts: Contact[]): void {
   ball.pos = vec3(ball.pos.x, BALL_RADIUS, ball.pos.z);
   contacts.push({ surface: 'ground', pos: ball.pos, speed: -ball.vel.y });
-  const result = bounce(ball.vel, ball.spin, UP, p.ground, p.inertiaFactor);
+  const result = bounce(ball.vel, ball.spin, UP, groundFor(ball, p), p.inertiaFactor);
   ball.spin = result.spin;
   // Rebond trop faible : la balle reste au sol et roule.
   ball.vel = result.vel.y < p.restSpeed ? vec3(result.vel.x, 0, result.vel.z) : result.vel;

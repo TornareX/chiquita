@@ -39,3 +39,13 @@ export const SIDE_GLASS_HEIGHT_LOW = 2;
 export const SIDE_WALL_HEIGHT_END = 4;
 /** Hauteur totale sur le reste du mur latéral. */
 export const SIDE_WALL_HEIGHT = 3;
+
+// Portes (accès au terrain) : une ouverture dans chaque mur latéral, de chaque côté du filet,
+// entre ces distances au filet, jusqu'à cette hauteur. Les joueurs sortent par là pour rattraper
+// une balle qui quitte le terrain (salida de pista) ; la balle peut aussi y passer.
+export const DOOR_NEAR = 0.1;
+export const DOOR_FAR = 1.0;
+export const DOOR_HEIGHT = 2;
+/** Zone praticable autour du terrain : au-delà des murs latéraux, puis derrière les murs du fond (m). */
+export const RUNOFF_SIDE = 8;
+export const RUNOFF_BACK = 6;

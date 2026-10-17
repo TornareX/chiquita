@@ -112,7 +112,9 @@ describe('fenêtre de timing : maintenir puis relâcher', () => {
   it('appui bref : coup normal, jamais raté', () => {
     const { shots, whiffs } = play(60, 7);
     expect(rallyShots(shots).length).toBeGreaterThan(20);
-    expect(rallyShots(shots).every((shot) => !shot.perfect && shot.timing < 0)).toBe(true);
+    // Au-dessus de la tête, la balle n'est frappable qu'en dessous de 3 m : un appui tôt peut tomber juste.
+    const low = rallyShots(shots).filter((shot) => shot.kind !== 'overhead');
+    expect(low.every((shot) => !shot.perfect && shot.timing < 0)).toBe(true);
     expect(whiffs).toBe(0);
   });
 

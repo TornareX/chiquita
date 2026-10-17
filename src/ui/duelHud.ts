@@ -1,5 +1,6 @@
+import type { OverheadKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
-import type { AssistLevel, Duel, PointReason, ServeFault } from '../sim/duel';
+import type { AssistLevel, Duel, DuelShot, PointReason, ServeFault } from '../sim/duel';
 
 export interface DuelHud {
   /** `sources` : d'où viennent les commandes de chaque joueur (« Manette 1 », « Clavier »…). */
@@ -26,6 +27,8 @@ const REASONS: Record<PointReason, string> = {
   'second-bounce': 'deuxième rebond',
   'not-returned': 'balle non renvoyée',
   'double-fault': 'double faute',
+  'por-tres': 'por tres, sortie par le côté',
+  'por-cuatro': 'por cuatro, sortie par le fond',
 };
 
 const SERVE_FAULTS: Record<ServeFault, string> = {
@@ -36,6 +39,22 @@ const SERVE_FAULTS: Record<ServeFault, string> = {
 };
 
 const COLORS = ['#8cc4ff', '#ff9aa3'] as const;
+
+const OVERHEADS: Record<OverheadKind, string> = {
+  bandeja: 'bandeja',
+  vibora: 'víbora',
+  remate: 'remate',
+};
+
+/** Nom du coup à afficher, ou `null` pour un coup ordinaire sans frappe parfaite. */
+function shotLabel(shot: DuelShot): string | null {
+  if (shot.outside) return 'salida de pista !';
+  if (shot.overhead) return OVERHEADS[shot.overhead] + (shot.perfect ? ' parfaite !' : '');
+  if (shot.style === 'cut') return shot.perfect ? 'volée coupée parfaite !' : 'volée coupée';
+  if (shot.style === 'chiquita') return 'chiquita';
+  if (shot.style === 'block') return 'bloquée';
+  return shot.perfect ? 'parfait !' : null;
+}
 
 function element(id: string, css: string): HTMLDivElement {
   const div = document.createElement('div');
@@ -61,10 +80,14 @@ export function createDuelHud(): DuelHud {
   const help = element('help', 'bottom:14px;right:18px;font-size:13px;text-align:right;color:#c9d3db');
   help.innerHTML =
     'A coup normal · X coupé · Y lob : maintiens, relâche quand l’anneau se referme<br>' +
+    'Anneau vert : balle facile (lob, chiquita, attaque) · jaune : transition · rouge : balle dure, remets-la bas<br>' +
+    'X de volée sur une balle flottante : volée coupée qui meurt · X stick vers soi : chiquita · appuie tôt pour armer, sinon tu bloques<br>' +
+    'B balle haute : bandeja · stick sur le côté : víbora · stick en avant près du filet : remate<br>' +
+    'Remate parfait près du filet : il peut sortir du terrain (por tres) ; sors par la porte pour la rattraper<br>' +
     'Service : maintiens pour lâcher la balle, relâche au sommet du rebond<br>' +
     'Stick : se placer, puis viser au moment de l’impact (haut = profond)<br>' +
-    'Clavier : ZQSD + J K L (bleu), flèches + 1 2 3 du pavé ou , ; : (rouge)<br>' +
-    'Assistance : bouton Affichage, U (bleu) ou 0 du pavé (rouge)';
+    'Clavier : ZQSD + J K L, I pour B (bleu) ; flèches + 1 2 3 4 du pavé, ou M , ; : en AZERTY (rouge)<br>' +
+    'Assistance : bouton Affichage, U (bleu) ou 0 du pavé (rouge) · Réglages : Échap ou Start';
 
   return {
     update(duel: Duel, sources: readonly [string, string]): void {
@@ -110,7 +133,8 @@ export function createDuelHud(): DuelHud {
       const recent = (tick: number): boolean => (duel.tick - tick) * SIM_DT < FEEDBACK_TIME;
       const notes = duel.players.map((player, i) => {
         if (recent(player.lastWhiffTick)) return `<span style="color:#ffb35c">${NAMES[i]} : dans le vide !</span>`;
-        if (player.lastHit?.perfect && recent(player.lastHitTick)) return `<span style="color:#fff">${NAMES[i]} : parfait !</span>`;
+        const label = player.lastHit && recent(player.lastHitTick) ? shotLabel(player.lastHit) : null;
+        if (label) return `<span style="color:#fff">${NAMES[i]} : ${label}</span>`;
         return '';
       });
       feedback.innerHTML = notes.filter(Boolean).join('<br>');
@@ -129,6 +153,11 @@ export function createDuelHud(): DuelHud {
         const won = outcome?.set ? ` · set ${NAMES[winner]}` : outcome?.game ? ` · jeu ${NAMES[winner]}` : '';
         message.style.color = COLORS[winner];
         message.textContent = `Point ${NAMES[winner]} : ${REASONS[reason]} (${hits} coups)${won}`;
+      } else if (duel.phase === 'rally' && duel.exit) {
+        // Balle sortie après son rebond : encore jouable dehors, jusqu'à ce qu'elle touche le sol.
+        const side = duel.exit.wall === 'sidePosX' || duel.exit.wall === 'sideNegX';
+        message.style.color = '#ffe27a';
+        message.textContent = side ? 'Por tres !' : 'Por cuatro !';
       } else if (duel.phase === 'over' && duel.match?.winner != null) {
         const winner = duel.match.winner;
         const sets = duel.match.sets.map((set) => `${set[winner]}-${set[winner === 0 ? 1 : 0]}`).join(' ');

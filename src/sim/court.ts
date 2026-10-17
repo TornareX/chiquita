@@ -1,6 +1,9 @@
 import {
   BACK_GLASS_HEIGHT,
   BACK_WALL_HEIGHT,
+  DOOR_FAR,
+  DOOR_HEIGHT,
+  DOOR_NEAR,
   HALF_LENGTH,
   HALF_WIDTH,
   NET_HEIGHT_CENTER,
@@ -71,7 +74,10 @@ function sidePanels(wall: WallId, variant: SideWallVariant): Panel[] {
       { wall, surface: 'mesh', ...span(0, p), yMin: SIDE_GLASS_HEIGHT_HIGH, yMax: SIDE_WALL_HEIGHT_END },
       { wall, surface: 'glass', ...span(p, 2 * p), yMin: 0, yMax: secondGlass },
       { wall, surface: 'mesh', ...span(p, 2 * p), yMin: secondGlass, yMax: SIDE_WALL_HEIGHT },
-      { wall, surface: 'mesh', ...span(2 * p, HALF_LENGTH), yMin: 0, yMax: SIDE_WALL_HEIGHT },
+      // Grillage jusqu'au filet, ouvert par la porte.
+      { wall, surface: 'mesh', ...span(2 * p, HALF_LENGTH - DOOR_FAR), yMin: 0, yMax: SIDE_WALL_HEIGHT },
+      { wall, surface: 'mesh', ...span(HALF_LENGTH - DOOR_FAR, HALF_LENGTH - DOOR_NEAR), yMin: DOOR_HEIGHT, yMax: SIDE_WALL_HEIGHT },
+      { wall, surface: 'mesh', ...span(HALF_LENGTH - DOOR_NEAR, HALF_LENGTH), yMin: 0, yMax: SIDE_WALL_HEIGHT },
     );
   }
   // En variante 2, le grillage au-dessus du deuxième panneau a une hauteur nulle.

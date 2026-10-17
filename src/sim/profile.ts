@@ -121,6 +121,14 @@ export interface ShotTypeTuning {
   depthLong: number;
   /** Effet : fraction de la vitesse convertie en rotation, positif = lift, négatif = slice. */
   spin: number;
+  /** Temps de vol à la profondeur courte (lob court), interpolé jusqu'à `flightTime` à la profondeur neutre. */
+  flightTimeShort?: number;
+  /** Effet de la frappe parfaite, s'il diffère de `spin` (volée coupée : plus coupée). */
+  spinPerfect?: number;
+  /** `speed` est la vitesse de la balle au départ, et non sa vitesse horizontale (smash frappé vers le bas). */
+  launchSpeed?: boolean;
+  /** Effet latéral (víbora) : fraction de la vitesse convertie en rotation autour de la verticale, vers l'extérieur. */
+  sideSpin?: number;
 }
 
 /** Échange arcade : course assistée et coups à boutons (GAME_DESIGN.md §4). */
@@ -195,10 +203,106 @@ export interface RallyTuning {
   manualThreshold: number;
   /** Récompense du placement manuel : plage latérale de visée multipliée par ce facteur. */
   manualAimBonus: number;
+  /**
+   * Coup au-dessus de la tête (bouton B) : hauteurs de balle où il se joue (m), et hauteur préférée par
+   * la course assistée. Plus bas, B donne un coup défensif (coupé).
+   */
+  overheadLow: number;
+  overheadHigh: number;
+  overheadIdeal: number;
+  /** La course assistée place la balle à cette distance sur le côté du joueur, au-dessus de la tête (m). */
+  overheadLateral: number;
+  /** Stick à fond au-delà de ce seuil (0..1), vers l'avant : remate ; sur le côté : víbora ; sinon bandeja. */
+  overheadStick: number;
+  /** Le remate ne se joue qu'à moins de cette distance du filet, sur une balle au moins à `remateLow` (m) ; sinon, bandeja. */
+  remateZone: number;
+  remateLow: number;
+  /** Remate parfait : profondeur visée, courte, pour que la balle rebondisse haut et sorte du terrain (m). */
+  remateKillDepth: number;
+  /**
+   * Écart latéral de la cible d'un remate au stick à fond : parfait (l'angle qui le fait sortir par le
+   * côté), puis non parfait (il reste plus près de l'axe et revient de la vitre) ; et de la víbora (m).
+   */
+  remateWidth: number;
+  remateWidthLoose: number;
+  viboraLateral: number;
+  /** Retard de la bandeja : la dérive est multipliée par ce facteur (coup sûr). */
+  bandejaDrift: number;
+  /** Lob parfait : profondeur ajoutée (m). */
+  lobPerfectDepth: number;
+  /** Pression de la balle reçue et précision du contact (`src/sim/pressure.ts`). */
+  pressure: PressureTuning;
   normal: ShotTypeTuning;
   slice: ShotTypeTuning;
   lob: ShotTypeTuning;
+  bandeja: ShotTypeTuning;
+  vibora: ShotTypeTuning;
+  remate: ShotTypeTuning;
+  /**
+   * Volée coupée (X de volée sur une balle flottante : verte et prise au-dessus de `cutLow`) : courte,
+   * rasante et coupée, elle s'écrase au rebond et meurt avant la vitre. Sous pression, X reste un blocage.
+   */
+  cut: ShotTypeTuning;
+  cutLow: number;
+  /** Chiquita (X stick vers soi, après rebond) : lente et basse, aux pieds du joueur au filet. */
+  chiquita: ShotTypeTuning;
+  /**
+   * Préparation (de l'appui à la frappe) : sous `blockPrep` s, le coup est bloqué (vitesse × `blockSpeed`,
+   * plage latérale × `blockWidth`) ; la vitesse est pleine à `fullPrep` s. Pas une jauge : au-delà, rien de plus.
+   */
+  blockPrep: number;
+  fullPrep: number;
+  blockSpeed: number;
+  blockWidth: number;
   serve: ServeTuning;
+}
+
+/**
+ * Pression (balle verte, jaune, rouge) et erreur du coup. Rampes linéaires entre une valeur « facile »
+ * (0) et une valeur « dure » (1). Tout est [à calibrer en jouant].
+ */
+export interface PressureTuning {
+  /** 0 désactive la pression et l'erreur (comparaison en jeu : `?pression=0`), 1 = réglage normal. */
+  scale: number;
+  /** Temps de préparation (s) : confortable au-dessus de `prepEasy`, sans préparation sous `prepHard`. */
+  prepEasy: number;
+  prepHard: number;
+  /** Hauteur d'impact (m) : confortable au-dessus de `comfortLow`, dans les pieds sous `lowHeight`. */
+  comfortLow: number;
+  lowHeight: number;
+  /** Part de la gêne d'une balle basse qui reste au coupé (il la remet mieux). */
+  sliceLow: number;
+  /** Vitesse de la balle reçue (m/s). */
+  slowSpeed: number;
+  fastSpeed: number;
+  /** Part de la vitesse de départ du coup adverse qui compte comme vitesse reçue (une volée forte reste dure après la vitre). */
+  struckSpeed: number;
+  /** Vitesse du joueur à l'impact (m/s). */
+  runEasy: number;
+  runHard: number;
+  weights: { time: number; low: number; fast: number; running: number };
+  /** Pression ajoutée par une balle sortie d'un coin. */
+  doubleGlass: number;
+  /** Erreur de timing : en avance, pleine à `earlySpan` s avant la sous-fenêtre parfaite ; en retard, à la fin de la fenêtre. */
+  earlySpan: number;
+  /** Poids de l'erreur de timing, de l'écart latéral au point idéal, et de la pression dans l'erreur du coup. */
+  timingError: number;
+  missError: number;
+  pressureError: number;
+  /** Frappe parfaite : la part de la pression est multipliée par ce facteur. */
+  perfectRelief: number;
+  /** Part de l'imprécision qui compte sur une balle verte ; elle compte entière sur une balle rouge. */
+  calmImprecision: number;
+  /** Sous pression maximale, la sous-fenêtre parfaite rétrécit de cette fraction (réflexes à la volée). */
+  windowShrink: number;
+  /** Erreur maximale : passage au-dessus du filet plus haut de tant (m), vitesse réduite de cette fraction, lob plus court de tant (m). */
+  clearance: number;
+  speedLoss: number;
+  lobShort: number;
+  /** Erreur maximale : coup normal ou coupé plus long de tant (m) ; avec du retard, il finit dans la vitre. */
+  long: number;
+  /** Au-dessus de la tête, l'erreur est multipliée par ce facteur (balle haute = balle d'attaque). */
+  overheadFactor: number;
 }
 
 /** Service à la cuillère, en diagonale. Distances en m ; profondeurs comptées depuis le filet. */
@@ -243,6 +347,8 @@ export interface PhysicsProfile {
   net: SurfaceParams;
   /** Fraction de vitesse horizontale perdue quand la balle accroche pleinement la bande du filet. */
   tapeSpeedLoss: number;
+  /** Balle coupée : restitution au sol réduite jusqu'à cette fraction (0 = sans effet). */
+  slicedBounce: number;
 }
 
 export const REALISTIC: PhysicsProfile = {
@@ -339,6 +445,50 @@ export const REALISTIC: PhysicsProfile = {
     aimWindow: 0.3,
     manualThreshold: 0.35,
     manualAimBonus: 1.25,
+    overheadLow: 1.9,
+    overheadHigh: 3.0,
+    overheadIdeal: 2.55,
+    overheadLateral: 0.35,
+    overheadStick: 0.5,
+    remateZone: 4,
+    remateLow: 2.2,
+    remateKillDepth: 3,
+    remateWidth: 3.2,
+    remateWidthLoose: 1.1,
+    viboraLateral: 3.9,
+    bandejaDrift: 0.5,
+    pressure: {
+      scale: 1,
+      // Calé sur l'échange arcade (IA contre IA) : volées 0,6-1 s de préparation et 9-14 m/s, balles
+      // après la vitre 1-2 s et 4-6 m/s. La course assistée arrête le joueur avant l'impact : la course
+      // ne pèse pas tant que le joueur se place lui-même.
+      prepEasy: 1.3,
+      prepHard: 0.55,
+      comfortLow: 0.8,
+      lowHeight: 0.35,
+      sliceLow: 0.4,
+      slowSpeed: 6,
+      fastSpeed: 16,
+      struckSpeed: 0.7,
+      runEasy: 2,
+      runHard: 6,
+      // La hauteur pèse le plus : une balle qui passe bas sur le filet oblige à remonter (le « 10 cm contre 1 m »).
+      weights: { time: 0.35, low: 0.5, fast: 0.25, running: 0.15 },
+      doubleGlass: 0.25,
+      earlySpan: 0.12,
+      timingError: 0.7,
+      missError: 0.6,
+      pressureError: 0.8,
+      perfectRelief: 0.5,
+      calmImprecision: 0.4,
+      windowShrink: 0.5,
+      clearance: 0.7,
+      speedLoss: 0.25,
+      lobShort: 2,
+      long: 0.7,
+      overheadFactor: 0.5,
+    },
+    lobPerfectDepth: 0.5,
     normal: {
       speed: 20,
       speedPerfect: 24,
@@ -372,6 +522,73 @@ export const REALISTIC: PhysicsProfile = {
       depthLong: 9.2,
       spin: 0.12,
     },
+    // Coups au-dessus de la tête : ordres de grandeur de research/padel-pro/NOTES.md §1 [à calibrer].
+    bandeja: {
+      speed: 21, // ~75 km/h, 3/4 de puissance
+      speedPerfect: 24,
+      clearance: 0.6,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 6.5,
+      depthNeutral: 8.2,
+      depthLong: 8.9,
+      spin: -0.3,
+    },
+    vibora: {
+      speed: 26, // ~95 km/h
+      speedPerfect: 29,
+      clearance: 0.4,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 7,
+      depthNeutral: 8.2,
+      depthLong: 8.8,
+      spin: -0.25,
+      sideSpin: 0.2,
+    },
+    cut: {
+      speed: 10,
+      speedPerfect: 12,
+      clearance: 0.12,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 3,
+      depthNeutral: 4.5,
+      depthLong: 6.5,
+      spin: -0.6,
+      spinPerfect: -0.95,
+    },
+    cutLow: 0.9,
+    chiquita: {
+      speed: 7,
+      speedPerfect: 8,
+      clearance: 0.15,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 2.5,
+      depthNeutral: 3.5,
+      depthLong: 4.5,
+      spin: -0.5,
+    },
+    blockPrep: 0.3,
+    fullPrep: 0.6,
+    blockSpeed: 0.6,
+    blockWidth: 0.5,
+    remate: {
+      // Vitesse au départ ; la traînée compensée, la balle part à ~125 km/h, ~131 en frappe parfaite
+      // (smash semi-pro face à un adversaire : 121 km/h, research/padel-pro/NOTES.md §1).
+      speed: 32,
+      speedPerfect: 35,
+      clearance: 0.15,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 7,
+      // Non parfait : profond, il revient de la vitre (ou repasse le filet) sans sortir.
+      depthNeutral: 8,
+      depthLong: 8.5,
+      spin: 0.05,
+      launchSpeed: true,
+    },
     serve: {
       standLateral: 1.6,
       serverDepth: 7.5,
@@ -399,6 +616,7 @@ export const REALISTIC: PhysicsProfile = {
   mesh: { restitution: 0.3, friction: 0.8, roughness: 0.25 }, // [à calibrer]
   net: { restitution: 0.05, friction: 0.8 },
   tapeSpeedLoss: 0.5, // [à calibrer]
+  slicedBounce: 0,
 };
 
 /**
@@ -410,7 +628,7 @@ export const ARCADE: PhysicsProfile = {
   ...REALISTIC,
   player: {
     ...REALISTIC.player,
-    maxSpeed: 7.5, // [à calibrer VT4 : vitesse de course]
+    maxSpeed: 6, // 7,5 au départ : le terrain paraissait petit et la défense trop facile (Xavier, 17/10) [à calibrer en jouant]
     acceleration: 38, // [à calibrer VT4 : accélération]
     deceleration: 45, // [à calibrer VT4]
   },
@@ -431,12 +649,29 @@ export const ARCADE: PhysicsProfile = {
     // Sans direction, le coup va chercher la vitre : au padel, la balle courte se fait punir. [à calibrer]
     normal: { ...REALISTIC.rally.normal, speed: 15.5, speedPerfect: 18.5, depthNeutral: 7.5 }, // [à calibrer VT4 : vitesses de balle]
     slice: { ...REALISTIC.rally.slice, speed: 11.5, speedPerfect: 13.5, depthNeutral: 6.5 }, // [à calibrer VT4]
-    lob: { ...REALISTIC.rally.lob, flightTime: 2.05, flightTimePerfect: 1.9 }, // [à calibrer VT4 : temps de vol]
+    // Lob profond : 2,5 à 3 s de vol, le temps de monter au filet (padel-pro/NOTES.md §5) ; lob court plus bas et plus
+    // rapide : une balle de smash. [à calibrer en jouant]
+    // Profondeurs : au neutre, la balle retombe vers 7,6 m, prise de volée vers 6,3 m ; un lob plus
+    // profond passe le joueur au filet, qui doit reculer. [à calibrer en jouant]
+    lob: {
+      ...REALISTIC.rally.lob,
+      flightTime: 2.6,
+      flightTimePerfect: 2.8,
+      flightTimeShort: 1.6,
+      depthShort: 5.5,
+      depthNeutral: 7.6,
+      depthLong: 8.8,
+    },
+    // Au-dessus de la tête, vitesses de coups arcade (normal ×0,775) sauf le remate, qui garde ses 120-130 km/h.
+    bandeja: { ...REALISTIC.rally.bandeja, speed: 16, speedPerfect: 18.5 }, // [à calibrer en jouant]
+    vibora: { ...REALISTIC.rally.vibora, speed: 20, speedPerfect: 23 }, // [à calibrer en jouant]
   },
   gravity: 8, // [à calibrer VT4 : temps de vol typiques] balle plus « flottante »
   magnusScale: 0.7, // [à calibrer VT4]
   // Rebonds plus francs.
   ground: { ...REALISTIC.ground, restitution: 0.8 }, // [à calibrer VT4]
+  // Balle coupée : elle s'écrase et reste basse (volée coupée qui tue une balle flottante). [à calibrer en jouant]
+  slicedBounce: 0.6,
   // Vitre moins vive que le sol : la balle revient de 2 à 4 m, le défenseur joue près de la vitre.
   glass: { ...REALISTIC.glass, restitution: 0.55 }, // [à calibrer en jouant]
 };

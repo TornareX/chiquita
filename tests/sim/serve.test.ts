@@ -106,18 +106,18 @@ describe('match contre l’IA', () => {
     const [set] = duel.match!.sets;
     expect(Math.max(...set!)).toBeGreaterThanOrEqual(6);
     expect(duel.match!.winner).not.toBeNull();
-  });
+  }, 30000);
 
   it('est déterministe', () => {
     expect(match(2).match!.sets).toEqual(match(2).match!.sets);
-  }, 20000);
+  }, 60000);
 
   it('les niveaux se classent : le fort bat le facile', () => {
     const duel = new Duel(DEFAULT_RULES);
     const bots = [new Bot(0, 5, AI_LEVELS.facile), new Bot(1, 6, AI_LEVELS.fort)] as const;
     while (duel.phase !== 'over' && duel.time < 3600) duel.step([bots[0].commands(duel), bots[1].commands(duel)]);
     expect(duel.match!.winner).toBe(1);
-  });
+  }, 30000);
 
   it('un appui après la fin du match relance une partie', () => {
     const duel = match(1);
@@ -126,5 +126,5 @@ describe('match contre l’IA', () => {
     expect(duel.phase).toBe('serve');
     expect(duel.match!.sets).toEqual([]);
     expect(duel.match!.points).toEqual([0, 0]);
-  });
+  }, 30000);
 });

@@ -13,9 +13,10 @@ export const IDLE_PAD: PadState = { stick: { up: 0, right: 0 }, shot: null, assi
 /** Zone morte radiale du stick. [à calibrer] */
 const DEAD_ZONE = 0.22;
 
-/** Boutons de la disposition standard (Xbox) : A = 0, X = 2, Y = 3. */
+/** Boutons de la disposition standard (Xbox) : A = 0, B = 1, X = 2, Y = 3. */
 const SHOT_BUTTONS: readonly [number, ShotKind][] = [
   [0, 'normal'],
+  [1, 'overhead'],
   [2, 'slice'],
   [3, 'lob'],
 ];

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { HALF_LENGTH, SIM_DT } from '../sim/constants';
 import type { Duel, DuelPlayer } from '../sim/duel';
 import { predictBall } from '../sim/predict';
+import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
 import { loadModel, modelsEnabled } from './models';
@@ -11,6 +12,9 @@ export interface DuelView {
   /** Léger tremblement de caméra ; `strength` de 0 à 1. */
   shake(strength: number): void;
 }
+
+/** Anneau de timing : couleur de la balle à venir (`pressure.ts`). */
+const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23f, rouge: 0xff4436 };
 
 /** Couleurs d'équipe vives, lisibles de loin (GAME_DESIGN.md §9). */
 export const TEAM_COLORS = [0x2f8cff, 0xff4f5e] as const;
@@ -212,7 +216,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   window.addEventListener('resize', resize);
   resize();
 
-  const updatePlayer = (view: PlayerView, player: DuelPlayer, alpha: number): void => {
+  const updatePlayer = (view: PlayerView, player: DuelPlayer, index: 0 | 1, alpha: number): void => {
     const pos = lerp(player.prevPos, player.pos, alpha);
     view.object.position.set(pos.x, 0, pos.z);
     // Face au filet.
@@ -224,7 +228,18 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const engaged = player.engagement !== null;
     // Repère local : le joueur regarde vers +Z, sa droite est vers -X.
     view.racket.position.x = -0.35;
-    view.racket.rotation.y = swing < 1 ? -Math.PI * 0.85 + swing * Math.PI * 1.4 : engaged ? -Math.PI * 0.8 : -0.4;
+    // Au-dessus de la tête (bouton B) : raquette armée derrière la tête, puis frappe de haut en bas.
+    const overheadSwing = swing < 1 && player.lastHit?.kind === 'overhead';
+    const overheadReady = swing >= 1 && player.engagement?.kind === 'overhead';
+    if (overheadSwing || overheadReady) {
+      view.racket.position.y = 1.75;
+      view.racket.rotation.y = 0;
+      view.racket.rotation.x = overheadSwing ? -Math.PI * 0.9 + swing * Math.PI * 1.25 : -Math.PI * 0.9;
+    } else {
+      view.racket.position.y = 1.0;
+      view.racket.rotation.x = 0;
+      view.racket.rotation.y = swing < 1 ? -Math.PI * 0.85 + swing * Math.PI * 1.4 : engaged ? -Math.PI * 0.8 : -0.4;
+    }
 
     // Coup préparé, bouton maintenu : en échange, ou balle lâchée au service.
     const engagement = player.engagement;
@@ -239,9 +254,12 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       // Temps restant avant l'impact ; sans point prévu (placement manuel), l'anneau reste à mi-chemin.
       const remaining = impactTick !== null ? (impactTick - duel.tick - alpha) * SIM_DT : RING_LEAD / 2;
       view.timingRing.scale.setScalar(1 + Math.min(1, Math.max(0, remaining / RING_LEAD)) * 1.2);
-      const inPerfect = impactTick !== null && remaining <= r.perfectBefore && remaining >= -r.perfectAfter;
-      view.timingMaterial.opacity = inPerfect ? 1 : 0.45;
-      view.timingMaterial.color.set(inPerfect ? 0xffffff : view.color);
+      // Couleur de la balle à venir (verte, jaune, rouge) ; sous pression, la sous-fenêtre parfaite rétrécit.
+      const pressure = toss || r.pressure.scale === 0 ? null : duel.plannedPressure(index);
+      const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * (pressure ?? 0);
+      const inPerfect = impactTick !== null && remaining <= r.perfectBefore * shrink && remaining >= -r.perfectAfter * shrink;
+      view.timingMaterial.opacity = inPerfect ? 1 : 0.6;
+      view.timingMaterial.color.set(inPerfect ? 0xffffff : pressure === null ? view.color : BALL_COLORS[ballColor(pressure)]);
     }
     // En placement manuel, pas de point d'arrivée : le joueur se place lui-même.
     const stand = plan?.stand;
@@ -264,7 +282,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
       camera.lookAt(cameraX * 0.6, 0, -0.5);
 
-      players.forEach((view, i) => updatePlayer(view, duel.players[i]!, alpha));
+      players.forEach((view, i) => updatePlayer(view, duel.players[i]!, i as 0 | 1, alpha));
 
       const { ball: simBall, prevBallPos } = duel;
       let pos: Vec3 | null = null;

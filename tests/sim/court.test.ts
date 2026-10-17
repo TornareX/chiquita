@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HALF_LENGTH, HALF_WIDTH } from '../../src/sim/constants';
+import { DOOR_FAR, DOOR_HEIGHT, DOOR_NEAR, HALF_LENGTH, HALF_WIDTH } from '../../src/sim/constants';
 import {
   buildPanels,
   netHeightAt,
@@ -16,6 +16,8 @@ const WALL_IDS = Object.keys(WALLS) as WallId[];
 const BACK_WALLS: WallId[] = ['backNear', 'backFar'];
 const SIDE_WALLS: WallId[] = ['sidePosX', 'sideNegX'];
 
+/** Surface des deux portes d'un mur latéral (m²). */
+const DOORS = 2 * (DOOR_FAR - DOOR_NEAR) * DOOR_HEIGHT;
 const VARIANT_1 = buildPanels(1);
 const VARIANT_2 = buildPanels(2);
 
@@ -85,9 +87,9 @@ describe('murs latéraux (variante 1, avec marche)', () => {
     }
   }
 
-  it.each(SIDE_WALLS)('%s : 20 m² de vitre et 44 m² de grillage', (wall) => {
+  it.each(SIDE_WALLS)('%s : 20 m² de vitre et 44 m² de grillage, moins les deux portes', (wall) => {
     expect(area(wall, 'glass', VARIANT_1)).toBe(20);
-    expect(area(wall, 'mesh', VARIANT_1)).toBe(44);
+    expect(area(wall, 'mesh', VARIANT_1)).toBeCloseTo(44 - DOORS, 9);
   });
 });
 
@@ -105,9 +107,19 @@ describe('murs latéraux (variante 2, sans marche)', () => {
     }
   });
 
-  it.each(SIDE_WALLS)('%s : 24 m² de vitre et 40 m² de grillage', (wall) => {
+  it.each(SIDE_WALLS)('%s : 24 m² de vitre et 40 m² de grillage, moins les deux portes', (wall) => {
     expect(area(wall, 'glass', VARIANT_2)).toBe(24);
-    expect(area(wall, 'mesh', VARIANT_2)).toBe(40);
+    expect(area(wall, 'mesh', VARIANT_2)).toBeCloseTo(40 - DOORS, 9);
+  });
+
+  it.each(SIDE_WALLS)('%s : une porte de chaque côté du filet, sous le grillage', (wall) => {
+    for (const end of [-1, 1]) {
+      const z = end * (DOOR_NEAR + DOOR_FAR) / 2;
+      expect(wallSurfaceAt(wall, z, 0.5)).toBeNull();
+      expect(wallSurfaceAt(wall, z, DOOR_HEIGHT - 0.01)).toBeNull();
+      expect(wallSurfaceAt(wall, z, DOOR_HEIGHT + 0.5)).toBe('mesh');
+      expect(wallSurfaceAt(wall, end * (DOOR_FAR + 0.2), 0.5)).toBe('mesh');
+    }
   });
 
   it('est la variante utilisée par le jeu, comme le modèle 3D', () => {
