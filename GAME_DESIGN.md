@@ -35,7 +35,7 @@ façons de s'en servir.
 | Sujet | MVP Trainer | Padel Smash |
 |---|---|---|
 | Caméra | Première personne | Troisième personne, derrière l'équipe (§8) |
-| Contrôles | Clavier/souris, geste de swing | **Manette d'abord**, boutons de coup façon VT (§4). Clavier en option |
+| Contrôles | Clavier/souris, geste de swing | **Manette d'abord**, frappe au stick droit (§4). Clavier en option |
 | Frappe | Zone de portée + geste | Course assistée + fenêtre de timing + direction (§4) |
 | Profil physique | `realistic` | Nouveau profil `arcade`, même moteur (§6) |
 | Joueurs | Seul face à la machine | 2 contre 2, humains et IA mélangés (§7) |
@@ -54,30 +54,39 @@ automatique de test.
 
 ### Commandes (manette)
 
+La frappe se fait au **stick droit**, comme le « Skill Stick » de NHL (`src/input/swingStick.ts`) :
+une seule préparation, trois fins de geste, et la balle (au sol, de volée, au-dessus de la tête)
+choisit la famille du coup.
+
+| Geste au stick droit | Au sol | De volée | Au-dessus de la tête |
+|---|---|---|---|
+| Tiré vers soi, puis **tout droit** vers l'avant | Coup normal | Volée coupée | Smash (remate) |
+| Tiré vers soi, puis vers l'avant **en arc** | Lob | — | Víbora |
+| Tiré vers soi, puis **lâché** | Chiquita | — | Feinte de smash |
+| **Coup sec** vers l'avant, sans préparation | Coup sans préparation | Volée bloquée | Bandeja |
+
 | Entrée | Action |
 |---|---|
 | Stick gauche | Déplacement ; au moment de l'impact : **direction et profondeur** du coup |
-| **A** | Coup normal (lift / à plat) |
-| **X** | Coupé (slice, chiquita, amortie si la balle est courte) |
-| **Y** | Lob (globo) |
-| **B** | Coup au-dessus de la tête si la balle est haute (bandeja, víbora, smash) ; sinon coup défensif / plongeon |
-| **RB** | Annuler la charge en cours (feinte) |
-| **LB** | Appel au partenaire (« j'y vais » / « à toi ») |
-| **RT** | Sprint court (repositionnement, sortie de court) |
+| Stick droit | Frappe (tableau ci-dessus) |
+| **LB** *(prévu)* | Appel au partenaire (« j'y vais » / « à toi ») |
+| **RT** *(prévu)* | Sprint court (repositionnement, sortie de court) |
 
+Les boutons de face (A/X/Y/B) sont cachés et sans effet ; `?boutons=1` les remet pour tester.
 Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 
 ### Le plancher (compris en 30 secondes)
 
-- **Course assistée** : dès que tu appuies sur un bouton de coup, ton joueur court vers le point
-  d'impact prévu et frappe au bon moment. Débutant, tu renvoies quand même.
-- **Direction au stick** au moment de l'impact. Sans direction : coup sûr, au centre.
-- **La situation choisit la variante** : B sur une balle haute donne une bandeja ; X sur une balle
-  courte devant le filet donne une amortie, etc.
+- **Course assistée** : dès que tu prépares un coup au stick droit, ton joueur court vers le point
+  d'impact de la première balle jouable. Débutant, tu renvoies quand même.
+- **Direction au stick gauche** au moment de l'impact. Sans direction : coup sûr, au centre.
+- **La situation choisit la variante** : le même geste donne un coup normal au sol, une volée
+  coupée de volée et un smash au-dessus de la tête (seuil aux épaules, au moins aux yeux après un
+  rebond).
 
 ### Le plafond (découvert en jouant)
 
-- **Fenêtre de timing, pas de charge de puissance** (décision §14, d'après la mesure VT4) :
+- **Fenêtre de timing, pas de charge de puissance** (décision §13, d'après la mesure VT4) :
   maintenir le bouton prépare le coup, mais la durée de maintien ne change quasiment rien à la
   vitesse de sortie. Ce qui compte, c'est de relâcher/connecter **dans la fenêtre** : trop tôt
   ou dans la fenêtre large = coup normal, trop tard = **faute**, pas un coup juste plus faible.
@@ -91,8 +100,8 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
   garde le filet), víbora (effet latéral qui longe la vitre), remate (plat, puissant, risqué).
   Le « smash parfait » qui sort la balle du court n'est pas une variante à part : c'est le
   résultat d'une frappe parfaite sur un remate bien dirigé.
-- **Feinte** : amorcer la préparation d'un smash puis jouer une amortie, ou annuler avec RB —
-  ça trompe l'adversaire sur l'animation de windup, indépendamment de toute notion de charge.
+- **Feinte de smash** : préparer comme un smash puis lâcher le stick ; l'adversaire recule et la
+  balle part lentement, elle meurt vers la vitre après son deuxième rebond.
 
 ## 5. Les vitres et le terrain : la vraie profondeur
 
@@ -162,10 +171,10 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 
 | Palier | Le joueur sait… |
 |---|---|
-| 1. Premiers échanges | Se déplacer, frapper avec A/X/Y, servir, diriger au stick |
+| 1. Premiers échanges | Se déplacer, frapper au stick droit, servir, diriger au stick gauche |
 | 2. Joueur de club | Bien timer sa frappe (éviter la faute de retard), jouer la profondeur, volleyer, renvoyer après la vitre du fond, lober |
 | 3. Joueur confirmé | Frappes parfaites, bandeja/víbora, bajada, chiquita, placement manuel, contrapared |
-| 4. Maîtrise | Por tres/cuatro, salida de pista, double vitre, feintes et annulations, jeu d'équipe (croisements, couverture du partenaire) |
+| 4. Maîtrise | Por tres/cuatro, salida de pista, double vitre, feintes de smash, jeu d'équipe (croisements, couverture du partenaire) |
 
 Chaque palier doit être **découvrable sans tutoriel** et **enseigné** dans le mode entraînement.
 
@@ -174,7 +183,7 @@ Chaque palier doit être **découvrable sans tutoriel** et **enseigné** dans le
 Par ordre de priorité (détail dans `research/vt4/PLAN.md`, constats dans
 `research/vt4/MECANIQUES.md`) :
 1. ~~Fenêtres de timing, charge~~ **Résolu** : pas de charge progressive, une fenêtre de
-   réussite/échec (voir §14 et `MECANIQUES.md` §5). Lecture de la direction au moment de
+   réussite/échec (voir §13 et `MECANIQUES.md` §5). Lecture de la direction au moment de
    l'impact : pas encore mesurée.
 2. Course assistée : comment le joueur est amené au point d'impact (vitesse, freinage,
    pas d'ajustement, « aimant »).
