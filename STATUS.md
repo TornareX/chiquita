@@ -502,3 +502,15 @@ tutoriel) OK. **À rejouer à la manette.**
   à l'impact, devant soi, pas en avant avec la jambe opposée (`Key.stepL` / `stepR`) ; geste court, légèrement coupé.
 - `?camera=dos` : caméra de debug derrière le joueur 1 (en plus de `?camera=proche`, trois quarts face).
 - Planche : `screenshots/42-volees.png` (coup droit de face et de dos, revers de face).
+
+### Visionneur d'animations (17/10/2026)
+
+Demandé par Xavier : voir chaque animation sans avoir à jouer. **`?mode=animations`** (`src/modes/animations.ts`) :
+un personnage seul au milieu de son camp, sans simulation.
+- Coups (toutes les familles de `pose.ts`, une famille ajoutée y apparaît d'elle-même) : préparation, impact, fin du
+  geste, retour en attente, en boucle ; la phase et le temps s'affichent en bas.
+- Déplacements : attente, repos, course vers le filet, pas chassés, course de côté.
+- Vue face, 3/4 face, côté, dos, ou rotation à la souris ; vitesse ×1 à ×0,1 ; temps de préparation 0,15 / 0,3 / 0,6 s ;
+  les quatre personnages ; pause et barre de lecture pour s'arrêter sur une image.
+- Lien direct : `?mode=animations&coup=voleeFore&vue=cote&vitesse=0.25`.
+- Test navigateur `tests/e2e/animations.spec.ts` ; capture `screenshots/43-visionneur-animations.png`.

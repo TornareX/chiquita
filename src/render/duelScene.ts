@@ -23,7 +23,7 @@ const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23
 /** Couleurs d'équipe vives, lisibles de loin (GAME_DESIGN.md §9). */
 export const TEAM_COLORS = [0x2f8cff, 0xff4f5e] as const;
 /** En double, le partenaire (joueurs 2 et 3) porte une teinte plus claire de la couleur de son équipe. */
-const PARTNER_COLORS = [0x8fc3ff, 0xff9ea8] as const;
+export const PARTNER_COLORS = [0x8fc3ff, 0xff9ea8] as const;
 /** Durée d'affichage d'une annonce entre partenaires (s), et son texte. */
 const CALL_TIME = 1;
 const CALL_TEXT: Record<CallKind, string> = { mia: '¡Mía!', tuya: '¡Tuya!' };

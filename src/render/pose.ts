@@ -113,6 +113,9 @@ const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
 };
 
 /** Après l'impact : durée de la fin du geste, puis du retour en attente (s). */
+/** Toutes les familles de geste, dans l'ordre du tableau (visionneur d'animations). */
+export const SWING_FAMILIES = Object.keys(SWINGS) as SwingFamily[];
+
 export const FOLLOW_TIME = 0.28;
 export const RECOVER_TIME = 0.3;
 /** Préparation : la raquette est à moitié armée en ~0,12 s, entièrement à 0,6 s (comme le bonus de vitesse, §13). */
