@@ -13,7 +13,7 @@ import type { PointReason } from '../sim/duel';
 
 /**
  * - `impact` : éclat (anneau et étoile) au point de frappe, face à la caméra ;
- * - `glass` : onde sur le plan de la vitre touchée ;
+ * - `glass` : petite onde sur le plan de la vitre touchée ;
  * - `mesh` : grillage qui s'éclaire et vibre à l'endroit touché ;
  * - `exit` : éclat au sommet du mur, balle sortie après son rebond (por tres en vue).
  */
@@ -22,7 +22,7 @@ export type EffectKind = 'impact' | 'glass' | 'mesh' | 'exit';
 export interface Effect {
   active: boolean;
   kind: EffectKind;
-  /** Âge (s) ; négatif, l'effet attend son tour (seconde onde d'une vitre). */
+  /** Âge (s) ; négatif, l'effet attend son tour. */
   age: number;
   life: number;
   x: number;
@@ -130,9 +130,12 @@ export function glassStrength(speed: number): number {
   return Math.max(0.2, clamp01((speed - 2) / 16));
 }
 
-/** Onde de vitre : rayon final (m) et durée (s) pour une force donnée. */
+/**
+ * Onde de vitre : rayon final (m) et durée (s) pour une force donnée. Petite et brève, pour ne pas cacher le rebond
+ * (retour de Xavier : à 25–85 cm, elle masquait la balle). [à calibrer]
+ */
 export function glassLook(strength: number): { size: number; life: number } {
-  return { size: 0.25 + 0.6 * strength, life: 0.4 + 0.2 * strength };
+  return { size: 0.07 + 0.13 * strength, life: 0.22 + 0.1 * strength };
 }
 
 /** Vitesse verticale (m/s) sous laquelle la balle ne soulève plus de poussière (elle roule). */
@@ -267,10 +270,7 @@ export class Effects {
         const strength = glassStrength(speed);
         const look = glassLook(strength);
         const [x, z] = onWall(wall.axis, wall.normal, pos.x, pos.z);
-        // Deux ondes : la seconde, plus petite, part un peu après.
         this.spawn('glass', x, pos.y, z, look.life, look.size, EFFECT_COLORS.glass, strength, wall.normal);
-        const second = this.spawn('glass', x, pos.y, z, look.life * 0.8, look.size * 0.6, EFFECT_COLORS.glass, strength * 0.7, wall.normal);
-        second.age = -0.07;
         return;
       }
       case 'mesh': {

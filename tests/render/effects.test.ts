@@ -65,7 +65,7 @@ describe('effets de balle et de vitre', () => {
     expect(impactLook(shot(false, null, 30)).size).toBeGreaterThan(impactLook(shot(false, null, 5)).size);
   });
 
-  it('onde de vitre : plus forte et plus large si la balle va vite, sur le plan de la vitre', () => {
+  it('onde de vitre : petite, plus forte et plus large si la balle va vite, sur le plan de la vitre', () => {
     expect(glassStrength(25)).toBeGreaterThan(glassStrength(8));
     expect(glassStrength(0)).toBeGreaterThan(0);
     expect(glassStrength(100)).toBe(1);
@@ -75,13 +75,11 @@ describe('effets de balle et de vitre', () => {
     const contact: Contact = { surface: 'glass', wall: 'backFar', pos: vec3(1.5, 1.2, HALF_LENGTH - 0.0325), speed: 12 };
     fx.fromStep(step({ contacts: [contact] }));
     const waves = active(fx);
-    expect(waves.map((e) => e.kind)).toEqual(['glass', 'glass']);
-    for (const e of waves) {
-      expect(e.z).toBeCloseTo(HALF_LENGTH - 0.01, 6);
-      expect([e.nx, e.ny, e.nz]).toEqual([0, 0, -1]);
-    }
-    // La seconde onde part un peu après.
-    expect(waves[1]!.age).toBeLessThan(0);
+    expect(waves.map((e) => e.kind)).toEqual(['glass']);
+    expect(waves[0]!.z).toBeCloseTo(HALF_LENGTH - 0.01, 6);
+    expect([waves[0]!.nx, waves[0]!.ny, waves[0]!.nz]).toEqual([0, 0, -1]);
+    // Petite, pour laisser voir le rebond : jamais plus de 20 cm de rayon.
+    expect(glassLook(1).size).toBeLessThanOrEqual(0.2);
 
     const side = new Effects(32, 256, seeded());
     side.contact({ surface: 'glass', wall: 'sideNegX', pos: vec3(-HALF_WIDTH + 0.0325, 1, 6), speed: 6 }, false);

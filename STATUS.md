@@ -588,7 +588,8 @@ joueur automatique compris, typecheck OK. **Rien n'est encore joué à la manett
 
 - **Frappe** : anneau qui s'ouvre et étoile qui tourne au point de contact, face à la caméra, avec des étincelles.
   Blanc sinon, doré, plus gros et plus long sur une frappe parfaite ; plus grand encore sur un smash (remate).
-- **Vitre** : deux ondes sur le plan de la vitre touchée, plus fortes et plus larges si la balle va vite.
+- **Vitre** : petite onde sur le plan de la vitre touchée, autour du rebond (7 à 20 cm de rayon, 0,2 à 0,3 s), plus
+  forte si la balle va vite. Retour de Xavier : la première version (deux ondes de 25 à 85 cm) cachait le rebond.
 - **Rebond au sol** : petit nuage de poussière (bleu clair sur le gazon, gris dehors), proportionné à la vitesse
   verticale ; rien quand la balle roule.
 - **Grillage** : tache de losanges qui s'éclaire et vibre à l'endroit touché, avec quelques éclats. Le grillage

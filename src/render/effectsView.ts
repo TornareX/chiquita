@@ -239,7 +239,7 @@ export function createEffectsView(scene: THREE.Scene, clippingPlanes: THREE.Plan
         }
         const far = place(e, camera, e.kind !== 'glass');
         // Une vitre se voit toujours, même touchée doucement.
-        const brightness = e.kind === 'glass' ? 0.45 + 0.55 * e.strength : e.strength;
+        const brightness = e.kind === 'glass' ? 0.35 + 0.45 * e.strength : e.strength;
         write(rings, ringCount++, e.size * far * (0.15 + 0.85 * ringOpening(t)), e.color, brightness * fade(t));
         if (e.star) {
           // Étoile qui jaillit et tourne, éteinte avant l'anneau.
