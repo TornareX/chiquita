@@ -44,6 +44,7 @@ const OVERHEADS: Record<OverheadKind, string> = {
   bandeja: 'bandeja',
   vibora: 'víbora',
   remate: 'remate',
+  bajada: 'bajada',
 };
 
 /** Nom du coup à afficher, ou `null` pour un coup ordinaire sans frappe parfaite. */

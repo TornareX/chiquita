@@ -78,6 +78,8 @@ describe('erreur du coup', () => {
       }
       return top;
     };
-    expect(peak(p.pressure.clearance)).toBeGreaterThan(peak(0) + 0.4);
+    // Plus haut, sans devenir un lob : la défense reste à plat.
+    expect(peak(p.pressure.clearance)).toBeGreaterThan(peak(0) + 0.15);
+    expect(peak(p.pressure.clearance)).toBeLessThan(peak(0) + 0.8);
   });
 });

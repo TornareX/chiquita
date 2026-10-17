@@ -58,18 +58,26 @@ export function aimTarget(
  * (GAME_DESIGN.md §4 et §13, pas de charge) : stick vers l'avant près du filet, sur une balle assez
  * haute : remate ; stick sur le côté : víbora ; sinon, ou loin du filet : bandeja.
  */
-export function overheadKind(aim: ArcadeCommands['stick'], contact: Vec3, profile: PhysicsProfile): OverheadKind {
+export function overheadKind(
+  aim: ArcadeCommands['stick'],
+  contact: Vec3,
+  profile: PhysicsProfile,
+  /** La balle a rebondi puis touché la vitre : stick vers l'avant, c'est une bajada. */
+  afterGlass = false,
+): OverheadKind {
   const r = profile.rally;
   const forward = aim.forward;
   const lateral = Math.abs(aim.right);
   if (forward >= r.overheadStick && forward >= lateral) {
+    if (afterGlass) return 'bajada';
     return Math.abs(contact.z) <= r.remateZone && contact.y >= r.remateLow ? 'remate' : 'bandeja';
   }
   return lateral >= r.overheadStick ? 'vibora' : 'bandeja';
 }
 
 /**
- * Point de chute d'un coup au-dessus de la tête. Bandeja : profonde, au stick comme un coup normal.
+ * Point de chute d'un coup au-dessus de la tête. Bandeja : profonde, vers le coin le long de la ligne,
+ * ou au stick comme un coup normal. Bajada : profonde, au stick.
  * Víbora : contre la vitre latérale du côté du stick, au fond. Remate : parfait, court et dirigé au
  * stick (il rebondit haut et peut sortir du terrain : por tres de côté, por cuatro dans l'axe) ;
  * sinon plus long, il reste dans le terrain et revient de la vitre.
@@ -80,15 +88,23 @@ export function overheadTarget(
   aim: ArcadeCommands['stick'],
   perfect: boolean,
   profile: PhysicsProfile,
+  /** Position latérale du contact (x) : la bandeja sans direction part le long de la ligne. */
+  contactX = 0,
 ): Vec3 {
   const r = profile.rally;
   const t = shotTuning(kind, profile);
   const toRight = rightFor(side).x;
   const limit = HALF_WIDTH - 0.6;
-  if (kind === 'bandeja') return aimTarget('bandeja', side, aim, perfect, profile);
+  if (kind === 'bandeja' && Math.abs(aim.right) < 0.2) {
+    // Bandeja sans direction : profonde, vers le coin de la vitre latérale, le long de la ligne ; jamais au centre.
+    const target = aimTarget(kind, side, aim, perfect, profile);
+    return vec3((contactX >= 0 ? 1 : -1) * r.bandejaLateral, target.y, target.z);
+  }
+  if (kind === 'bandeja' || kind === 'bajada') return aimTarget(kind, side, aim, perfect, profile);
   if (kind === 'vibora') {
-    const lateral = r.viboraLateral + (perfect ? 0.3 : 0);
-    return vec3(clamp(Math.sign(aim.right) * lateral * toRight, -limit, limit), BALL_RADIUS, -side * t.depthNeutral);
+    // Rebond vers 7 m, près du côté : la balle file dans la vitre latérale et y meurt basse.
+    const lateral = Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0));
+    return vec3(Math.sign(aim.right || 1) * lateral * toRight, BALL_RADIUS, -side * t.depthNeutral);
   }
   const depth = perfect ? r.remateKillDepth : t.depthNeutral;
   const x = clamp(clamp(aim.right, -1, 1) * (perfect ? r.remateWidth : r.remateWidthLoose) * toRight, -limit, limit);
@@ -171,6 +187,8 @@ export function solveShot(
   speedFactor = 1,
   /** Passage au-dessus du filet ajouté (m) : coup imprécis ou sous pression, la balle monte. */
   extraClearance = 0,
+  /** Effet imposé (fraction de la vitesse, négatif = coupé), à la place de celui du coup. */
+  spinOverride: number | null = null,
 ): SolvedShot {
   const t = shotTuning(kind, profile);
   const g = profile.gravity;
@@ -207,7 +225,7 @@ export function solveShot(
       (target.y - contact.y + (g * flightTime * flightTime) / 2) / flightTime,
       (target.z - contact.z) / flightTime,
     );
-    const effect = perfect && t.spinPerfect !== undefined ? t.spinPerfect : t.spin;
+    const effect = spinOverride ?? (perfect && t.spinPerfect !== undefined ? t.spinPerfect : t.spin);
     let spin = scale(cross(UP, direction), (effect * length(vel)) / BALL_RADIUS);
     if (t.sideSpin) {
       // Rotation autour de la verticale qui courbe la balle vers l'extérieur (le côté de la cible).

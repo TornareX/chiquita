@@ -386,6 +386,35 @@ export class Duel {
   }
 
   /** Prépare un service : nouveau point, ou service rejoué (second service, let). */
+  /**
+   * Labo de sensations : rejoue une situation de match. Les joueurs sont placés en `positions`, puis
+   * `hitter` frappe le coup d'ouverture (`kind`, de `contact` vers `target`) comme en jeu ; le point se
+   * joue ensuite normalement. Avec `kind` = `serve`, le point repart d'un service de `hitter`.
+   */
+  playSituation(
+    hitter: 0 | 1,
+    positions: readonly [Vec3, Vec3],
+    /** `error` : coup raté exprès (balle plus haute et plus lente, comme une défense sous pression). */
+    opening: { kind: ShotKind; contact: Vec3; target: Vec3; perfect?: boolean; overhead?: OverheadKind; error?: number } | 'serve',
+  ): void {
+    this.startServe(hitter);
+    for (const [i, pos] of positions.entries()) {
+      const player = this.players[i as 0 | 1];
+      player.pos = player.prevPos = pos;
+      player.lastHit = null;
+    }
+    if (opening === 'serve') return;
+    const { kind, contact, target, perfect = false, overhead, error = 0 } = opening;
+    this.phase = 'rally';
+    this.phaseTick = this.tick;
+    this.hits = 1;
+    this.ball = createBall(contact, vec3(0, 0, 0));
+    this.prevBallPos = contact;
+    // Une volée si le frappeur est près du filet : l'IA en déduit qu'elle y reste.
+    const volley = Math.abs(positions[hitter].z) < this.profile.rally.volleyZone;
+    this.hit(hitter, kind, contact, target, perfect, 0, volley, false, false, overhead ? { overhead, error } : { error });
+  }
+
   private startServe(server: 0 | 1, newPoint = true): void {
     this.phase = 'serve';
     this.phaseTick = this.tick;
@@ -675,8 +704,8 @@ export class Duel {
     let error = shotError(pressure, timing, miss, perfect, this.profile);
     if (kind === 'overhead') {
       error *= r.pressure.overheadFactor;
-      const variant = overheadKind(player.stick, ball.pos, this.profile);
-      const aimed = overheadTarget(variant, player.side, player.stick, perfect, this.profile);
+      const variant = overheadKind(player.stick, ball.pos, this.profile, this.bounces > 0 && this.touchedGlass);
+      const aimed = overheadTarget(variant, player.side, player.stick, perfect, this.profile, ball.pos.x);
       const target = lateDrift(aimed, player.side, timing, this.profile, variant === 'bandeja' ? r.bandejaDrift : 1);
       this.hit(index, kind, ball.pos, target, perfect, timing, volley, false, engagement.manual, { overhead: variant, pressure, error });
       return;
@@ -745,7 +774,9 @@ export class Duel {
     const base = kind === 'lob' || overhead || touch ? 1 : volley ? r.volleySpeed : this.touchedGlass ? r.glassSpeed : 1;
     // Préparation : sans temps pour armer, on ne fait que bloquer ; armé assez tôt, le coup part plein.
     const speedFactor = base * (1 - r.pressure.speedLoss * error) * (touch || kind === 'lob' ? 1 : preparation(prepared, this.profile));
-    const solved = solveShot(tuning, contact, target, perfect, this.profile, speedFactor, error * r.pressure.clearance);
+    // Au padel, la volée se joue coupée : la balle reste basse, même après la vitre.
+    const spin = volley && kind === 'normal' && !touch ? r.volleySpin : null;
+    const solved = solveShot(tuning, contact, target, perfect, this.profile, speedFactor, error * r.pressure.clearance, spin);
     const ball = this.ball!;
     ball.vel = solved.vel;
     ball.spin = solved.spin;

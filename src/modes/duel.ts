@@ -11,6 +11,8 @@ import { FixedStepLoop } from '../sim/loop';
 import type { MatchRules } from '../sim/score';
 import { createDuelHud } from '../ui/duelHud';
 import { createSettingsMenu, loadSettings, type DuelSettings } from '../ui/duelSettings';
+import { loadFeel } from '../ui/feelStorage';
+import { applyFeel } from '../sim/feel';
 
 const AI_NAMES = { facile: 'IA facile', normal: 'IA normale', fort: 'IA forte' } as const;
 
@@ -42,6 +44,9 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const rulesOf = (s: DuelSettings): MatchRules | null =>
     s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint };
   const duel = new Duel(rulesOf(settings));
+  // Sensations réglées dans le labo, si on a choisi de les garder en match.
+  const feel = loadFeel();
+  if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
   const keyboard = createKeyboardPads();

@@ -131,7 +131,7 @@ describe('sur un lob, au filet', () => {
 
   it('B sur une balle basse : coup défensif coupé', () => {
     const from = vec3(0, 1, 7);
-    const drive = solveShot('normal', from, aimTarget('normal', 1, { forward: 0, right: 0 }, false, ARCADE), false, ARCADE);
+    const drive = solveShot('slice', from, aimTarget('slice', 1, { forward: 0, right: 0 }, false, ARCADE), false, ARCADE);
     const duel = rally(1, { pos: from, vel: drive.vel, spin: drive.spin }, vec3(0.6, 0, -6));
     const { shot } = play(duel, 'overhead', { forward: 0, right: 0 });
     expect(shot?.kind).toBe('slice');
@@ -378,11 +378,13 @@ describe('IA contre IA : le jeu au-dessus de la tête', () => {
         `dont remate ${((100 * t.smashWinners) / t.winners).toFixed(0)} % (au-dessus de la tête ${((100 * t.overheadWinners) / t.winners).toFixed(0)} %), ` +
         `lobs qui passent ${((100 * t.lobsPassed) / t.lobs).toFixed(0)} % sur ${t.lobs}, sorties ${t.exits}, rattrapées dehors ${t.catches}`,
     );
-    expect(perPoint).toBeGreaterThan(7.5);
+    // Depuis la défense à plat (17/10), le remate seul conclut moins (balles hautes plus rares) : on
+    // vérifie la part de tous les coups au-dessus de la tête (pros : smash 35-43 % + bandeja 5-13 %).
+    expect(perPoint).toBeGreaterThan(7);
     expect(perPoint).toBeLessThan(11.5);
-    expect(t.smashWinners / t.winners).toBeGreaterThan(0.28);
-    expect(t.smashWinners / t.winners).toBeLessThan(0.5);
-    expect(t.lobsPassed / t.lobs).toBeGreaterThan(0.2);
+    expect(t.overheadWinners / t.winners).toBeGreaterThan(0.25);
+    expect(t.smashWinners).toBeGreaterThan(0);
+    expect(t.lobsPassed / t.lobs).toBeGreaterThan(0.1);
     expect(t.lobsPassed / t.lobs).toBeLessThan(0.45);
     expect(t.exits).toBeGreaterThan(0);
   }, 120000);

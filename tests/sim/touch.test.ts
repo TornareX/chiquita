@@ -70,6 +70,30 @@ describe('balle coupée', () => {
   });
 });
 
+describe('volée au filet', () => {
+  it('se joue coupée : après la vitre du fond, elle ressort basse, là où un coup lifté remonte', () => {
+    /** Hauteur maximale de la balle après la vitre du fond (avant le second rebond). */
+    const afterGlass = (spin: number): number => {
+      const contact = vec3(0.5, 1.3, 3.2);
+      const shot = solveShot('normal', contact, vec3(-2, 0.03, -8.8), false, ARCADE, ARCADE.rally.volleySpeed, 0, spin);
+      const ball = createBall(contact, shot.vel, shot.spin);
+      const contacts: Contact[] = [];
+      let glass = false;
+      let peak = 0;
+      for (let i = 0; i < 4 / SIM_DT; i++) {
+        contacts.length = 0;
+        stepBall(ball, SIM_DT, ARCADE, contacts);
+        if (contacts.some((c) => c.surface === 'glass')) glass = true;
+        if (glass && contacts.some((c) => c.surface === 'ground')) break;
+        if (glass) peak = Math.max(peak, ball.pos.y);
+      }
+      return peak;
+    };
+    expect(afterGlass(ARCADE.rally.volleySpin)).toBeLessThan(0.8);
+    expect(afterGlass(ARCADE.rally.normal.spin)).toBeGreaterThan(1.5);
+  });
+});
+
 describe('toucher : volée coupée, chiquita, blocage', () => {
   it('se choisit par la situation et le stick', () => {
     const neutral = { forward: 0, right: 0 };

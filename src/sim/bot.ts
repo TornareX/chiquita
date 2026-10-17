@@ -43,7 +43,7 @@ export interface BotOptions {
    * prend à moins de `maxDepth` m du filet ; plus loin (lob profond), il recule et la joue après le
    * rebond. Parts du remate (s'il est assez près du filet) et de la víbora ; le reste en bandeja.
    */
-  overhead: { maxDepth: number; remate: number; vibora: number };
+  overhead: { maxDepth: number; remate: number; vibora: number; bajada: number };
   /**
    * Choix face à un joueur au filet (avec `tactics`) : parts du lob, de la chiquita et de la frappe au
    * corps sur une balle verte (moins sur une jaune), et de la volée coupée sur une balle flottante.
@@ -60,7 +60,7 @@ export const DEFAULT_BOT: BotOptions = {
   release: { offset: -0.08, spread: 0 },
   manualPlacement: false,
   tactics: false,
-  overhead: { maxDepth: 6.5, remate: 0.5, vibora: 0 },
+  overhead: { maxDepth: 6.5, remate: 0.5, vibora: 0, bajada: 0.3 },
   choices: { lob: 0.6, chiquita: 0.15, body: 0.1, cut: 0.3 },
 };
 
@@ -77,7 +77,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     reaction: 0.35,
     aim: 0.45,
     release: { offset: 0.02, spread: 0.15 },
-    overhead: { maxDepth: 6.4, remate: 0.3, vibora: 0 },
+    overhead: { maxDepth: 6.4, remate: 0.3, vibora: 0, bajada: 0.1 },
     choices: { lob: 0.6, chiquita: 0.05, body: 0.05, cut: 0.15 },
   },
   normal: {
@@ -86,7 +86,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     aim: 0.75,
     release: { offset: 0.01, spread: 0.12 },
     tactics: true,
-    overhead: { maxDepth: 7, remate: 0.35, vibora: 0.2 },
+    overhead: { maxDepth: 7, remate: 0.35, vibora: 0.2, bajada: 0.4 },
     choices: { lob: 0.55, chiquita: 0.2, body: 0.15, cut: 0.5 },
   },
   fort: {
@@ -95,7 +95,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     aim: 0.95,
     release: { offset: 0, spread: 0.1 },
     tactics: true,
-    overhead: { maxDepth: 7.4, remate: 0.9, vibora: 0.3 },
+    overhead: { maxDepth: 7.4, remate: 0.9, vibora: 0.3, bajada: 0.6 },
     choices: { lob: 0.5, chiquita: 0.25, body: 0.2, cut: 0.8 },
   },
 };
@@ -201,15 +201,23 @@ export class Bot {
     if (!ball) return;
     const r = duel.profile.rally;
     const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, true);
-    const { maxDepth, remate, vibora } = this.options.overhead;
-    if (!plan?.reachable || plan.outside || plan.contact.y <= r.hitHigh || Math.abs(plan.contact.z) > maxDepth) return;
-    this.kind = 'overhead';
+    const { maxDepth, remate, vibora, bajada } = this.options.overhead;
+    if (!plan?.reachable || plan.outside || plan.contact.y <= r.hitHigh) return;
     const right = this.volleyStick.right >= 0 ? 1 : -1;
     const roll = this.prng.next();
+    // Au fond, sur la balle haute qui ressort de la vitre : bajada, une attaque, puis il monte au filet.
+    if (Math.abs(plan.contact.z) > maxDepth) {
+      if (plan.volley || roll >= bajada) return;
+      this.kind = 'overhead';
+      this.overheadStick = { forward: 1, right: right * 0.5 * this.options.aim };
+      return;
+    }
+    this.kind = 'overhead';
     const nearNet = Math.abs(plan.contact.z) <= r.remateZone - 0.3 && plan.contact.y >= r.remateLow + 0.1;
     if (nearNet && roll < remate) this.overheadStick = { forward: 1, right: right * this.prng.range(0.3, 0.8) * this.options.aim };
     else if (this.prng.next() < vibora) this.overheadStick = { forward: 0, right };
-    else this.overheadStick = { forward: 0.2, right: right * 0.3 * this.options.aim };
+    // Bandeja : sans direction, elle part profonde vers le coin, le long de la ligne.
+    else this.overheadStick = { forward: 0.2, right: 0 };
   }
 
   /** Stick qui fait courir vers `target`, assez vite pour arriver, assez lentement pour freiner (par la porte s'il faut). */
@@ -247,8 +255,9 @@ export class Bot {
   private netAfter(duel: Duel): boolean {
     const hit = duel.players[this.index].lastHit;
     if (!hit || hit.outside) return false;
-    // La bandeja et la víbora gardent le filet ; le remate y reste aussi.
-    return hit.serve || hit.kind === 'lob' || hit.kind === 'overhead' || hit.volley || hit.perfect;
+    // La bandeja et la víbora gardent le filet ; le remate y reste aussi. La chiquita et la bajada
+    // permettent de le reprendre.
+    return hit.serve || hit.kind === 'lob' || hit.kind === 'overhead' || hit.style === 'chiquita' || hit.volley || hit.perfect;
   }
 
   commands(duel: Duel): ArcadeCommands {

@@ -192,6 +192,11 @@ export interface RallyTuning {
    */
   volleySpeed: number;
   volleyWidth: number;
+  /**
+   * Effet de la volée au coup normal (A) : coupé. Une balle liftée remonte la vitre jusqu'à ~2 m ; une
+   * volée coupée en sort à ~0,5 m, à ramasser bas. Le coupé (X) garde le sien, plus fort.
+   */
+  volleySpin: number;
   /** Coup normal ou coupé joué après une vitre : vitesse multipliée par ce facteur (coup défensif). */
   glassSpeed: number;
   /**
@@ -226,6 +231,8 @@ export interface RallyTuning {
   remateWidth: number;
   remateWidthLoose: number;
   viboraLateral: number;
+  /** Bandeja sans direction : écart au centre de la cible, vers le coin, le long de la ligne (m). */
+  bandejaLateral: number;
   /** Retard de la bandeja : la dérive est multipliée par ce facteur (coup sûr). */
   bandejaDrift: number;
   /** Lob parfait : profondeur ajoutée (m). */
@@ -238,6 +245,8 @@ export interface RallyTuning {
   bandeja: ShotTypeTuning;
   vibora: ShotTypeTuning;
   remate: ShotTypeTuning;
+  /** Bajada : attaque depuis le fond sur la balle haute qui ressort de la vitre, à plat, profonde. */
+  bajada: ShotTypeTuning;
   /**
    * Volée coupée (X de volée sur une balle flottante : verte et prise au-dessus de `cutLow`) : courte,
    * rasante et coupée, elle s'écrase au rebond et meurt avant la vitre. Sous pression, X reste un blocage.
@@ -441,6 +450,7 @@ export const REALISTIC: PhysicsProfile = {
     glassBonus: 0.3,
     volleySpeed: 1.3,
     volleyWidth: 1.3,
+    volleySpin: -0.25,
     glassSpeed: 0.85,
     aimWindow: 0.3,
     manualThreshold: 0.35,
@@ -455,7 +465,8 @@ export const REALISTIC: PhysicsProfile = {
     remateKillDepth: 3,
     remateWidth: 3.2,
     remateWidthLoose: 1.1,
-    viboraLateral: 3.9,
+    viboraLateral: 4.3,
+    bandejaLateral: 3,
     bandejaDrift: 0.5,
     pressure: {
       scale: 1,
@@ -482,8 +493,9 @@ export const REALISTIC: PhysicsProfile = {
       perfectRelief: 0.5,
       calmImprecision: 0.4,
       windowShrink: 0.5,
-      clearance: 0.7,
-      speedLoss: 0.25,
+      // Sous pression, la balle passe plus haut sur le filet sans devenir un lob : elle reste à plat.
+      clearance: 0.35,
+      speedLoss: 0.1,
       lobShort: 2,
       long: 0.7,
       overheadFactor: 0.5,
@@ -523,9 +535,12 @@ export const REALISTIC: PhysicsProfile = {
       spin: 0.12,
     },
     // Coups au-dessus de la tête : ordres de grandeur de research/padel-pro/NOTES.md §1 [à calibrer].
+    // Bandeja : coupée, à vitesse contrôlée ; parfaite, elle est plus coupée et pas plus forte (frappée
+    // trop fort, elle rebondit haut : c'est l'erreur type, pelotista.com).
     bandeja: {
       speed: 21, // ~75 km/h, 3/4 de puissance
-      speedPerfect: 24,
+      speedPerfect: 21,
+      spinPerfect: -0.5,
       clearance: 0.6,
       flightTime: 0,
       flightTimePerfect: 0,
@@ -540,11 +555,22 @@ export const REALISTIC: PhysicsProfile = {
       clearance: 0.4,
       flightTime: 0,
       flightTimePerfect: 0,
-      depthShort: 7,
-      depthNeutral: 8.2,
+      depthShort: 6,
+      depthNeutral: 7,
       depthLong: 8.8,
       spin: -0.25,
       sideSpin: 0.2,
+    },
+    bajada: {
+      speed: 24, // ~85 km/h : une attaque, mais depuis le fond
+      speedPerfect: 27,
+      clearance: 0.3,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 6.5,
+      depthNeutral: 7.5,
+      depthLong: 8.5,
+      spin: -0.1,
     },
     cut: {
       speed: 10,
@@ -560,8 +586,9 @@ export const REALISTIC: PhysicsProfile = {
     },
     cutLow: 0.9,
     chiquita: {
-      speed: 7,
-      speedPerfect: 8,
+      // Rasante : à 7 m/s elle devait monter à 2,7 m pour passer ; à 11 m/s elle passe juste au-dessus du filet.
+      speed: 11,
+      speedPerfect: 12,
       clearance: 0.15,
       flightTime: 0,
       flightTimePerfect: 0,
@@ -586,6 +613,7 @@ export const REALISTIC: PhysicsProfile = {
       // Non parfait : profond, il revient de la vitre (ou repasse le filet) sans sortir.
       depthNeutral: 8,
       depthLong: 8.5,
+      // Presque à plat : avec du lift (0,25), l'effet Magnus plaque la balle, le smash ralentit et ne sort plus.
       spin: 0.05,
       launchSpeed: true,
     },
@@ -643,11 +671,14 @@ export const ARCADE: PhysicsProfile = {
     lateDriftLateral: 1.5, // retard moins puni : la faute vient d'un coup visé profond et relâché tard
     lateDriftDepth: 2.6, // en fin de fenêtre, même un coup au neutre (7,5 m) sort
     volleySpeed: 1.45, // la volée conclut : c'est au filet que se gagnent les points
-    glassSpeed: 0.8, // après la vitre, on défend : balle plus lente, attaquable au filet
+    // Après la vitre, plus de ralentissement imposé : la défense se joue à plat ; c'est la pression
+    // (balle basse, peu de temps) qui la rend moins bonne. 0,8 la faisait bomber comme un lob (Xavier, 17/10).
+    glassSpeed: 1,
     aimWindow: 0.3, // [à calibrer VT4 : quand le stick vise-t-il au lieu de déplacer ?]
     manualAimBonus: 1.25, // [à calibrer VT4]
     // Sans direction, le coup va chercher la vitre : au padel, la balle courte se fait punir. [à calibrer]
-    normal: { ...REALISTIC.rally.normal, speed: 15.5, speedPerfect: 18.5, depthNeutral: 7.5 }, // [à calibrer VT4 : vitesses de balle]
+    // ~65 km/h (75 en frappe parfaite) : à 56 km/h, la balle devait monter pour arriver au fond. [à calibrer dans le labo]
+    normal: { ...REALISTIC.rally.normal, speed: 18, speedPerfect: 21, depthNeutral: 7.5 },
     slice: { ...REALISTIC.rally.slice, speed: 11.5, speedPerfect: 13.5, depthNeutral: 6.5 }, // [à calibrer VT4]
     // Lob profond : 2,5 à 3 s de vol, le temps de monter au filet (padel-pro/NOTES.md §5) ; lob court plus bas et plus
     // rapide : une balle de smash. [à calibrer en jouant]
@@ -663,8 +694,10 @@ export const ARCADE: PhysicsProfile = {
       depthLong: 8.8,
     },
     // Au-dessus de la tête, vitesses de coups arcade (normal ×0,775) sauf le remate, qui garde ses 120-130 km/h.
-    bandeja: { ...REALISTIC.rally.bandeja, speed: 16, speedPerfect: 18.5 }, // [à calibrer en jouant]
-    vibora: { ...REALISTIC.rally.vibora, speed: 20, speedPerfect: 23 }, // [à calibrer en jouant]
+    bandeja: { ...REALISTIC.rally.bandeja, speed: 16, speedPerfect: 16 }, // [à calibrer en jouant]
+    // Víbora : fort effet latéral, à peine coupée : elle file dans la vitre latérale et en ressort basse
+    // (avec du lift, elle remontait la vitre jusqu'à 2,5 m). [à calibrer en jouant]
+    vibora: { ...REALISTIC.rally.vibora, speed: 20, speedPerfect: 23, spin: -0.15, sideSpin: 0.25 },
   },
   gravity: 8, // [à calibrer VT4 : temps de vol typiques] balle plus « flottante »
   magnusScale: 0.7, // [à calibrer VT4]

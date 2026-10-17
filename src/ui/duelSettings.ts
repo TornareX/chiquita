@@ -277,7 +277,12 @@ export function createSettingsMenu(settings: DuelSettings, onChange: (settings: 
   const restart = document.createElement('button');
   restart.type = 'button';
   restart.textContent = 'Nouvelle partie';
-  actions.append(resume, restart);
+  const labo = document.createElement('button');
+  labo.type = 'button';
+  labo.textContent = 'Labo de sensations';
+  labo.title = 'Rejouer une situation de match en boucle et régler la physique';
+  labo.addEventListener('click', () => (location.search = '?mode=labo'));
+  actions.append(labo, resume, restart);
   panel.append(actions);
 
   document.body.append(gear, overlay);

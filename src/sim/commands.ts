@@ -32,9 +32,10 @@ export type ShotKind = 'normal' | 'slice' | 'lob' | 'overhead';
 /**
  * Coups au-dessus de la tête (GAME_DESIGN.md §4) : la bandeja par défaut, sûre et profonde ; la víbora
  * au stick latéral, plus rapide, avec un effet qui longe la vitre latérale ; le remate au stick vers
- * l'avant, à plat, seulement près du filet.
+ * l'avant, à plat, seulement près du filet ; la bajada, stick vers l'avant sur une balle haute qui ressort
+ * de la vitre du fond : une attaque jouée depuis le fond.
  */
-export type OverheadKind = 'bandeja' | 'vibora' | 'remate';
+export type OverheadKind = 'bandeja' | 'vibora' | 'remate' | 'bajada';
 
 /**
  * Commandes d'un joueur de l'échange arcade pour un pas de simulation, quelle que soit la source

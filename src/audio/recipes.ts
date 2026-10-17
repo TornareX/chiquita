@@ -63,7 +63,7 @@ export interface ShotSound {
   perfect: boolean;
   contact: Vec3;
   soft?: boolean;
-  overhead?: 'bandeja' | 'vibora' | 'remate' | null;
+  overhead?: 'bandeja' | 'vibora' | 'remate' | 'bajada' | null;
   kind?: 'normal' | 'slice' | 'lob' | 'overhead';
   volley?: boolean;
 }
