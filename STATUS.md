@@ -514,3 +514,19 @@ un personnage seul au milieu de son camp, sans simulation.
   les quatre personnages ; pause et barre de lecture pour s'arrêter sur une image.
 - Lien direct : `?mode=animations&coup=voleeFore&vue=cote&vitesse=0.25`.
 - Test navigateur `tests/e2e/animations.spec.ts` ; capture `screenshots/43-visionneur-animations.png`.
+
+### E2 : bandeja et víbora d'après les images de Xavier (17/10/2026)
+
+450 tests OK (dont 3 de plus dans `tests/render/pose.test.ts`), typecheck OK, test navigateur du visionneur OK,
+`src/sim` inchangé. **À rejouer à la manette.**
+
+- Nouvelle famille de geste `bandeja` (bandeja et víbora, même geste, comme décidé avec Xavier) ; `overhead` reste
+  celui du smash, de la bajada et de la feinte (`overheadFamily`). Armé de profil, raquette montée au-dessus de
+  l'épaule droite, coude haut, bras gauche tendu vers la balle, pied droit en arrière ; impact sur le côté, devant,
+  entre l'épaule et la tête ; le geste traverse le corps vers le bas et finit à gauche, à hauteur de hanche, corps
+  tourné et jambe droite devant.
+- La variante ne se décide qu'au relâcher : pendant la préparation au stick, le personnage arme la bandeja/víbora
+  (l'armé du smash est le même sur les images) ; à l'impact, le coup joué choisit le geste. Aux boutons, un smash
+  annoncé (stick de déplacement vers l'avant à l'appui) arme le smash.
+- Visionneur : « Bandeja / víbora » et « Smash » ; caméra rapprochée (4,4 m) pour rester dans le terrain en vue de côté.
+- Planche (face et côté) : `screenshots/44-bandeja-vibora.png`.

@@ -9,7 +9,7 @@ test('le visionneur joue chaque coup et chaque déplacement, phase par phase, sa
   await page.goto('/?mode=animations&models=off');
   await page.waitForFunction(() => window.__anim !== undefined);
 
-  for (const family of ['fore', 'back', 'voleeFore', 'voleeBack', 'overhead', 'serve']) {
+  for (const family of ['fore', 'back', 'voleeFore', 'voleeBack', 'bandeja', 'overhead', 'serve']) {
     await page.click(`[data-anim="${family}"]`);
     for (const [t, phase] of [[0.3, 'Préparation'], [0.61, 'Impact'], [0.75, 'Fin du geste'], [1.0, 'Retour en attente']] as const) {
       await page.evaluate((t) => window.__anim!.seek(t), t);

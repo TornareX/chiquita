@@ -16,7 +16,8 @@ const FAMILY_NAMES: Partial<Record<SwingFamily, string>> = {
   back: 'Revers',
   voleeFore: 'Volée coup droit',
   voleeBack: 'Volée revers',
-  overhead: 'Au-dessus de la tête',
+  bandeja: 'Bandeja / víbora',
+  overhead: 'Smash',
   serve: 'Service',
 };
 
@@ -301,7 +302,8 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
         ? `${FAMILY_NAMES[state.clip.family] ?? state.clip.family} · ${phaseAt(t)} · ${t.toFixed(2)} s`
         : MOTIONS[state.clip.motion].name;
 
-    const distance = 5.6;
+    // Assez près pour rester dans le terrain en vue de côté (le grillage masquerait le joueur).
+    const distance = 4.4;
     camera.position.set(spot.x + Math.sin(state.angle) * distance, 1.5, spot.z + Math.cos(state.angle) * distance);
     camera.lookAt(spot.x, 0.95, spot.z);
     renderer.render(scene, camera);

@@ -7,7 +7,7 @@ import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { loadModel, modelsEnabled } from './models';
-import { bodyYawTarget, computePose, lowFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
+import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
 export interface DuelView {
   render(alpha: number, frameTime: number): void;
@@ -85,7 +85,7 @@ interface PlayerView {
   object: THREE.Group;
   /** Personnage cartoon et son état d'animation, propre au rendu. */
   rig: CharacterRig;
-  anim: { yaw: number; stride: number; side: 'fore' | 'back'; high: boolean; volley: boolean; last: { x: number; z: number } | null };
+  anim: { yaw: number; stride: number; side: 'fore' | 'back'; high: boolean; highFamily: SwingFamily; volley: boolean; last: { x: number; z: number } | null };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
    * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
@@ -166,7 +166,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', high: false, volley: false, last: null };
+  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null };
   return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
@@ -354,7 +354,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       if (target) view.anim.side = swingSide(localX(target), view.anim.side);
       view.anim.high = plansHighShot(duel, player, engagement);
       view.anim.volley = engagement.plan?.volley ?? false;
-      const family = view.anim.high ? 'overhead' : lowFamily(view.anim.side, view.anim.volley);
+      // Coup haut : la variante ne se décide qu'au relâcher ; on prépare la bandeja/víbora (même armé que le smash),
+      // sauf le smash annoncé aux boutons (stick de déplacement vers l'avant à l'appui).
+      view.anim.highFamily = !engagement.swing && duel.rematePrepared(duel.players.indexOf(player)) ? 'overhead' : 'bandeja';
+      const family = view.anim.high ? view.anim.highFamily : lowFamily(view.anim.side, view.anim.volley);
       prep = { family, seconds: (now - engagement.pressTick) * SIM_DT };
     }
 
@@ -370,7 +373,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       // est toujours celle d'un coup haut : c'est la hauteur de la balle qui décide).
       const high = hit ? kind === 'overhead' : view.anim.high;
       const volley = hit ? hit.volley : view.anim.volley;
-      const family: SwingFamily = hit?.serve ? 'serve' : high ? 'overhead' : lowFamily(view.anim.side, volley);
+      const highFamily = hit ? overheadFamily(hit.overhead) : view.anim.highFamily;
+      const family: SwingFamily = hit?.serve ? 'serve' : high ? highFamily : lowFamily(view.anim.side, volley);
       strike = { family, seconds: (now - strikeTick) * SIM_DT };
     }
 

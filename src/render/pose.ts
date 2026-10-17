@@ -8,12 +8,14 @@
  */
 
 import type { Duel, DuelPlayer, Engagement } from '../sim/duel';
+import type { OverheadKind } from '../sim/commands';
 import { bandejaHeight } from '../sim/shots';
 
 export type V3 = readonly [number, number, number];
 
 /** Famille du geste : coup droit, revers, au-dessus de la tête, service à la cuillère. */
-export type SwingFamily = 'fore' | 'back' | 'voleeFore' | 'voleeBack' | 'overhead' | 'serve';
+/** `overhead` : smash (remate), bajada et feinte ; `bandeja` : bandeja et víbora, même geste. */
+export type SwingFamily = 'fore' | 'back' | 'voleeFore' | 'voleeBack' | 'bandeja' | 'overhead' | 'serve';
 
 export interface Pose {
   /** Abaissement du bassin (m) : flexion des genoux. */
@@ -99,6 +101,15 @@ const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
     prep: key({ twist: 0.8, lean: 0.12, crouch: 0.12, armR: [0.55, -0.25, 0.2], armL: [0.45, -0.1, 0.4], elbowR: 1.2, racket: [0.35, 0.85, -0.3], face: [1, 0, 0.2] }),
     impact: key({ twist: 0.25, lean: 0.2, crouch: 0.15, armR: [0.5, -0.2, 0.85], armL: [0.6, -0.3, -0.75], elbowR: 0.3, racket: [0.45, 0.7, 0.55], face: [0, 0.1, 1], stepR: 0.45 }),
     follow: key({ twist: 0.05, lean: 0.22, crouch: 0.14, armR: [0.3, -0.35, 0.9], armL: [0.6, -0.35, -0.7], elbowR: 0.3, racket: [0.3, 0.5, 0.8], face: [0, -0.3, 1], stepR: 0.5 }),
+  },
+  // Bandeja et víbora d'après les images de Xavier (víbora) : préparation de profil, raquette montée à deux mains
+  // puis derrière la tête, coude haut, bras gauche tendu vers la balle, pied droit en arrière ; impact sur le côté,
+  // devant, entre l'épaule et la tête ; le geste traverse le corps vers le bas et finit à gauche, à hauteur de hanche,
+  // le corps tourné et la jambe droite qui passe devant.
+  bandeja: {
+    prep: key({ twist: -1.1, lean: -0.15, crouch: 0.1, armR: [-0.75, 0.55, -0.2], armL: [0.25, 0.95, 0.2], elbowR: 1.0, racket: [-0.2, 0.9, -0.4], face: [-1, 0, 0], stepL: 0.3 }),
+    impact: key({ twist: -0.2, lean: 0.1, crouch: 0.08, armR: [-0.75, 0.35, 0.55], armL: [0.85, 0.2, 0.2], elbowR: 0.1, racket: [-0.75, 0.25, 0.6], face: [0, 0.1, 1], stepL: 0.3 }),
+    follow: key({ twist: 1.0, lean: 0.3, crouch: 0.12, armR: [0.8, -0.5, 0.3], armL: [0.4, -0.6, -0.6], elbowR: 0.3, racket: [0.6, -0.3, -0.7], face: [1, 0, 0], stepR: 0.35 }),
   },
   overhead: {
     prep: key({ twist: -0.7, lean: -0.12, crouch: 0.04, armR: [-0.5, 0.8, -0.3], armL: [0.35, 0.9, 0.3], elbowR: 0.9, racket: [0.1, -0.3, -0.95], face: [-1, 0, 0] }),
@@ -256,6 +267,11 @@ export function computePose(input: PoseInput): Pose {
 /** Pas en avant (`forward`) de cette jambe, ou en arrière quand c'est l'autre qui avance (`other`). */
 function step(leg: LegPose, forward: number, other: number): LegPose {
   return { swing: leg.swing - forward + other * 0.5, spread: leg.spread, knee: leg.knee + forward * 0.6 };
+}
+
+/** Geste d'un coup au-dessus de la tête joué : bandeja et víbora d'un côté, smash, bajada et feinte de l'autre. */
+export function overheadFamily(variant: OverheadKind | null): SwingFamily {
+  return variant === 'bandeja' || variant === 'vibora' ? 'bandeja' : 'overhead';
 }
 
 /** Coup au sol ou de volée, côté coup droit ou revers. */

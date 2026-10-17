@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
 import { NEUTRAL_ARCADE } from '../../src/sim/commands';
 import { Duel, type HighFloor } from '../../src/sim/duel';
 import { vec3 } from '../../src/sim/vec3';
@@ -9,7 +9,7 @@ const length = (v: V3): number => Math.hypot(v[0], v[1], v[2]);
 
 describe('poses du personnage', () => {
   it('donne des directions unitaires et aucune valeur NaN, dans tous les états', () => {
-    const families = ['fore', 'back', 'voleeFore', 'voleeBack', 'overhead', 'serve'] as const;
+    const families = ['fore', 'back', 'voleeFore', 'voleeBack', 'bandeja', 'overhead', 'serve'] as const;
     for (const family of families) {
       for (const seconds of [0, 0.1, 0.3, 0.6, 2]) {
         for (const strike of [null, { family, seconds }]) {
@@ -159,5 +159,35 @@ describe('volées (images de Xavier)', () => {
     const me = duel.players[0];
     expect(me.engagement!.plan!.volley).toBe(true);
     expect(plansHighShot(duel, me, me.engagement!)).toBe(false);
+  });
+});
+
+describe('bandeja et víbora (images de Xavier)', () => {
+  it('même geste pour la bandeja et la víbora ; le smash, la bajada et la feinte ont le leur', () => {
+    expect(overheadFamily('bandeja')).toBe('bandeja');
+    expect(overheadFamily('vibora')).toBe('bandeja');
+    expect(overheadFamily('remate')).toBe('overhead');
+    expect(overheadFamily('bajada')).toBe('overhead');
+    expect(overheadFamily('feinte')).toBe('overhead');
+  });
+
+  it('armé : de profil, bras droit levé, raquette derrière la tête, bras gauche tendu vers la balle', () => {
+    const prep = computePose({ ...still, prep: { family: 'bandeja', seconds: 1 } });
+    expect(prep.twist).toBeLessThan(-0.8);
+    expect(prep.armR[1]).toBeGreaterThan(0.5);
+    expect(prep.racket[1]).toBeGreaterThan(0.7);
+    expect(prep.racket[2]).toBeLessThan(-0.2);
+    expect(prep.armL[1]).toBeGreaterThan(0.8);
+  });
+
+  it('impact sur le côté, devant, puis fin du geste à gauche, à hauteur de hanche, jambe droite devant', () => {
+    const impact = computePose({ ...still, strike: { family: 'bandeja', seconds: 0 } });
+    expect(impact.racket[0]).toBeLessThan(-0.5);
+    expect(impact.racket[2]).toBeGreaterThan(0.4);
+    const follow = computePose({ ...still, strike: { family: 'bandeja', seconds: FOLLOW_TIME } });
+    expect(follow.twist).toBeGreaterThan(0.8);
+    expect(follow.armR[0]).toBeGreaterThan(0.5);
+    expect(follow.armR[1]).toBeLessThan(0);
+    expect(follow.legR.swing).toBeLessThan(follow.legL.swing);
   });
 });
