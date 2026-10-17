@@ -635,15 +635,18 @@ export class Duel {
       [server, spots.server],
       [receiver, spots.receiver],
     ];
-    // Le partenaire du serveur attend au filet, de l'autre côté ; celui du receveur, un pas derrière la ligne de service.
+    // Personne ne change de côté, même au service : le partenaire du serveur attend au filet dans sa propre moitié
+    // (devant le serveur quand celui-ci sert du côté du partenaire ; le serveur rejoint ensuite la sienne). Celui du
+    // receveur attend dans la sienne, un pas derrière la ligne de service.
+    const ownHalf = (index: number, depth: number): Vec3 => {
+      const player = this.players[index]!;
+      const lateral = (player.half === 'right' ? 1 : -1) * DOUBLE_LATERAL * rightFor(player.side).x;
+      return vec3(lateral, 0, player.side * depth);
+    };
     const partnerServer = this.partnerOf(server);
     const partnerReceiver = this.partnerOf(receiver);
-    if (partnerServer !== null) {
-      places.push([partnerServer, vec3(-Math.sign(spots.server.x) * DOUBLE_LATERAL, 0, serverSide * SERVER_PARTNER_DEPTH)]);
-    }
-    if (partnerReceiver !== null) {
-      places.push([partnerReceiver, vec3(-Math.sign(spots.receiver.x) * DOUBLE_LATERAL, 0, -serverSide * RECEIVER_PARTNER_DEPTH)]);
-    }
+    if (partnerServer !== null) places.push([partnerServer, ownHalf(partnerServer, SERVER_PARTNER_DEPTH)]);
+    if (partnerReceiver !== null) places.push([partnerReceiver, ownHalf(partnerReceiver, RECEIVER_PARTNER_DEPTH)]);
     for (const [index, pos] of places) {
       const player = this.players[index]!;
       player.pos = player.prevPos = pos;

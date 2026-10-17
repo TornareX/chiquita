@@ -91,6 +91,23 @@ describe('2 contre 2 (étape C)', () => {
     expect(Math.sign(receiverMate!.pos.x)).toBe(-Math.sign(receiver.pos.x));
   });
 
+  it('personne ne change de côté au service : servi de la gauche, le partenaire de gauche reste à gauche', () => {
+    const duel = new Duel({ setsToWin: 1, gamesPerSet: 6, goldenPoint: false }, 'double');
+    duel.match!.awardPoint(0);
+    duel.playSituation(0, [], 'serve');
+    expect(duel.serveSide).toBe('left');
+    const [blue1, red1, blue2, red2] = duel.players;
+    // Bleu 1 (joueur de droite) sert de sa gauche ; Bleu 2 (gauche) attend au filet devant lui, dans sa moitié.
+    // Côté bleu (Z négatif), la gauche du joueur est vers +X.
+    expect(blue1.pos.x).toBeGreaterThan(0);
+    expect(blue2!.pos.x).toBeGreaterThan(0);
+    expect(Math.abs(blue2!.pos.z)).toBeLessThan(3.5);
+    // Reçoit le joueur de gauche adverse (Rouge 2) ; Rouge 1 reste dans sa moitié droite. Côté rouge, la droite est +X.
+    expect(duel.receiver).toBe(3);
+    expect(red2!.pos.x).toBeLessThan(0);
+    expect(red1.pos.x).toBeGreaterThan(0);
+  });
+
   it('seul le receveur peut renvoyer le service', () => {
     const duel = new Duel(null, 'double');
     duel.phase = 'rally';

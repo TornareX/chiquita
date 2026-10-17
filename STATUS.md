@@ -403,8 +403,9 @@ frappe). Le simple ne bouge pas (mêmes échanges, mêmes tests). **Pas encore j
   droite (drive), 2 et 3 à gauche (revés), et gardent leur côté. Le premier des deux partenaires qui touche la
   balle la joue ; seul le receveur renvoie le service. Score par équipe.
 - **Service** : rotation A1, B1, A2, B2 à chaque jeu, jeu décisif compris (`Match.serveTurn`). Reçoit le joueur
-  adverse du côté servi. Le partenaire du serveur attend au filet, celui du receveur un pas derrière la ligne de
-  service.
+  adverse du côté servi. Personne ne change de côté, même au service (précision de Xavier) : le partenaire du
+  serveur attend au filet dans sa propre moitié, devant le serveur quand celui-ci sert de ce côté-là, et le serveur
+  rejoint ensuite la sienne ; le partenaire du receveur attend dans la sienne, un pas derrière la ligne de service.
 - **Qui prend la balle** (`Duel.owner`) : celui qui s'est engagé le premier ; sinon le propriétaire de la moitié ;
   au milieu (±0,7 m), celui qui arrive nettement le premier (0,15 s), sinon le joueur de gauche ; si l'un ne peut
   pas l'atteindre et l'autre si, l'autre (cambio). Les IA s'en servent ; un humain reste libre.
