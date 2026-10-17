@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HALF_LENGTH, SIM_DT } from '../sim/constants';
+import { BALL_RADIUS, HALF_LENGTH, SIM_DT } from '../sim/constants';
 import type { Duel, DuelPlayer } from '../sim/duel';
 import { predictBall } from '../sim/predict';
 import { ballColor, type BallColor } from '../sim/pressure';
@@ -19,17 +19,29 @@ const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23
 /** Couleurs d'équipe vives, lisibles de loin (GAME_DESIGN.md §9). */
 export const TEAM_COLORS = [0x2f8cff, 0xff4f5e] as const;
 
-/** Balle surdimensionnée à l'écran pour rester lisible de loin. [à calibrer] */
-const BALL_DISPLAY_RADIUS = 0.075;
 /**
- * Caméra derrière le joueur du camp Z négatif, plus haute et plus reculée que dans Virtua Tennis
- * pour garder la vitre du fond dans le champ (GAME_DESIGN.md §8). [à calibrer]
+ * Caméra de retransmission télé, derrière le joueur du camp Z négatif (GAME_DESIGN.md §8) : téléobjectif
+ * placé haut et loin, qui aplatit la perspective (le joueur du fond reste grand) et cadre tout le
+ * terrain, vitres du fond comprises. Valeurs relevées sur des images du Premier Padel (Milan 2026) :
+ * ligne de fond proche sur ~76 % de la largeur d'une image 16:9, ligne de fond lointaine sur ~40 %.
  */
-const CAMERA_HEIGHT = 8.2;
-const CAMERA_BACK = HALF_LENGTH + 8.5;
-const CAMERA_FOV = 46;
-/** Part du déplacement latéral du joueur suivie par la caméra, et lissage (1/s). */
-const CAMERA_FOLLOW = 0.35;
+const CAMERA_HEIGHT = 8.7;
+const CAMERA_BACK = HALF_LENGTH + 20;
+const CAMERA_LOOK_Z = -0.4;
+/** Champ vertical (°) pour un écran 16:9 ; plus étroit, l'écran élargit le champ pour garder toute la largeur. */
+const CAMERA_FOV = 20;
+const CAMERA_ASPECT = 16 / 9;
+/**
+ * Comme dans Virtua Tennis ou Top Spin, la balle garde une taille lisible de loin : à sa vraie taille
+ * (6,5 cm) tant qu'elle paraît assez grosse, sinon agrandie pour couvrir au moins cette part de la
+ * hauteur de l'écran. Près du joueur proche, elle reste à l'échelle de la raquette. [à calibrer]
+ */
+const BALL_MIN_SCREEN = 0.009;
+/** Au-delà de cette vitesse (m/s), une traînée suit la balle, longue de sa course pendant `TRAIL_TIME` (s). */
+const TRAIL_SPEED = 12;
+const TRAIL_TIME = 0.04;
+/** Part du déplacement latéral du joueur suivie par la caméra, et lissage (1/s) : à peine, comme à la télé. */
+const CAMERA_FOLLOW = 0.15;
 const CAMERA_SMOOTHING = 4;
 /** Durée de l'animation de frappe (s). */
 const SWING_TIME = 0.28;
@@ -78,10 +90,11 @@ const RING_LEAD = 0.6;
 function createPlayerView(color: number): PlayerView {
   const object = new THREE.Group();
   const material = new THREE.MeshLambertMaterial({ color });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.85, 6, 16), material);
-  body.position.y = 0.28 + 0.425 + 0.05;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 14), new THREE.MeshLambertMaterial({ color: 0xf1c9a5 }));
-  head.position.y = 1.62;
+  // Joueur de 1,80 m : corps de 34 cm de large en moyenne jusqu'au cou (1,56 m), tête de 22 cm.
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 1.22, 6, 16), material);
+  body.position.y = 0.78;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 14), new THREE.MeshLambertMaterial({ color: 0xf1c9a5 }));
+  head.position.y = 1.69;
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.36, 24),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
@@ -89,16 +102,18 @@ function createPlayerView(color: number): PlayerView {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.006;
 
-  // Raquette : tamis et manche, tenue sur le côté droit du joueur.
+  // Raquette aux dimensions réglementaires : 45,5 cm de long, tamis de 26 × 29 cm, 3,8 cm d'épaisseur.
+  // Tenue sur le côté droit du joueur, le manche vers l'avant (+Z), le tamis dans le plan YZ.
   const racket = new THREE.Group();
   const frame = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.2, 0.04, 20),
+    new THREE.CylinderGeometry(0.13, 0.13, 0.038, 32),
     new THREE.MeshLambertMaterial({ color: 0x20262c }),
   );
-  frame.rotation.x = Math.PI / 2;
-  frame.position.set(0, 0, 0.32);
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.2), new THREE.MeshLambertMaterial({ color: 0xe8e8e8 }));
-  handle.position.set(0, 0, 0.1);
+  frame.rotation.z = Math.PI / 2;
+  frame.scale.set(1, 1, 1.12);
+  frame.position.set(0, 0, 0.165 + 0.145);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.165), new THREE.MeshLambertMaterial({ color: 0xe8e8e8 }));
+  handle.position.set(0, 0, 0.0825);
   racket.add(frame, handle);
   const pivot = new THREE.Group();
   pivot.position.set(0, 1.0, 0);
@@ -119,17 +134,28 @@ function createPlayerView(color: number): PlayerView {
   return { object, racket: pivot, timingRing, timingMaterial, standMarker, color };
 }
 
-/** Balle, ombre bien marquée et trait de hauteur : les repères de profondeur vus de loin. */
-function createBallView(): { object: THREE.Group; update(pos: Vec3 | null): void; setModel(model: THREE.Object3D): void } {
+/** Agrandissement à appliquer à un objet de diamètre `size` à cette position pour le voir à `BALL_MIN_SCREEN`. */
+function minScreenScale(camera: THREE.PerspectiveCamera, x: number, y: number, z: number, size: number): number {
+  const distance = camera.position.distanceTo(new THREE.Vector3(x, y, z));
+  const visibleHeight = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  return Math.max(1, (BALL_MIN_SCREEN * visibleHeight) / size);
+}
+
+/** Balle, ombre bien marquée, trait de hauteur et traînée : les repères de profondeur et de vitesse vus de loin. */
+function createBallView(): {
+  object: THREE.Group;
+  update(pos: Vec3 | null, vel: Vec3 | null, camera: THREE.PerspectiveCamera): void;
+  setModel(model: THREE.Object3D): void;
+} {
   const object = new THREE.Group();
   const sphere = new THREE.Group();
   const simple = new THREE.Mesh(
-    new THREE.SphereGeometry(BALL_DISPLAY_RADIUS, 24, 16),
+    new THREE.SphereGeometry(BALL_RADIUS, 24, 16),
     new THREE.MeshLambertMaterial({ color: 0xe4ff3a, emissive: 0x3a4a00 }),
   );
   sphere.add(simple);
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(BALL_DISPLAY_RADIUS * 1.3, 24),
+    new THREE.CircleGeometry(BALL_RADIUS * 1.15, 24),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.8, depthWrite: false }),
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -137,25 +163,42 @@ function createBallView(): { object: THREE.Group; update(pos: Vec3 | null): void
     new THREE.CylinderGeometry(0.008, 0.008, 1, 6),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }),
   );
-  object.add(sphere, shadow, heightLine);
+  // Traînée : cône allongé derrière la balle, de son diamètre à rien.
+  const trailMaterial = new THREE.MeshBasicMaterial({ color: 0xf4ffb0, transparent: true, opacity: 0.4, depthWrite: false });
+  const trail = new THREE.Mesh(new THREE.ConeGeometry(BALL_RADIUS, 1, 12, 1, true), trailMaterial);
+  const up = new THREE.Vector3(0, 1, 0);
+  const direction = new THREE.Vector3();
+  object.add(sphere, shadow, heightLine, trail);
   return {
     object,
     setModel(model: THREE.Object3D): void {
       sphere.remove(simple);
-      model.scale.multiplyScalar(BALL_DISPLAY_RADIUS / 0.0325);
       sphere.add(model);
     },
-    update(pos: Vec3 | null): void {
+    update(pos: Vec3 | null, vel: Vec3 | null, camera: THREE.PerspectiveCamera): void {
       object.visible = pos !== null;
       if (!pos) return;
       sphere.position.set(pos.x, pos.y, pos.z);
+      const scale = minScreenScale(camera, pos.x, pos.y, pos.z, 2 * BALL_RADIUS);
+      sphere.scale.setScalar(scale);
       // L'ombre rétrécit un peu avec la hauteur, sans jamais disparaître.
-      const s = 1 / (1 + pos.y * 0.12);
+      const s = (1 / (1 + pos.y * 0.12)) * minScreenScale(camera, pos.x, 0, pos.z, 2 * BALL_RADIUS);
       shadow.scale.set(s, s, s);
       shadow.position.set(pos.x, 0.009, pos.z);
       const height = Math.max(0.001, pos.y);
       heightLine.scale.set(1, height, 1);
       heightLine.position.set(pos.x, height / 2, pos.z);
+
+      const speed = vel ? Math.hypot(vel.x, vel.y, vel.z) : 0;
+      trail.visible = vel !== null && speed > TRAIL_SPEED;
+      if (!vel || !trail.visible) return;
+      // La pointe du cône (+Y) part vers l'arrière de la trajectoire.
+      direction.set(-vel.x, -vel.y, -vel.z).divideScalar(speed);
+      trail.quaternion.setFromUnitVectors(up, direction);
+      const length = speed * TRAIL_TIME;
+      trail.scale.set(scale, length, scale);
+      trail.position.set(pos.x, pos.y, pos.z).addScaledVector(direction, length / 2);
+      trailMaterial.opacity = 0.4 * Math.min(1, (speed - TRAIL_SPEED) / 8);
     },
   };
 }
@@ -211,6 +254,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const height = canvas.clientHeight;
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
+    const fovFactor = Math.max(1, CAMERA_ASPECT / camera.aspect);
+    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) * fovFactor));
     camera.updateProjectionMatrix();
   };
   window.addEventListener('resize', resize);
@@ -280,7 +325,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       shakeTime += frameTime;
       const jitter = shake * 0.06 * Math.sin(shakeTime * 70);
       camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
-      camera.lookAt(cameraX * 0.6, 0, -0.5);
+      camera.lookAt(cameraX * 0.6, 0, CAMERA_LOOK_Z);
 
       players.forEach((view, i) => updatePlayer(view, duel.players[i]!, i as 0 | 1, alpha));
 
@@ -288,7 +333,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       let pos: Vec3 | null = null;
       if (simBall && prevBallPos) pos = lerp(prevBallPos, simBall.pos, alpha);
       else if (duel.phase === 'serve') pos = duel.servePosition();
-      ball.update(pos);
+      ball.update(pos, simBall && prevBallPos ? simBall.vel : null, camera);
 
       bounceMarker.visible = false;
       if (simBall && duel.phase === 'rally') {

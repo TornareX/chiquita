@@ -135,8 +135,12 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 
 ## 8. Caméra
 
-- Derrière l'équipe du joueur, comme dans VT, mais **plus haute et plus reculée** pour voir les
-  vitres du fond : tout le jeu tourne autour d'elles.
+- Derrière l'équipe du joueur, **cadrée comme une retransmission télé** : téléobjectif haut et loin
+  (8,7 m de haut, 20 m derrière le fond, champ de 20°). Tout le terrain et les vitres du fond restent
+  dans le champ, et la perspective aplatie garde le joueur du fond lisible.
+- Proportions réelles (joueur de 1,80 m, raquette de 45,5 cm). Seule la balle est agrandie au loin,
+  comme à la télé et dans VT ou Top Spin : jamais moins de 0,9 % de la hauteur de l'écran, avec une
+  traînée sur les balles rapides.
 - À 4 en local : caméra partagée derrière une équipe ; l'autre équipe joue côté lointain, comme
   dans VT en multijoueur.
 - Ombre de balle très marquée au sol et marqueur de hauteur pour lire la profondeur.
