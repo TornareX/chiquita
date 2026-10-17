@@ -154,8 +154,11 @@ export class SwingStick {
   }
 }
 
-/** Seuil des coups au-dessus de la tête, réglable : `?coupshauts=yeux` ou `tete` (épaules par défaut). */
+/**
+ * Seuil des coups au-dessus de la tête, réglable : `?coupshauts=yeux` ou `tete` (épaules par défaut), ou `lob`
+ * (coups hauts seulement sur un lob, volées sinon).
+ */
 export function highFloorFromUrl(): HighFloor {
   const value = new URLSearchParams(location.search).get('coupshauts');
-  return value === 'yeux' || value === 'tete' ? value : 'epaules';
+  return value === 'yeux' || value === 'tete' || value === 'lob' ? value : 'epaules';
 }

@@ -226,6 +226,21 @@ describe('au-dessus de la tête', () => {
     expect(head.overhead).toBeNull();
     expect(stickShotOf(head)).toBe('voleeCoupee');
   });
+
+  it('seuil « lob » : coup haut seulement sur un lob ; la même balle flottante haute se joue de volée', () => {
+    const floaty = (duel: Duel): void =>
+      duel.playSituation(1, [vec3(0, 0, -2.5), vec3(0, 0, 8.5)], { kind: 'slice', contact: vec3(0, 1, 8.5), target: vec3(0.8, 0.03, -5), error: 0.5 });
+    // Aux épaules, cette balle se smashe ; ici, la course assistée la prend de volée, à hauteur de volée.
+    expect(rally(floaty, { prepared: true, end: 'straight' }, 'epaules')!.overhead).not.toBeNull();
+    const volley = rally(floaty, { prepared: true, end: 'straight' }, 'lob')!;
+    expect(volley.volley).toBe(true);
+    expect(volley.overhead).toBeNull();
+    expect(stickShotOf(volley)).toBe('voleeCoupee');
+    const lob = lobOn(vec3(0.3, 0, -3.5));
+    expect(rally(lob, { prepared: false }, 'lob')?.overhead).toBe('bandeja');
+    expect(rally(lob, { prepared: true, end: 'straight' }, 'lob')?.overhead).toBe('remate');
+    expect(rally(lob, { prepared: true, end: 'arc' }, 'lob')?.overhead).toBe('vibora');
+  });
 });
 
 describe('leçons au stick', () => {

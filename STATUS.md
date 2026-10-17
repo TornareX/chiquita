@@ -458,3 +458,19 @@ Reste pour E2 (frappes calées par famille) : volée, lob, chiquita et smash ont
 leur famille (coup droit, revers, au-dessus de la tête) ; pas encore de trait de mouvement à l'impact ni d'allonge
 quand la balle est loin du corps. Ensuite : E3 effets de balle et de vitre, E4 replay ralenti, E5 célébrations,
 E6 arène et public, E7 sons, E8 clip de validation.
+
+## Essai : coups au-dessus de la tête seulement sur un lob (17/10/2026, branche `feat/etape-e`)
+
+Demandé par Xavier : la bandeja, la víbora, le smash et la feinte ne se jouent que sur une balle qui vient d'un lob ;
+toute autre balle haute se joue de volée (ou au sol). **Option à l'essai, le défaut ne change pas** : `?coupshauts=lob`.
+440 tests OK (dont un test de plus dans `tests/input/swingStick.test.ts`), typecheck OK. **Pas encore joué à la manette.**
+
+- `HighFloor` gagne `lob` (`Duel.overheadAllowed`) : sur un lob (dernière frappe en jeu de `kind` `lob`, balles
+  rattrapées dehors comprises), seuil aux épaules comme par défaut ; sinon le seuil est infini, au stick comme aux
+  boutons (B donne alors le coupé défensif), IA comprise. La course assistée place le joueur pour une volée à hauteur
+  normale (~1,1 m) au lieu d'un smash.
+- Une balle qui n'est pas un lob et passe au-dessus de 2,1 m (`hitHigh`) ne peut pas se volleyer : elle se joue après
+  la vitre (rare entre IA).
+- IA normale contre IA normale, 2 × 15 min (graines 3 et 11), épaules → lob : coups hauts 40 → 16 par partie (dont ~1/3
+  sur des balles qui n'étaient pas des lobs avant, 0 après), volées 80 → 95, coups par point inchangés (~6), coups dans
+  le vide inchangés, por tres toujours possibles.

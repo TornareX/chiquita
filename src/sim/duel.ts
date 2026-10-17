@@ -62,8 +62,10 @@ export interface Engagement {
 /**
  * Seuil des coups au-dessus de la tête au stick droit : les épaules (par défaut), les yeux ou le dessus de la
  * tête. Au-dessus, bandeja, víbora, smash ou feinte ; en dessous, volée ou coup au sol.
+ * `lob` (à l'essai) : coups hauts aux épaules, mais seulement sur une balle qui vient d'un lob ; toute autre
+ * balle se joue de volée ou au sol, aux boutons comme au stick, IA comprise.
  */
-export type HighFloor = 'epaules' | 'yeux' | 'tete';
+export type HighFloor = 'epaules' | 'yeux' | 'tete' | 'lob';
 
 /** Équipe : 0 (bleus, camp Z négatif) ou 1 (rouges). Le joueur `i` est dans l'équipe `i % 2`. */
 export type Team = 0 | 1;
@@ -1014,9 +1016,17 @@ export class Duel {
 
   /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`), pour un joueur de cette taille (m). */
   swingFloor(playerHeight: number): number {
+    if (!this.overheadAllowed()) return Infinity;
     if (this.highFloor === 'tete') return playerHeight;
     if (this.highFloor === 'yeux') return bandejaHeight(this.profile, playerHeight);
     return this.profile.rally.overheadLow * (playerHeight / PLAYER_HEIGHT);
+  }
+
+  /** Seuil `lob` : un coup haut ne se joue que sur la balle d'un lob (la dernière frappe en jeu). */
+  private overheadAllowed(): boolean {
+    if (this.highFloor !== 'lob') return true;
+    const hitter = this.lastHitter === null ? null : this.players[this.lastHitter];
+    return hitter?.lastHit?.kind === 'lob';
   }
 
   /**
@@ -1025,7 +1035,7 @@ export class Duel {
    * hauteur d'épaules se joue au sol ; un lob qui rebondit très haut, en bajada.
    */
   private overheadFloor(engagement: Engagement, playerHeight: number, bounced = this.bounces > 0): number {
-    if (!engagement.swing) return this.profile.rally.overheadLow;
+    if (!engagement.swing) return this.overheadAllowed() ? this.profile.rally.overheadLow : Infinity;
     const floor = this.swingFloor(playerHeight);
     return bounced ? Math.max(floor, bandejaHeight(this.profile, playerHeight) - 0.02) : floor;
   }
