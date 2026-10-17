@@ -36,7 +36,7 @@ façons de s'en servir.
 |---|---|---|
 | Caméra | Première personne | Troisième personne, derrière l'équipe (§8) |
 | Contrôles | Clavier/souris, geste de swing | **Manette d'abord**, boutons de coup façon VT (§4). Clavier en option |
-| Frappe | Zone de portée + geste | Course assistée + timing + charge + direction (§4) |
+| Frappe | Zone de portée + geste | Course assistée + fenêtre de timing + direction (§4) |
 | Profil physique | `realistic` | Nouveau profil `arcade`, même moteur (§6) |
 | Joueurs | Seul face à la machine | 2 contre 2, humains et IA mélangés (§7) |
 | Corps du joueur | Seule la raquette visible | Personnages complets, animés, style cartoon (§9) |
@@ -77,17 +77,22 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 
 ### Le plafond (découvert en jouant)
 
-- **Charge** : appuyer tôt donne un coup plus fort et plus précis. Appuyer tard cache ton
-  intention à l'adversaire, mais le coup est moins puissant. **[VT4 : durée de charge, courbe
-  puissance/précision]**
-- **Frappe parfaite** : une fenêtre de timing étroite, soulignée par un arrêt sur image, un son
-  et un éclat. La balle part plus vite et plus précise. **[VT4 : largeur des fenêtres]**
-- **Placement manuel** : toucher au stick pendant la charge coupe l'assistance. Le joueur qui
-  se place lui-même frappe plus tôt et ouvre de meilleurs angles. Risque/récompense.
-- **Famille du smash selon charge et direction** : bandeja (sûre, garde le filet), víbora (effet
-  latéral qui longe la vitre), remate (puissant, risqué), et le smash parfait qui sort la balle
-  du court.
-- **Feinte** : amorcer un smash puis jouer une amortie, ou annuler avec RB.
+- **Fenêtre de timing, pas de charge de puissance** (décision §14, d'après la mesure VT4) :
+  maintenir le bouton prépare le coup, mais la durée de maintien ne change quasiment rien à la
+  vitesse de sortie. Ce qui compte, c'est de relâcher/connecter **dans la fenêtre** : trop tôt
+  ou dans la fenêtre large = coup normal, trop tard = **faute**, pas un coup juste plus faible.
+- **Frappe parfaite** : une sous-fenêtre étroite à l'intérieur de la fenêtre de réussite,
+  soulignée par un arrêt sur image, un son et un éclat. La balle part plus vite et plus précise.
+  **[VT4 : fenêtre de réussite confirmée entre 800 ms et 1500 ms de maintien sur un service ;
+  largeur exacte et position de la sous-fenêtre « parfaite » non mesurées — à caler en jouant]**
+- **Placement manuel** : toucher au stick pendant la préparation coupe l'assistance. Le joueur
+  qui se place lui-même frappe plus tôt et ouvre de meilleurs angles. Risque/récompense.
+- **Famille du smash selon la direction au stick et la précision du timing** : bandeja (sûre,
+  garde le filet), víbora (effet latéral qui longe la vitre), remate (plat, puissant, risqué).
+  Le « smash parfait » qui sort la balle du court n'est pas une variante à part : c'est le
+  résultat d'une frappe parfaite sur un remate bien dirigé.
+- **Feinte** : amorcer la préparation d'un smash puis jouer une amortie, ou annuler avec RB —
+  ça trompe l'adversaire sur l'animation de windup, indépendamment de toute notion de charge.
 
 ## 5. Les vitres et le terrain : la vraie profondeur
 
@@ -158,7 +163,7 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 | Palier | Le joueur sait… |
 |---|---|
 | 1. Premiers échanges | Se déplacer, frapper avec A/X/Y, servir, diriger au stick |
-| 2. Joueur de club | Charger tôt, jouer la profondeur, volleyer, renvoyer après la vitre du fond, lober |
+| 2. Joueur de club | Bien timer sa frappe (éviter la faute de retard), jouer la profondeur, volleyer, renvoyer après la vitre du fond, lober |
 | 3. Joueur confirmé | Frappes parfaites, bandeja/víbora, bajada, chiquita, placement manuel, contrapared |
 | 4. Maîtrise | Por tres/cuatro, salida de pista, double vitre, feintes et annulations, jeu d'équipe (croisements, couverture du partenaire) |
 
@@ -166,8 +171,11 @@ Chaque palier doit être **découvrable sans tutoriel** et **enseigné** dans le
 
 ## 11. Ce que Virtua Tennis 4 doit nous apprendre
 
-Par ordre de priorité (détail dans `research/vt4/PLAN.md`) :
-1. Fenêtres de timing, charge, lecture de la direction au moment de l'impact.
+Par ordre de priorité (détail dans `research/vt4/PLAN.md`, constats dans
+`research/vt4/MECANIQUES.md`) :
+1. ~~Fenêtres de timing, charge~~ **Résolu** : pas de charge progressive, une fenêtre de
+   réussite/échec (voir §14 et `MECANIQUES.md` §5). Lecture de la direction au moment de
+   l'impact : pas encore mesurée.
 2. Course assistée : comment le joueur est amené au point d'impact (vitesse, freinage,
    pas d'ajustement, « aimant »).
 3. Trajectoires : simulées ou calculées depuis une cible ? Temps de vol, hauteur au filet.
@@ -193,7 +201,19 @@ et une IA médiocre fausserait le verdict. On valide le cœur (l'échange) avant
 
 Les mesures de VT4 alimentent surtout l'étape A (feeling de frappe et de course), puis D.
 
-## 13. Questions ouvertes
+## 13. Décisions prises
+
+- **Pas de charge progressive de puissance par durée de maintien** (révise le §4). Mesuré en jeu
+  sur VT4 (`research/vt4/MECANIQUES.md` §5) : tenir le bouton de coup plus longtemps ne change
+  quasiment pas la vitesse de sortie (~3 % d'écart, dans le bruit), mais un maintien trop long
+  fait complètement rater le coup. Ce n'est pas un curseur de puissance continu, c'est une
+  **fenêtre de réussite/échec**. Cohérent avec le pilier n°4 (« pas de super-coup gagné par une
+  jauge ») et avec la directive n°1 (une fenêtre de timing est plus simple à comprendre qu'une
+  courbe de charge cachée, tout en gardant de la profondeur via la sous-fenêtre « frappe
+  parfaite », qui elle existait déjà dans le design). La famille de smash (bandeja/víbora/remate)
+  se choisit par la direction et le contexte, pas par un niveau de charge.
+
+## 14. Questions ouvertes
 
 - Nom définitif du jeu.
 - Personnages : nombre, caractéristiques (tous identiques, ou profils puissance/vitesse/contrôle ?).
