@@ -271,9 +271,12 @@ export class Bot {
     // Coup haut : il relâche quand la balle redescend à la bonne hauteur, ses yeux pour la bandeja et la
     // víbora, plus haut pour le remate (bras tendu). Calculé une fois par coup, une fois le point prévu.
     if (me.engagement?.kind === 'overhead' && me.engagement.plan) {
-      const press = me.engagement.pressTick;
+      // Au stick, recalculé si le point prévu change (la balle jouée peut passer d'un coup haut à un coup bas).
+      const press = me.engagement.pressTick + (me.engagement.swing ? me.engagement.plan.tick * 1e-6 : 0);
       if (this.eyeTick?.press !== press) {
-        const smash = this.overheadStick.forward >= duel.profile.rally.overheadStick;
+        // Au stick (démonstrateur du tutoriel), tout coup haut préparé se joue bras tendu, comme le smash.
+        const swing = me.engagement.swing;
+        const smash = swing ? swing.prepared : this.overheadStick.forward >= duel.profile.rally.overheadStick;
         const tick = duel.overheadReleaseTick(this.index, smash);
         this.eyeTick = tick === null ? null : { press, tick };
       }

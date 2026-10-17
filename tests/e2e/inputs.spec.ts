@@ -37,7 +37,7 @@ async function press(page: Page, index: number, pressed: boolean): Promise<void>
 
 test('les boutons pressés s’affichent avec les symboles de la manette', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?ai=normal');
+  await page.goto('/?ai=normal&boutons=1');
   await page.waitForFunction(() => window.__duel !== undefined);
   await plugPlayStation(page);
 
@@ -53,11 +53,16 @@ test('les boutons pressés s’affichent avec les symboles de la manette', async
   });
   await press(page, 0, true);
   await expect(display).toContainText('armé');
-  await page.waitForFunction(() => {
-    const d = window.__duel!.duel;
-    return d.toss !== null && d.tick >= d.toss.idealTick;
+  // Relâché dans la page, au moment idéal : un aller-retour de Playwright rate parfois la fenêtre du service.
+  await page.evaluate(() => {
+    const fake = (window as unknown as { __fake: { buttons: { pressed: boolean; touched: boolean; value: number }[] } }).__fake;
+    const watch = (): void => {
+      const d = window.__duel!.duel;
+      if (d.toss && d.tick >= d.toss.idealTick - 6) fake.buttons[0] = { pressed: false, touched: false, value: 0 };
+      else requestAnimationFrame(watch);
+    };
+    watch();
   });
-  await press(page, 0, false);
   await expect(display).toContainText('service');
   await page.screenshot({ path: 'screenshots/20-retour-entrees.png' });
 });

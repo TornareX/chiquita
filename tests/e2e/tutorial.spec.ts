@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 test('la leçon du coup normal se joue jusqu’au bout', async ({ page }) => {
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?mode=tutoriel');
+  await page.goto('/?mode=tutoriel&boutons=1');
   await page.waitForFunction(() => window.__tutorial !== undefined);
   await expect(page.locator('#tutorial-overlay')).toContainText('Le coup normal');
 
@@ -55,7 +55,7 @@ test('la leçon du coup normal se joue jusqu’au bout', async ({ page }) => {
 
 test('la leçon de direction dessine la zone à viser', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?mode=tutoriel&lecon=diriger');
+  await page.goto('/?mode=tutoriel&lecon=diriger&boutons=1');
   await page.waitForFunction(() => window.__tutorial !== undefined);
   await page.keyboard.press('Enter');
   await expect(page.locator('#tutorial-instruction')).toContainText('à droite');

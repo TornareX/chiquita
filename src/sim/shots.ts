@@ -58,6 +58,18 @@ export function aimTarget(
  * (GAME_DESIGN.md §4 et §13, pas de charge) : stick vers l'avant près du filet, sur une balle assez
  * haute : remate ; stick sur le côté : víbora ; sinon, ou loin du filet : bandeja.
  */
+/**
+ * Pourquoi un remate demandé n'a pas pu être joué en `contact` : balle trop basse ou trop loin du filet ;
+ * `null` s'il était possible (ou si c'est une bajada, balle sortie de la vitre).
+ */
+export function remateRefusal(contact: Vec3, profile: PhysicsProfile): string | null {
+  const r = profile.rally;
+  const metres = (v: number): string => `${v.toFixed(1).replace('.', ',')} m`;
+  if (contact.y < r.remateLow) return `balle trop basse pour un remate (${metres(contact.y)}, il faut ${metres(r.remateLow)}) : finis ton geste plus tôt`;
+  if (Math.abs(contact.z) > r.remateZone) return `trop loin du filet pour un remate (${metres(Math.abs(contact.z))}, il faut ${metres(r.remateZone)} au plus)`;
+  return null;
+}
+
 export function overheadKind(
   aim: ArcadeCommands['stick'],
   contact: Vec3,
@@ -100,7 +112,7 @@ export function overheadTarget(
     const target = aimTarget(kind, side, aim, perfect, profile);
     return vec3((contactX >= 0 ? 1 : -1) * r.bandejaLateral, target.y, target.z);
   }
-  if (kind === 'bandeja' || kind === 'bajada') return aimTarget(kind, side, aim, perfect, profile);
+  if (kind === 'bandeja' || kind === 'bajada' || kind === 'feinte') return aimTarget(kind, side, aim, perfect, profile);
   if (kind === 'vibora') {
     // Rebond vers 7 m, près du côté : la balle file dans la vitre latérale et y meurt basse.
     const lateral = Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0));

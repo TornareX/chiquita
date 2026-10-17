@@ -1,4 +1,4 @@
-import type { ArcadeCommands, ShotKind } from './commands';
+import type { ArcadeCommands, ShotKind, SwingEnd as GestureEnd } from './commands';
 import { HALF_LENGTH, HALF_WIDTH, SIM_DT } from './constants';
 import type { Duel, DuelShot, PointReason } from './duel';
 import type { PhysicsProfile } from './profile';
@@ -147,6 +147,11 @@ export interface Lesson {
   /** Ce que fait le démonstrateur : bouton et stick au moment de l'impact. */
   demo(attempt: number): { kind: ShotKind; stick: ArcadeCommands['stick'] };
   judge(outcome: AttemptOutcome, attempt: number, profile: PhysicsProfile): Verdict;
+  /**
+   * Leçon au stick droit (les consignes parlent du geste, pas des boutons) : le coup visé, et le geste qui le
+   * donne (préparé ou non, fin du geste). Le démonstrateur joue avec ce geste.
+   */
+  stick?: { shot: StickShot; swing: { prepared: boolean; end?: GestureEnd } };
 }
 
 const at = (x: number, z: number): Vec3 => vec3(x, 0, z);
@@ -213,6 +218,150 @@ const DIRECTION_STICKS: readonly ArcadeCommands['stick'][] = [
   { forward: 1, right: 0 },
 ];
 const DIRECTION_WORDS = ['à droite', 'à gauche', 'vers toi', 'vers l’avant'] as const;
+
+/** Coups enseignés au stick droit. */
+export type StickShot =
+  | 'normal'
+  | 'lob'
+  | 'chiquita'
+  | 'sansPrep'
+  | 'voleeBloquee'
+  | 'voleeCoupee'
+  | 'bandeja'
+  | 'smash'
+  | 'vibora'
+  | 'feinte';
+
+/** Nom de chaque coup au stick, en clair. */
+export const STICK_SHOT_NAMES: Record<StickShot, string> = {
+  normal: 'coup normal',
+  lob: 'lob',
+  chiquita: 'chiquita',
+  sansPrep: 'coup sans préparation',
+  voleeBloquee: 'volée bloquée',
+  voleeCoupee: 'volée coupée',
+  bandeja: 'bandeja',
+  smash: 'smash',
+  vibora: 'víbora',
+  feinte: 'feinte de smash',
+};
+
+/** Le geste qui donne chaque coup, en une phrase. */
+export const STICK_HOW: Record<StickShot, string> = {
+  normal: 'tire le stick droit vers toi dès que Rouge frappe, puis ramène-le tout droit vers l’avant quand la balle arrive',
+  lob: 'tire le stick droit vers toi dès que Rouge frappe, puis ramène-le vers l’avant en arc, par un côté',
+  chiquita: 'tire le stick droit vers toi dès que Rouge frappe, puis lâche-le quand la balle arrive',
+  sansPrep: 'ne prépare pas : un coup sec du stick droit vers l’avant quand la balle arrive à côté de toi',
+  voleeBloquee: 'ne prépare pas : un coup sec du stick droit vers l’avant quand la balle arrive à côté de toi',
+  voleeCoupee: 'tire le stick droit vers toi dès que Rouge frappe, puis ramène-le tout droit vers l’avant quand la balle arrive',
+  bandeja: 'ne prépare pas : un coup sec du stick droit vers l’avant quand la balle redescend à hauteur de tes yeux',
+  smash: 'tire le stick droit vers toi dès que Rouge lobe, puis ramène-le tout droit vers l’avant quand la balle est en haut',
+  vibora: 'tire le stick droit vers toi dès que Rouge lobe, puis ramène-le vers l’avant en arc, par un côté',
+  feinte: 'tire le stick droit vers toi dès que Rouge lobe, comme pour un smash, puis lâche-le',
+};
+
+/** Coup au stick que la simulation a joué (`null` : pas un coup au stick reconnu). */
+export function stickShotOf(shot: DuelShot): StickShot | null {
+  if (shot.overhead === 'remate' || shot.overhead === 'bajada') return 'smash';
+  if (shot.overhead) return shot.overhead;
+  if (shot.volley) return shot.style === 'cut' ? 'voleeCoupee' : shot.style === 'block' ? 'voleeBloquee' : null;
+  if (shot.style === 'chiquita') return 'chiquita';
+  if (shot.style === 'block') return 'sansPrep';
+  return shot.kind === 'lob' ? 'lob' : shot.kind === 'normal' ? 'normal' : null;
+}
+
+/** Juge un essai au stick droit : pas de frappe, mauvais coup (et pourquoi), puis filet ou dehors. */
+function judgeStick(o: AttemptOutcome, goal: StickShot): Verdict {
+  const fail = (message: string): Verdict => ({ success: false, message });
+  const prepared = !['sansPrep', 'voleeBloquee', 'bandeja'].includes(goal);
+  if (!o.shot) {
+    if (!o.pressed) return fail(`Tu n’as pas frappé : ${STICK_HOW[goal]}.`);
+    if (o.whiff && o.whiffLate) return fail('Trop tard : la balle était déjà passée. Finis ton geste quand elle arrive à côté de toi.');
+    if (o.whiff) return fail(prepared ? 'Geste fini trop tôt, dans le vide : garde le stick tiré vers toi jusqu’à ce que la balle arrive.' : 'Trop tôt, dans le vide : attends que la balle arrive à côté de toi.');
+    return fail(`Pas de frappe : ${STICK_HOW[goal]}.`);
+  }
+  const played = stickShotOf(o.shot);
+  const high = ['bandeja', 'smash', 'vibora', 'feinte'].includes(goal);
+  if (high && !o.shot.overhead) return fail('Balle prise trop bas pour un coup au-dessus de la tête : attends qu’elle soit en l’air au-dessus de toi.');
+  if (!high && o.shot.overhead) return fail('Balle prise au-dessus de la tête : laisse-la descendre, ou prends-la plus tôt.');
+  if ((goal === 'voleeBloquee' || goal === 'voleeCoupee') && !o.shot.volley) return fail('Elle a rebondi : prends-la de volée, avant le rebond.');
+  if (played !== goal) {
+    const name = played ? STICK_SHOT_NAMES[played] : 'un autre coup';
+    if (goal === 'voleeCoupee' && played === 'voleeBloquee') {
+      return fail('C’est une volée bloquée : prépare plus tôt (stick tiré vers toi dès que Rouge frappe), puis ramène-le tout droit.');
+    }
+    return fail(`Tu as joué ${name === 'un autre coup' ? name : `un ${name}`.replace('un víbora', 'une víbora').replace('un bandeja', 'une bandeja').replace('un chiquita', 'une chiquita').replace('un volée', 'une volée').replace('un feinte', 'une feinte')}. Ici, ${STICK_HOW[goal]}.`);
+  }
+  // Bandeja : la hauteur compte (aux yeux).
+  const off = o.shot.heightOff;
+  const height = `${o.shot.contact.y.toFixed(2).replace('.', ',')} m`;
+  if (goal === 'bandeja' && off < 0 && !o.inCourt) return fail(`Prise trop basse (${height}) : dans le filet. Frappe un peu plus tôt, à hauteur de tes yeux.`);
+  if (goal === 'bandeja' && off > 0.15) return fail(`Prise trop haute (${height}) : elle perd son effet et rebondit. Laisse-la redescendre à hauteur de tes yeux.`);
+  if (!o.landing && o.reason === 'net') return fail('Dans le filet : finis ton geste un peu plus tôt.');
+  if (!o.inCourt) return fail('La balle sort : vise plus au centre (stick gauche moins poussé au moment de la frappe).');
+  const name = STICK_SHOT_NAMES[goal];
+  return praise(o, `${name[0]!.toUpperCase()}${name.slice(1)} !`);
+}
+
+/** Rouge envoie la balle de l'essai selon le coup à travailler. */
+function stickFeed(goal: StickShot): (duel: Duel, attempt: number) => void {
+  return (duel, attempt) => {
+    if (goal === 'voleeBloquee' || goal === 'voleeCoupee') {
+      // Au filet : rapide (76 km/h, ~0,6 s) pour le blocage ; flottante pour la volée coupée (~1 s pour arriver,
+      // sous les épaules : au-dessus, ce serait un coup haut).
+      const side = [0.8, -0.8, 0.2][attempt % 3]!;
+      const opening =
+        goal === 'voleeBloquee'
+          ? { kind: 'normal' as const, contact: vec3(0, 1, 8.5), target: vec3(side, 0.03, -8) }
+          : { kind: 'slice' as const, contact: vec3(0, 1, 8.5), target: vec3(side, 0.03, -4), error: 0.5 };
+      duel.playSituation(1, [at(0, -2.5), at(0, 8.5)], opening);
+    } else if (goal === 'bandeja' || goal === 'smash' || goal === 'vibora' || goal === 'feinte') {
+      // Lob sur Bleu, au filet : il passe assez haut pour un coup au-dessus de la tête.
+      const side = [0.6, -0.6, 0][attempt % 3]!;
+      duel.playSituation(1, [at(0, -3.5), at(0, 8.6)], { kind: 'lob', contact: vec3(0.3, 0.9, 8.6), target: vec3(side, 0.03, -6.2) });
+    } else if (goal === 'sansPrep') {
+      // Sans préparation, pas de course assistée : la balle arrive près de Bleu, juste à côté de lui.
+      const side = [0.6, -0.6, 0.3][attempt % 3]!;
+      duel.playSituation(1, [at(0, -8.5), at(0, 8.5)], { kind: 'normal', contact: vec3(0, 0.9, 8.5), target: vec3(side, 0.03, -6.6) });
+    } else baselineFeed(duel, attempt);
+  };
+}
+
+/** Leçon d'un coup au stick droit. */
+function stickLesson(goal: StickShot, title: string, tier: 1 | 2 | 3 | 4, when: string, how: string, swing: { prepared: boolean; end?: GestureEnd }): Lesson {
+  return {
+    id: `stick-${goal}`,
+    title,
+    tier,
+    stick: { shot: goal, swing },
+    buttons: swing.prepared
+      ? `stick droit tiré vers toi, puis ${swing.end === 'arc' ? 'en arc' : swing.end === 'letGo' ? 'lâché' : 'tout droit vers l’avant'}`
+      : 'stick droit : un coup sec vers l’avant, sans préparer',
+    when,
+    how: [how, 'Le guide à côté de ton stick dessine le geste que le jeu a lu, et le nom du coup selon la balle.'],
+    goal: 3,
+    start: stickFeed(goal),
+    instruction: () => `${STICK_HOW[goal][0]!.toUpperCase()}${STICK_HOW[goal].slice(1)}.`,
+    target: () => null,
+    // Le démonstrateur tient le coup comme le geste au stick (coup haut si la balle monte), avec le même geste.
+    demo: () => ({ kind: 'overhead', stick: { forward: 0, right: 0 } }),
+    judge: (o) => judgeStick(o, goal),
+  };
+}
+
+/** Leçons au stick droit : au sol, de volée, puis au-dessus de la tête. */
+export const STICK_LESSONS: readonly Lesson[] = [
+  stickLesson('normal', 'Le coup normal', 1, 'Le coup de base, du fond du terrain, sur une balle prise vers le nombril.', 'Prépare tôt : plus tu as le temps de tirer le stick vers toi, plus le coup est fort et précis. Puis ramène-le tout droit vers l’avant quand la balle arrive.', { prepared: true, end: 'straight' }),
+  stickLesson('lob', 'Le lob', 1, 'Pour reprendre le filet, ou passer un adversaire monté au filet.', 'Même préparation que le coup normal : à la fin, ramène le stick vers l’avant en arc, par un côté. L’adversaire ne sait pas lequel arrive.', { prepared: true, end: 'arc' }),
+  stickLesson('chiquita', 'La chiquita', 2, 'Sur une balle facile, face à des adversaires au filet : courte et basse, dans leurs pieds.', 'Même préparation : à la fin, lâche le stick, il revient tout seul au centre.', { prepared: true, end: 'letGo' }),
+  stickLesson('sansPrep', 'Sans préparation', 1, 'En défense, quand la balle arrive trop vite pour préparer.', 'Un coup sec du stick vers l’avant, sans le tirer vers toi : la balle repart, moins fort et moins précise.', { prepared: false }),
+  stickLesson('voleeBloquee', 'La volée bloquée', 2, 'Au filet, quand la balle arrive vite : on met la raquette devant.', 'Ne prépare pas : un coup sec du stick vers l’avant quand la balle arrive à côté de toi.', { prepared: false }),
+  stickLesson('voleeCoupee', 'La volée coupée', 2, 'Au filet, sur une balle flottante : elle rebondit bas et meurt avant la vitre.', 'Comme un coup normal, mais de volée : tire le stick vers toi dès que Rouge frappe, puis ramène-le tout droit.', { prepared: true, end: 'straight' }),
+  stickLesson('bandeja', 'La bandeja', 3, 'Au filet, sur un lob pas assez haut pour un smash : elle te garde au filet.', 'Sans préparer : un coup sec du stick vers l’avant quand la balle redescend à hauteur de tes yeux. Trop tôt, elle rebondit ; trop tard, filet.', { prepared: false }),
+  stickLesson('smash', 'Le smash', 3, 'Sur un lob, près du filet : il peut sortir du terrain. Mal minuté ou de trop loin, il rebondit chez l’adversaire, qui peut contrer.', 'Prépare dès que Rouge lobe (stick tiré vers toi), puis ramène-le tout droit vers l’avant quand la balle est en haut, bras tendu.', { prepared: true, end: 'straight' }),
+  stickLesson('vibora', 'La víbora', 3, 'Sur un lob : plus rapide que la bandeja, avec un effet qui longe la vitre latérale.', 'Même préparation que le smash : à la fin, ramène le stick en arc, par un côté.', { prepared: true, end: 'arc' }),
+  stickLesson('feinte', 'La feinte de smash', 4, 'Sur un lob : tu prépares un smash, l’adversaire recule… et la balle part lentement, elle meurt vers la vitre après son deuxième rebond.', 'Même préparation que le smash : à la fin, lâche le stick.', { prepared: true, end: 'letGo' }),
+];
 
 export const LESSONS: readonly Lesson[] = [
   {
@@ -319,4 +468,5 @@ export const LESSONS: readonly Lesson[] = [
       return praise(o, 'Bandeja ! Tu gardes le filet.');
     },
   },
+  ...STICK_LESSONS,
 ];

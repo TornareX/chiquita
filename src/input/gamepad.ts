@@ -1,4 +1,5 @@
 import type { ArcadeCommands, ShotKind } from '../sim/commands';
+import { rightStickAxes, type SwingStick } from './swingStick';
 
 /** Stick et boutons d'un joueur, dans le repère de l'écran : `up` vers le haut de l'écran. */
 export interface PadState {
@@ -6,6 +7,15 @@ export interface PadState {
   shot: ShotKind | null;
   /** Bouton de changement d'assistance maintenu (Affichage / Select sur la manette). */
   assistButton: boolean;
+  /** Geste du stick droit : préparation et fin du geste, pour la simulation (`ArcadeCommands.swing`). */
+  gesture?: ArcadeCommands['swing'];
+  /** Stick droit (frappe au geste, `swingStick.ts`), et le coup qu'il tient : pour l'affichage. */
+  swing?: { right: number; up: number; shot: ShotKind | null };
+  /**
+   * Bouton de face pressé, même quand les boutons ne frappent pas (`?boutons=1` pour qu'ils frappent) : sert à
+   * valider dans les menus.
+   */
+  face?: ShotKind | null;
 }
 
 export const IDLE_PAD: PadState = { stick: { up: 0, right: 0 }, shot: null, assistButton: false };
@@ -21,8 +31,12 @@ const SHOT_BUTTONS: readonly [number, ShotKind][] = [
   [3, 'lob'],
 ];
 
-/** Lit une manette (Gamepad API, disposition standard). */
-export function readGamepad(pad: Gamepad): PadState {
+/**
+ * Lit une manette (Gamepad API, disposition standard). Avec `swing`, le stick droit frappe au geste
+ * (`swingStick.ts`) : un pas de `dt` s. Les boutons de face ne frappent qu'avec `?boutons=1` (ils gardent
+ * alors la priorité) ; sinon ils ne servent qu'aux menus.
+ */
+export function readGamepad(pad: Gamepad, swing?: SwingStick, dt = 0): PadState {
   let x = pad.axes[0] ?? 0;
   // L'axe vertical de la Gamepad API est positif vers le bas.
   let y = -(pad.axes[1] ?? 0);
@@ -41,9 +55,33 @@ export function readGamepad(pad: Gamepad): PadState {
   if (button(13)) y = -1;
   if (button(14)) x = -1;
   if (button(15)) x = 1;
-  const shot = SHOT_BUTTONS.find(([i]) => button(i))?.[1] ?? null;
-  return { stick: { up: y, right: x }, shot, assistButton: button(8) };
+  const face = SHOT_BUTTONS.find(([i]) => button(i))?.[1] ?? null;
+  const shot = buttonsEnabled() ? face : null;
+  if (!swing) return { stick: { up: y, right: x }, shot, assistButton: button(8), face };
+  const right = rightStickAxes(pad.axes[2] ?? 0, -(pad.axes[3] ?? 0));
+  const gesture = swing.update(right.right, right.up, dt);
+  return {
+    stick: { up: y, right: x },
+    shot: shot ?? gesture.shot,
+    assistButton: button(8),
+    face,
+    ...(!shot && gesture.swing ? { gesture: gesture.swing } : {}),
+    swing: { ...right, shot: gesture.shot },
+  };
 }
+
+/** Frappe au stick droit, sauf `?geste=0`. */
+export const swingEnabled = (): boolean => new URLSearchParams(location.search).get('geste') !== '0';
+
+/**
+ * Boutons de coup (A, B, X, Y et leurs indications) : cachés et sans effet sur la manette, tout se joue aux
+ * sticks ; `?boutons=1` les remet. Sans stick droit (`?geste=0`), ils reviennent aussi.
+ */
+export const buttonsEnabled = (): boolean => {
+  // Hors navigateur (tests) : pas d'adresse, réglages par défaut.
+  const params = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
+  return params.get('boutons') === '1' || params.get('geste') === '0';
+};
 
 /** Manettes branchées, dans l'ordre de leur index. */
 export function connectedGamepads(): Gamepad[] {
@@ -58,7 +96,7 @@ export function connectedGamepads(): Gamepad[] {
  */
 export function toCommands(state: PadState, nearSide: boolean, ownView = false): ArcadeCommands {
   const flip = nearSide || ownView ? 1 : -1;
-  return { stick: { forward: state.stick.up * flip, right: state.stick.right * flip }, shot: state.shot };
+  return { stick: { forward: state.stick.up * flip, right: state.stick.right * flip }, shot: state.shot, ...(state.gesture ? { swing: state.gesture } : {}) };
 }
 
 /** Fusionne deux sources (manette et clavier) : le stick le plus poussé, le premier bouton. */
@@ -68,5 +106,9 @@ export function mergePads(a: PadState, b: PadState): PadState {
     stick: strength(a) >= strength(b) ? a.stick : b.stick,
     shot: a.shot ?? b.shot,
     assistButton: a.assistButton || b.assistButton,
+    // Le geste du stick droit vient de la manette : au relâcher (plus de coup tenu), sa fin doit passer quand même.
+    ...((a.gesture ?? b.gesture) ? { gesture: (a.gesture ?? b.gesture)! } : {}),
+    swing: a.swing ?? b.swing,
+    face: a.face ?? b.face ?? null,
   };
 }

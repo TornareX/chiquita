@@ -10,7 +10,9 @@ function attempt(lesson: Lesson, n: number, blue: Bot | null): { outcome: Attemp
   lesson.start(duel, n);
   const watcher = new AttemptWatcher(duel);
   for (;;) {
-    const commands: ArcadeCommands = blue ? blue.commands(duel) : NEUTRAL_ARCADE;
+    // Leçon au stick : le démonstrateur joue avec le geste de la leçon (comme dans le tutoriel).
+    const gesture = lesson.stick?.swing;
+    const commands: ArcadeCommands = blue ? { ...blue.commands(duel), ...(gesture ? { swing: { ...gesture } } : {}) } : NEUTRAL_ARCADE;
     duel.step([commands, NEUTRAL_ARCADE]);
     const outcome = watcher.step(duel, commands);
     if (outcome) return { outcome, duel };

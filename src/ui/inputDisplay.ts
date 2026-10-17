@@ -4,7 +4,24 @@ import type { ArcadeCommands, OverheadKind, ShotKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
 import type { Duel, DuelShot } from '../sim/duel';
 import type { PhysicsProfile } from '../sim/profile';
+import { buttonsEnabled } from '../input/gamepad';
+import type { SwingStick } from '../input/swingStick';
 import { buttonIcon, escapeHtml, keysFor, type InputSource } from './buttonIcons';
+import { createSwingGuide, type SwingContext } from './swingGuide';
+
+/**
+ * Situation de la balle que le joueur `index` va jouer, comme la simulation la jugera : au-dessus du seuil des
+ * coups hauts, coup haut ; avant le rebond, volée ; sinon, coup au sol.
+ */
+export function swingContext(duel: Duel, index: 0 | 1): SwingContext {
+  const me = duel.players[index];
+  const plan = me.engagement?.plan;
+  const ball = duel.ball;
+  const height = plan ? plan.contact.y : (ball?.pos.y ?? 0);
+  if (height >= duel.swingFloor(me.height)) return 'haut';
+  const volley = plan ? plan.volley : duel.bounces === 0 && Math.abs(me.pos.z) < duel.profile.rally.volleyZone;
+  return volley ? 'volee' : 'sol';
+}
 
 /** Résultat d'un relâcher, qui colore le bouton : doré parfait, vert réussi, orange imprécis, rouge raté. */
 export type ReleaseQuality = 'perfect' | 'good' | 'off' | 'miss';
@@ -16,7 +33,12 @@ export interface ReleaseNote {
   text: string;
   /** Direction du stick au moment de la frappe, en clair, relative au joueur. */
   stick: string;
+  /** Coup joué au geste du stick droit, pas au bouton. */
+  bySwing?: boolean;
 }
+
+/** Le coup tenu vient du geste du stick droit (pas d'un bouton). */
+const swingHeld = (state: PadState): boolean => state.shot !== null && state.swing?.shot === state.shot;
 
 const QUALITY_COLORS: Record<ReleaseQuality, string> = {
   perfect: '#ffd23f',
@@ -25,7 +47,13 @@ const QUALITY_COLORS: Record<ReleaseQuality, string> = {
   miss: '#ff6b6b',
 };
 
-const OVERHEAD_NAMES: Record<OverheadKind, string> = { bandeja: 'bandeja', vibora: 'víbora', remate: 'remate', bajada: 'bajada' };
+const OVERHEAD_NAMES: Record<OverheadKind, string> = {
+  bandeja: 'bandeja',
+  vibora: 'víbora',
+  remate: 'smash',
+  bajada: 'bajada',
+  feinte: 'feinte de smash',
+};
 
 /** Durée d'affichage du dernier relâcher au-dessus de l'historique, et de la couleur du bouton (s). */
 const NOTE_TIME = 1.6;
@@ -73,8 +101,9 @@ export function describeShot(shot: DuelShot, profile: PhysicsProfile): { text: s
  * coup dans le vide). Indépendant du DOM, pour être testé et réutilisé (labo, tutoriel).
  */
 export class ReleaseTracker {
-  /** Bouton maintenu au pas précédent. */
+  /** Bouton maintenu au pas précédent, et si le dernier bouton tenu venait du geste du stick droit. */
   private held: ShotKind | null = null;
+  private heldBySwing = false;
   private lastHitTick = -Infinity;
   private lastWhiffTick = -Infinity;
   /** Pas de la dernière note, et historique, la plus récente d'abord. */
@@ -90,9 +119,23 @@ export class ReleaseTracker {
     if (player.lastHitTick !== this.lastHitTick) {
       this.lastHitTick = player.lastHitTick;
       if (player.lastHit) {
-        const { text, quality } = describeShot(player.lastHit, duel.profile);
+        let { text, quality } = describeShot(player.lastHit, duel.profile);
+        const bySwing = state.shot ? swingHeld(state) : this.heldBySwing;
+        // Au stick droit, le coup sec sans préparation est voulu : volée bloquée, ou coup moins fort au sol.
+        if (bySwing && player.lastHit.style === 'block') {
+          if (player.lastHit.volley) {
+            text = player.lastHit.perfect ? 'volée bloquée parfaite !' : 'volée bloquée';
+            quality = player.lastHit.perfect ? 'perfect' : 'good';
+          } else text = 'coup sans préparation : moins fort, moins précis';
+        }
         // Le bouton réellement pressé : B sur une balle basse donne un coupé, mais c'est bien B.
-        this.push(duel, { button: state.shot ?? released ?? player.lastHit.kind, quality, text, stick: describeStick(player.stick) });
+        this.push(duel, {
+          button: state.shot ?? released ?? player.lastHit.kind,
+          quality,
+          text,
+          stick: describeStick(player.stick),
+          bySwing,
+        });
       }
     }
     if (player.lastWhiffTick !== this.lastWhiffTick) {
@@ -103,10 +146,13 @@ export class ReleaseTracker {
           quality: 'miss',
           text: 'relâché trop tôt : dans le vide',
           stick: describeStick(player.stick),
+          bySwing: this.heldBySwing,
         });
       }
     }
     this.held = state.shot;
+    // Gardé après le relâcher : la frappe part souvent quelques pas plus tard.
+    if (state.shot) this.heldBySwing = swingHeld(state);
   }
 
   private push(duel: Duel, note: ReleaseNote): void {
@@ -132,6 +178,9 @@ interface Widget {
   root: HTMLDivElement;
   title: HTMLDivElement;
   dot: SVGCircleElement;
+  /** Stick droit (frappe au geste) : point et trace du geste en cours ou du dernier. */
+  swingDot: SVGCircleElement;
+  swingTrail: SVGPolylineElement;
   buttons: Record<ShotKind, { circle: SVGCircleElement; label: SVGTextElement }>;
   note: HTMLDivElement;
   history: HTMLDivElement;
@@ -140,6 +189,7 @@ interface Widget {
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
+const SWING_BADGE = '<span style="display:inline-block;padding:0 4px;border-radius:4px;background:#ffd23f;color:#111;font-weight:700;font-size:10px">R</span>';
 function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
   const el = document.createElementNS(SVG, tag);
   for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, String(value));
@@ -157,17 +207,23 @@ function sourceName(source: InputSource): string {
   return source.family === 'generic' ? 'Manette' : `Manette ${PAD_FAMILY_NAMES[source.family]}`;
 }
 
+/** Centre du stick droit dans le dessin : après les boutons quand ils sont affichés (`?boutons=1`). */
+const swingX = (): number => (buttonsEnabled() ? 160 : 98);
+
 function createWidget(index: 0 | 1): Widget {
+  const withButtons = buttonsEnabled();
+  const SWING_X = swingX();
   const root = document.createElement('div');
   root.className = 'input-display';
   root.dataset.player = String(index);
   root.style.cssText =
     'position:fixed;left:16px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;' +
     'background:rgba(10,16,24,.6);color:#f2f5f7;font:12px/1.35 system-ui,sans-serif;pointer-events:none;' +
-    `border-left:3px solid ${TEAM[index]};width:min(340px,calc(100vw - 32px));box-sizing:border-box`;
+    `border-left:3px solid ${TEAM[index]};width:min(400px,calc(100vw - 32px));box-sizing:border-box`;
   const pads = document.createElement('div');
   pads.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px';
-  const row = svg('svg', { width: 128, height: 60, viewBox: '0 0 128 60' });
+  const width = SWING_X + 30;
+  const row = svg('svg', { width, height: 60, viewBox: `0 0 ${width} 60` });
   // Stick : cercle et point.
   row.append(svg('circle', { cx: 30, cy: 30, r: 26, fill: 'rgba(255,255,255,.06)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
   row.append(svg('line', { x1: 30, y1: 6, x2: 30, y2: 54, stroke: '#3a4a58', 'stroke-width': 1 }));
@@ -192,7 +248,14 @@ function createWidget(index: 0 | 1): Widget {
     group.append(circle, label);
     buttons[kind] = { circle, label };
   }
-  row.append(group);
+  // Boutons de coup cachés : tout se joue aux sticks (`?boutons=1` pour les remettre).
+  if (withButtons) row.append(group);
+  // Stick droit, à droite des boutons : la trace montre le geste lu.
+  row.append(svg('circle', { cx: SWING_X, cy: 30, r: 26, fill: 'rgba(255,255,255,.06)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
+  row.append(svg('circle', { cx: SWING_X, cy: 30, r: 6, fill: 'none', stroke: '#3a4a58', 'stroke-width': 1 }));
+  const swingTrail = svg('polyline', { points: '', fill: 'none', stroke: '#ffd23f', 'stroke-width': 2, 'stroke-linejoin': 'round', opacity: 0.8 });
+  const swingDot = svg('circle', { cx: SWING_X, cy: 30, r: 6, fill: '#e8edf1' });
+  row.append(swingTrail, swingDot);
   const title = document.createElement('div');
   title.style.cssText = 'font-size:11px;color:#c9d3db;white-space:nowrap';
   pads.append(title, row);
@@ -205,12 +268,12 @@ function createWidget(index: 0 | 1): Widget {
   text.append(note, history);
   root.append(pads, text);
   document.body.append(root);
-  return { root, title, dot, buttons, note, history, key: '', historyHtml: '' };
+  return { root, title, dot, swingDot, swingTrail, buttons, note, history, key: '', historyHtml: '' };
 }
 
 function noteHtml(note: ReleaseNote, source: InputSource): string {
   return (
-    `${buttonIcon(note.button, source)} <span style="color:${QUALITY_COLORS[note.quality]}">${escapeHtml(note.text)}</span>` +
+    `${note.bySwing || !buttonsEnabled() ? SWING_BADGE : buttonIcon(note.button, source)} <span style="color:${QUALITY_COLORS[note.quality]}">${escapeHtml(note.text)}</span>` +
     ` <span style="opacity:.7">· ${escapeHtml(note.stick)}</span>`
   );
 }
@@ -220,9 +283,11 @@ function noteHtml(note: ReleaseNote, source: InputSource): string {
  * avec les symboles de sa manette (le bouton maintenu s'allume, puis prend la couleur du résultat au
  * relâcher), ce que le dernier relâcher a donné, et les 5 précédents.
  */
-export function createInputDisplay(): InputDisplay {
+export function createInputDisplay(swings?: readonly (SwingStick | null)[] | null): InputDisplay {
   const trackers = [new ReleaseTracker(0), new ReleaseTracker(1)] as const;
   const widgets: (Widget | null)[] = [null, null];
+  /** Guide du geste au stick droit, à droite du retour des entrées de chaque joueur. */
+  const guides = [createSwingGuide(), createSwingGuide()] as const;
 
   return {
     step(duel, states) {
@@ -235,6 +300,7 @@ export function createInputDisplay(): InputDisplay {
         const state = states[i];
         if (!shown.includes(i) || !source || !state) {
           if (widgets[i]) widgets[i]!.root.style.display = 'none';
+          guides[i].render(null, null, false, 0, 0, 'sol');
           return;
         }
         const w = (widgets[i] ??= createWidget(i));
@@ -242,6 +308,9 @@ export function createInputDisplay(): InputDisplay {
         // En bas à gauche, au-dessus des noms des joueurs : Bleu en bas, Rouge au-dessus.
         const below = i === 1 && shown.includes(0) ? widgets[0]!.root.offsetHeight + 8 : 0;
         w.root.style.bottom = `${58 + below}px`;
+        const lastNote = trackers[i].history[0];
+        const recent = lastNote?.bySwing && (duel.tick - trackers[i].noteTick) * SIM_DT < NOTE_TIME ? lastNote.text : null;
+        guides[i].render(swings?.[i] ?? null, state.swing ?? null, true, 16 + w.root.offsetWidth + 10, 58 + below, swingContext(duel, i), recent);
 
         const tracker = trackers[i];
         const key = source.kind === 'pad' ? source.family : `kbd${source.player}${source.layout?.size ?? 0}`;
@@ -260,6 +329,17 @@ export function createInputDisplay(): InputDisplay {
 
         w.dot.setAttribute('cx', (30 + state.stick.right * 20).toFixed(1));
         w.dot.setAttribute('cy', (30 - state.stick.up * 20).toFixed(1));
+        const swing = state.swing;
+        const SWING_X = swingX();
+        w.swingDot.style.display = swing ? '' : 'none';
+        if (swing) {
+          w.swingDot.setAttribute('cx', (SWING_X + swing.right * 20).toFixed(1));
+          w.swingDot.setAttribute('cy', (30 - swing.up * 20).toFixed(1));
+          w.swingDot.setAttribute('fill', swing.shot ? '#ffd23f' : '#e8edf1');
+        }
+        const recognizer = swings?.[i];
+        const points = recognizer ? recognizer.trail.map((p) => `${(SWING_X + p.right * 20).toFixed(1)},${(30 - p.up * 20).toFixed(1)}`).join(' ') : '';
+        if (w.swingTrail.getAttribute('points') !== points) w.swingTrail.setAttribute('points', points);
 
         const since = (duel.tick - tracker.noteTick) * SIM_DT;
         const last = tracker.history[0];
@@ -268,10 +348,10 @@ export function createInputDisplay(): InputDisplay {
           const { circle } = w.buttons[kind];
           let fill = 'rgba(255,255,255,.06)';
           let stroke = '#9fb0bf';
-          if (state.shot === kind) {
+          if (state.shot === kind && !swingHeld(state)) {
             fill = 'rgba(255,255,255,.55)';
             stroke = '#ffffff';
-          } else if (flash?.button === kind) {
+          } else if (flash?.button === kind && !flash.bySwing) {
             fill = QUALITY_COLORS[flash.quality];
             stroke = QUALITY_COLORS[flash.quality];
           }
@@ -281,7 +361,9 @@ export function createInputDisplay(): InputDisplay {
 
         // Pendant le maintien : quel bouton est armé. Sinon : le dernier relâcher, un court instant.
         let note = '';
-        if (state.shot) note = `${buttonIcon(state.shot, source)} <span style="color:#c9d3db">${SHOT_NAMES[state.shot]} : armé, relâche au bon moment</span>`;
+        if (state.shot && swingHeld(state)) {
+          note = `${SWING_BADGE} <span style="color:#c9d3db">armé au stick droit : choisis la fin du geste</span>`;
+        } else if (state.shot && buttonsEnabled()) note = `${buttonIcon(state.shot, source)} <span style="color:#c9d3db">${SHOT_NAMES[state.shot]} : armé, relâche au bon moment</span>`;
         else if (last && since < NOTE_TIME) note = noteHtml(last, source);
         if (w.note.innerHTML !== note) w.note.innerHTML = note;
 

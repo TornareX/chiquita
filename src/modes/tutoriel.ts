@@ -1,10 +1,11 @@
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands, type PadState } from '../input/gamepad';
+import { buttonsEnabled, connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
 import { Bot, DEFAULT_BOT } from '../sim/bot';
-import { NEUTRAL_ARCADE, type ArcadeCommands, type ShotKind } from '../sim/commands';
+import { NEUTRAL_ARCADE, type ArcadeCommands, type ShotKind, type SwingEnd as GestureEnd } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
 import { Duel } from '../sim/duel';
 import { applyFeel } from '../sim/feel';
@@ -34,6 +35,24 @@ const PERFECTS_FOR_STAR = 3;
 const VERDICT_TIME = 1.4;
 /** « Relâche ! » s'affiche quand l'impact prévu est à moins de ce délai (s de jeu). */
 const RELEASE_LEAD = 0.12;
+/** Au stick droit, le geste prend un peu de temps (l'arc du lob surtout) : on prévient plus tôt (s). */
+const SWING_LEAD = 0.18;
+/** Démo au stick droit : chemin du stick à la fin du geste, chaque point tenu `DEMO_HOLD` pas. */
+const DEMO_PATHS: Record<GestureEnd | 'flick', readonly [number, number][]> = {
+  straight: [[0, -0.3], [0, 0.4], [0, 0.9]],
+  arc: [[0.6, -0.8], [0.9, -0.3], [0.95, 0.2], [0.6, 0.75]],
+  letGo: [[0, 0], [0, 0], [0, 0], [0, 0]],
+  // Sans préparation : un coup sec vers l'avant depuis le centre.
+  flick: [[0, 0.9], [0, 0.9], [0, 0]],
+};
+const DEMO_HOLD = 5;
+/** Ce qu'il faut faire au moment de la frappe, au stick droit. */
+const SWING_PROMPT: Record<GestureEnd | 'flick', string> = {
+  straight: 'Tout droit !',
+  arc: 'En arc, par un côté !',
+  letGo: 'Lâche !',
+  flick: 'Coup sec vers l’avant !',
+};
 const START_BUTTON = 9;
 
 /**
@@ -43,6 +62,7 @@ const START_BUTTON = 9;
 export function startTutorial(canvas: HTMLCanvasElement): void {
   const settings = loadSettings(new URLSearchParams(location.search));
   const duel = new Duel(null);
+  duel.highFloor = highFloorFromUrl();
   const feel = loadFeel();
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   duel.profile.rally.pressure.scale = settings.pressure;
@@ -53,7 +73,9 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   const sounds = createSounds();
   for (const type of ['pointerdown', 'keydown'] as const) window.addEventListener(type, () => sounds.unlock(), { once: true });
   window.addEventListener('gamepadconnected', () => sounds.unlock());
-  const inputs = createInputDisplay();
+  /** Frappe au geste du stick droit, une par manette. */
+  const swings = swingEnabled() ? ([new SwingStick(), new SwingStick()] as const) : null;
+  const inputs = createInputDisplay(swings);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   const padTest = createPadTest(
@@ -64,12 +86,14 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     },
   );
 
+  /** Leçons proposées : celles au stick droit, sauf avec `?boutons=1` (toutes). */
+  const LIST: readonly Lesson[] = buttonsEnabled() ? LESSONS : LESSONS.filter((l) => l.stick);
   const progress = loadProgress();
   const params = new URLSearchParams(location.search);
-  const first = LESSONS.findIndex((l) => l.id === params.get('lecon'));
+  const first = LIST.findIndex((l) => l.id === params.get('lecon'));
   let selected = Math.max(0, first);
   let phase: Phase = 'list';
-  let lesson: Lesson = LESSONS[selected]!;
+  let lesson: Lesson = LIST[selected]!;
   let attempt = 0;
   let successes = 0;
   let guidedSuccesses = 0;
@@ -87,15 +111,18 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   const buttons: [InputSource, null] = [{ kind: 'keyboard', player: 0 }, null];
   let lastSourceKey = '';
 
-  const readPlayer = (): PadState => {
+  /** `gesture` : fait avancer le geste du stick droit (une fois par pas de simulation, pas dans les menus). */
+  const readPlayer = (gesture = true): PadState => {
     const pad = connectedGamepads()[0];
     buttons[0] = pad
       ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
       : { kind: 'keyboard', player: 0, layout: keyboardLayout };
-    return mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(0));
+    return mergePads(pad ? readGamepad(pad, gesture ? swings?.[0] : undefined, SIM_DT) : IDLE_PAD, keyboard.read(0));
   };
 
   const expected = (): ShotKind => lesson.demo(attempt).kind;
+  /** Démo au stick droit : pas écoulés depuis que le démonstrateur a relâché, `null` tant qu'il prépare. */
+  let demoSwingTick: number | null = null;
   const phaseName: Partial<Record<Phase, string>> = { demo: 'Démo', guided: 'Essai guidé', solo: 'À toi' };
   const updateStatus = (): void => {
     const name = phaseName[phase];
@@ -110,11 +137,19 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     watcher = new AttemptWatcher(duel);
     verdictTick = null;
     view.setTarget(lesson.target(attempt));
+    demoSwingTick = null;
     demoBot =
       phase === 'demo'
-        ? new Bot(0, 7, { ...DEFAULT_BOT, release: { offset: 0, spread: 0 }, forced: lesson.demo(attempt) })
+        ? new Bot(0, 7, {
+            ...DEFAULT_BOT,
+            release: { offset: 0, spread: 0 },
+            forced: lesson.demo(attempt),
+          })
         : null;
-    panel.setInstruction(phase === 'demo' ? `Regarde : ${lesson.instruction(attempt)}` : lesson.instruction(attempt), buttons[0]);
+    panel.setInstruction(
+      phase === 'demo' ? `Regarde : ${lesson.instruction(attempt)} · {normal} pour passer la démo` : lesson.instruction(attempt),
+      buttons[0],
+    );
     panel.setPrompt(null, buttons[0]);
     updateStatus();
   };
@@ -129,7 +164,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     if (next === 'list') {
       view.setTarget(null);
       panel.setInstruction(null, buttons[0]);
-      panel.showList(LESSONS, progress, selected, buttons[0]);
+      panel.showList(LIST, progress, selected, buttons[0]);
     } else if (next === 'card') {
       panel.setInstruction(null, buttons[0]);
       panel.showCard(lesson, buttons[0]);
@@ -139,7 +174,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
       const stars = perfects >= PERFECTS_FOR_STAR ? 2 : 1;
       progress[lesson.id] = Math.max(progress[lesson.id] ?? 0, stars);
       saveProgress(progress);
-      panel.showDone(lesson, stars, perfects, selected < LESSONS.length - 1, buttons[0]);
+      panel.showDone(lesson, stars, perfects, selected < LIST.length - 1, buttons[0]);
     } else {
       panel.hideOverlay();
       startAttempt();
@@ -149,7 +184,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
 
   const openLesson = (index: number): void => {
     selected = index;
-    lesson = LESSONS[index]!;
+    lesson = LIST[index]!;
     attempt = successes = guidedSuccesses = failsInRow = perfects = 0;
     enter('card');
   };
@@ -163,8 +198,9 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   const confirm = (): void => {
     if (phase === 'list') openLesson(selected);
     else if (phase === 'card') enter('demo');
+    else if (phase === 'demo') enter('guided');
     else if (phase === 'done') {
-      if (selected < LESSONS.length - 1) openLesson(selected + 1);
+      if (selected < LIST.length - 1) openLesson(selected + 1);
       else enter('list');
     }
   };
@@ -209,6 +245,28 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     const me = duel.players[0];
     const button = `{${expected()}}`;
     const plan = me.engagement?.plan;
+    const stick = lesson.stick;
+    if (stick) {
+      const ball = duel.ball;
+      const coming = duel.phase === 'rally' && duel.lastHitter === 1 && ball !== null;
+      if (!stick.swing.prepared) {
+        // Sans préparation : rien à faire avant ; on prévient juste avant que la balle n'arrive (au-dessus de la
+        // tête : quand elle redescend à hauteur des yeux).
+        let now = false;
+        if (coming && stick.shot === 'bandeja') now = ball.vel.y < 0 && ball.pos.y <= me.height + 0.2;
+        else if (coming && ball.vel.z < 0) now = (me.pos.z - ball.pos.z) / ball.vel.z <= SWING_LEAD + 0.05;
+        panel.setPrompt(!coming ? null : now ? SWING_PROMPT.flick : 'Attends la balle…', buttons[0]);
+        return;
+      }
+      if (me.engagement && plan) {
+        // Coup haut : la balle en haut, bras tendu.
+        const release = me.engagement.kind === 'overhead' ? (duel.overheadReleaseTick(0) ?? plan.tick) : plan.tick;
+        const remaining = (release - duel.tick) * SIM_DT;
+        panel.setPrompt(remaining <= SWING_LEAD ? SWING_PROMPT[stick.swing.end ?? 'straight'] : 'Garde le stick tiré…', buttons[0]);
+      } else if (coming && !state.shot) panel.setPrompt('Tire le stick droit vers toi !', buttons[0]);
+      else panel.setPrompt(null, buttons[0]);
+      return;
+    }
     if (me.engagement && plan) {
       // Coup haut (bandeja) : la balle qui redescend à hauteur des yeux.
       const release = expected() === 'overhead' ? (duel.overheadReleaseTick(0, false) ?? plan.tick) : plan.tick;
@@ -223,9 +281,21 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   const loop = new FixedStepLoop(SIM_DT, () => {
     // Hors essai (carte, liste, fin de leçon) : plus rien ne bouge, même dans les pas restants de l'image.
     if (SPEED[phase] === undefined) return;
-    const state = readPlayer();
+    // Pendant la démo, le stick droit du joueur ne joue pas : le guide montre le geste du démonstrateur.
+    const state = readPlayer(!demoBot);
     let blue: ArcadeCommands = toCommands(state, true);
-    if (demoBot) {
+    if (demoBot && lesson.stick && swings) {
+      const gesture = lesson.stick.swing;
+      blue = { ...demoBot.commands(duel), swing: { ...gesture } };
+      // Le guide dessine le geste équivalent : préparation tenue (ou rien sans préparation), puis la fin du geste.
+      if (!blue.shot && demoSwingTick === null && duel.players[0].engagement) demoSwingTick = 0;
+      const path = DEMO_PATHS[gesture.prepared ? (gesture.end ?? 'straight') : 'flick'];
+      const step = demoSwingTick === null ? -1 : Math.floor(demoSwingTick++ / DEMO_HOLD);
+      const hold: [number, number] = blue.shot && gesture.prepared ? [0, -1] : [0, 0];
+      const [right, up] = step < 0 ? hold : (path[step] ?? (step < path.length + 12 ? path[path.length - 1]! : [0, 0]));
+      swings[0].update(right, up, SIM_DT);
+      states[0] = { stick: { up: 0, right: 0 }, shot: blue.shot, assistButton: false, swing: { right, up, shot: blue.shot } };
+    } else if (demoBot) {
       blue = demoBot.commands(duel);
       // La démo montre les boutons du démonstrateur, comme s'il tenait la manette du joueur.
       states[0] = { stick: { up: blue.stick.forward, right: blue.stick.right }, shot: blue.shot, assistButton: false };
@@ -262,8 +332,8 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   let previous: PadState = IDLE_PAD;
   let startHeld = false;
   const navigate = (): void => {
-    const state = readPlayer();
-    const pressed = (kind: ShotKind): boolean => state.shot === kind && previous.shot !== kind;
+    const state = readPlayer(false);
+    const pressed = (kind: ShotKind): boolean => (state.face ?? state.shot) === kind && (previous.face ?? previous.shot) !== kind;
     const start = connectedGamepads().some((p) => p.buttons[START_BUTTON]?.pressed ?? false);
     if (!padTest.isOpen) {
       if (start && !startHeld) back();
@@ -271,10 +341,12 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
         const step = (v: number): number => (v > 0.6 ? 1 : v < -0.6 ? -1 : 0);
         const move = step(state.stick.up);
         if (move !== 0 && move !== step(previous.stick.up)) {
-          selected = (selected - move + LESSONS.length) % LESSONS.length;
-          panel.showList(LESSONS, progress, selected, buttons[0]);
+          selected = (selected - move + LIST.length) % LIST.length;
+          panel.showList(LIST, progress, selected, buttons[0]);
         } else if (pressed('normal')) confirm();
       } else if ((phase === 'card' || phase === 'done') && pressed('normal')) confirm();
+      // Démo au ralenti : le bouton de validation la passe, direct aux essais guidés.
+      else if (phase === 'demo' && pressed('normal')) confirm();
     }
     startHeld = start;
     previous = state;
@@ -282,7 +354,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     const key = sourceKey(buttons[0]);
     if (key !== lastSourceKey) {
       lastSourceKey = key;
-      if (phase === 'list') panel.showList(LESSONS, progress, selected, buttons[0]);
+      if (phase === 'list') panel.showList(LIST, progress, selected, buttons[0]);
       else if (phase === 'card') panel.showCard(lesson, buttons[0]);
     }
   };

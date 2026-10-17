@@ -35,7 +35,10 @@ export type ShotKind = 'normal' | 'slice' | 'lob' | 'overhead';
  * l'avant, à plat, seulement près du filet ; la bajada, stick vers l'avant sur une balle haute qui ressort
  * de la vitre du fond : une attaque jouée depuis le fond.
  */
-export type OverheadKind = 'bandeja' | 'vibora' | 'remate' | 'bajada';
+export type OverheadKind = 'bandeja' | 'vibora' | 'remate' | 'bajada' | 'feinte';
+
+/** Fin d'un geste préparé au stick droit : tout droit, en arc, ou lâché (`src/input/swingStick.ts`). */
+export type SwingEnd = 'straight' | 'arc' | 'letGo';
 
 /**
  * Commandes d'un joueur de l'échange arcade pour un pas de simulation, quelle que soit la source
@@ -47,6 +50,11 @@ export interface ArcadeCommands {
   stick: { forward: number; right: number };
   /** Bouton de coup maintenu, ou `null`. Seul l'appui (front montant) déclenche un coup. */
   shot: ShotKind | null;
+  /**
+   * Coup joué au stick droit : préparé (stick tiré vers soi) ou non (coup sec), et la fin du geste, connue au
+   * relâcher. La simulation choisit alors le coup selon la balle (`Duel.swingShot`).
+   */
+  swing?: { prepared: boolean; end?: SwingEnd };
 }
 
 export const NEUTRAL_ARCADE: ArcadeCommands = { stick: { forward: 0, right: 0 }, shot: null };

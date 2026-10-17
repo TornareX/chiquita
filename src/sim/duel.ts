@@ -1,7 +1,7 @@
 import { flatDistance, planIntercept, ticksToHeight, type Intercept } from './assist';
 import { createBall, type Ball } from './ball';
 import { stepBall, type Contact } from './collisions';
-import { NEUTRAL_ARCADE, type ArcadeCommands, type OverheadKind, type ShotKind } from './commands';
+import { NEUTRAL_ARCADE, type ArcadeCommands, type OverheadKind, type ShotKind, type SwingEnd } from './commands';
 import { HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
 import type { WallId } from './court';
 import { ARCADE, type PhysicsProfile } from './profile';
@@ -55,7 +55,15 @@ export interface Engagement {
   manual: boolean;
   /** Stick au moment de l'appui : seul un changement après l'appui compte comme reprise en main. */
   pressStick: ArcadeCommands['stick'];
+  /** Coup joué au stick droit (`ArcadeCommands.swing`) : préparation, et fin du geste une fois connue. */
+  swing?: { prepared: boolean; end?: SwingEnd };
 }
+
+/**
+ * Seuil des coups au-dessus de la tête au stick droit : les épaules (par défaut), les yeux ou le dessus de la
+ * tête. Au-dessus, bandeja, víbora, smash ou feinte ; en dessous, volée ou coup au sol.
+ */
+export type HighFloor = 'epaules' | 'yeux' | 'tete';
 
 export interface DuelPlayer {
   side: CourtSide;
@@ -141,12 +149,13 @@ export function shotStyle(
   stick: ArcadeCommands['stick'],
   prepared: number,
   profile: PhysicsProfile,
+  touch = false,
 ): ShotStyle | null {
   const r = profile.rally;
   if (outside || (kind !== 'slice' && kind !== 'normal')) return null;
   if (prepared < r.blockPrep) return 'block';
   if (kind === 'slice' && volley) return 'cut';
-  if (kind === 'slice' && stick.forward <= -r.overheadStick) return 'chiquita';
+  if (kind === 'slice' && (touch || stick.forward <= -r.overheadStick)) return 'chiquita';
   return null;
 }
 
@@ -289,6 +298,8 @@ export class Duel {
   tick = 0;
   profile: PhysicsProfile = structuredClone(ARCADE);
   players: [DuelPlayer, DuelPlayer] = [createDuelPlayer(-1), createDuelPlayer(1)];
+  /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`). */
+  highFloor: HighFloor = 'epaules';
   ball: Ball | null = null;
   prevBallPos: Vec3 | null = null;
   readonly contacts: Contact[] = [];
@@ -509,6 +520,8 @@ export class Duel {
       if (player.engagement) {
         player.engagement.kind = pressed;
         player.engagement.releaseTick = null;
+        if (cmd.swing) player.engagement.swing = { ...cmd.swing };
+        else delete player.engagement.swing;
       } else {
         player.engagement = {
           kind: pressed,
@@ -517,11 +530,14 @@ export class Duel {
           plan: null,
           manual: player.assist === 'off',
           pressStick: cmd.stick,
+          ...(cmd.swing ? { swing: { ...cmd.swing } } : {}),
         };
       }
     }
 
     const engagement = player.engagement;
+    // Fin du geste au stick droit : connue au relâcher.
+    if (engagement?.swing && cmd.swing?.end) engagement.swing.end = cmd.swing.end;
     const magnet = player.assist === 'magnet';
     if (engagement && this.isReceiving(index) && this.ball) {
       const plan = engagement.plan;
@@ -545,11 +561,22 @@ export class Duel {
             this.bounces > 0,
             overhead,
             player.height,
-            engagement.pressStick.forward >= r.overheadStick,
+            this.rematePrepared(index),
           );
         engagement.plan = plan(engagement.kind === 'overhead');
-        // B sur une balle qui ne monte pas assez : coup défensif, préparé comme un coup normal.
-        if (engagement.kind === 'overhead' && !engagement.plan?.reachable) {
+        // Balle qui ne monte pas assez pour un coup haut (B, ou geste au stick) : préparé comme un coup au sol
+        // ou une volée.
+        const belowFloor = (engagement.plan?.contact.y ?? 0) < this.overheadFloor(engagement, player.height);
+        if (engagement.swing && engagement.plan?.reachable && !belowFloor) {
+          // Au stick, le coup se choisit selon la balle : on prend la première balle jouable. Au-dessus de la
+          // tête si elle y passe d'abord (un lob) ; sinon au sol ou de volée, plutôt que d'attendre qu'elle
+          // remonte en sortant de la vitre.
+          // Après un rebond, au sol aussi, sauf si elle remonte vraiment haut (au moins aux yeux : un lob qui
+          // rebondit très haut, joué en bajada près de la vitre).
+          const low = plan(false);
+          const reallyHigh = engagement.plan.contact.y >= this.overheadFloor(engagement, player.height, !engagement.plan.volley);
+          if (low?.reachable && (low.tick < engagement.plan.tick || !reallyHigh)) engagement.plan = low;
+        } else if (engagement.kind === 'overhead' && (!engagement.plan?.reachable || belowFloor)) {
           const low = plan(false);
           if (low?.reachable || !engagement.plan) engagement.plan = low;
         }
@@ -691,13 +718,16 @@ export class Duel {
     const r = this.profile.rally;
     // Au-dessus de la tête : la balle se prend haute, à la hauteur prévue par la course assistée.
     const overhead = engagement.kind === 'overhead';
-    const plannedHigh = overhead && (engagement.plan?.contact.y ?? 0) >= r.overheadLow;
+    const plannedHigh = overhead && (engagement.plan?.contact.y ?? 0) >= this.overheadFloor(engagement, player.height);
     // Balle haute relâchée en retard : descendue sous la zone du coup haut, le joueur fait quand même son
     // geste (trop bas : filet), tant qu'elle n'est pas tombée sous les épaules.
-    const high = overhead && (ball.pos.y >= r.overheadLow || (plannedHigh && ball.pos.y >= r.overheadMissLow));
+    // Au stick, seulement en retard (le moment prévu est passé) : avant, la balle basse se joue comme elle vient.
+    const late = !engagement.swing || (engagement.plan !== null && this.tick >= engagement.plan.tick);
+    const high =
+      overhead && (ball.pos.y >= this.overheadFloor(engagement, player.height) || (plannedHigh && late && ball.pos.y >= r.overheadMissLow));
     // Hauteur de référence du timing : celle du coup joué. Remate : bras tendu (`overheadIdeal`), plus haut et
     // plus tôt que le point prévu par la course assistée (les yeux, pour la bandeja et la víbora).
-    const smash = high && overheadKind(player.stick, ball.pos, this.profile, this.bounces > 0 && this.touchedGlass) === 'remate';
+    const smash = high && this.overheadVariant(index, ball.pos) === 'remate';
     const ideal = !high ? null : smash ? r.overheadIdeal : Math.max(r.overheadLow, engagement.plan?.contact.y ?? bandejaHeight(this.profile, player.height));
     const { timing, miss } = contactTiming(ball, player, high ? r.overheadLateral : r.standLateral, ideal);
     const heightOk = ball.pos.y >= r.hitLow && ball.pos.y <= (overhead ? r.overheadHigh : r.hitHigh);
@@ -719,7 +749,7 @@ export class Duel {
     const volley = this.bounces === 0;
     const outside = outsideCourt(ball.pos);
     // Dehors, on renvoie la balle en lob par-dessus le mur ; B sur une balle basse : coup défensif, coupé.
-    const kind: ShotKind = high && !outside ? 'overhead' : outside ? 'lob' : engagement.kind === 'overhead' ? 'slice' : engagement.kind;
+    const kind: ShotKind = high && !outside ? 'overhead' : outside ? 'lob' : this.lowShotKind(engagement, volley);
     // Balle verte, jaune ou rouge : sous pression, la sous-fenêtre parfaite rétrécit (réflexes).
     const pressure = this.pressureOf(index, kind, ball.pos.y, Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2), length(player.vel));
     const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure;
@@ -728,25 +758,34 @@ export class Duel {
     let error = shotError(pressure, timing, miss, perfect, this.profile);
     if (kind === 'overhead') {
       error *= r.pressure.overheadFactor;
-      const variant = overheadKind(player.stick, ball.pos, this.profile, this.bounces > 0 && this.touchedGlass);
+      const variant = this.overheadVariant(index, ball.pos);
+      // Bandeja et víbora : la hauteur fait la frappe parfaite (aux yeux, alignée), pas le moment prévu par la
+      // course assistée, qui vise la hauteur du remate près du filet. Au stick, la víbora est préparée comme le
+      // smash : elle se juge au moment, comme lui.
+      const byHeight = variant === 'bandeja' || (variant === 'vibora' && !engagement.swing);
       // Bandeja et víbora : la hauteur de frappe compte (trop haute, elle rebondit ; trop basse, filet).
-      const heightOff = variant === 'bandeja' || variant === 'vibora' ? overheadHeightOff(ball.pos.y, this.profile, player.height) : 0;
-      // Bandeja et víbora : la hauteur fait la frappe parfaite (aux yeux, alignée), pas le moment prévu
-      // par la course assistée, qui vise la hauteur du remate près du filet.
-      const byHeight = variant === 'bandeja' || variant === 'vibora';
+      const heightOff = byHeight ? overheadHeightOff(ball.pos.y, this.profile, player.height) : 0;
       const clean = byHeight ? heightOff === 0 && miss <= r.sweetSpot : perfect;
-      let aimed = overheadTarget(variant, player.side, player.stick, clean, this.profile, ball.pos.x);
+      // Smash au stick joué loin du filet : il ne sort pas du terrain (pas de por tres), l'adversaire peut contrer.
+      const far = variant === 'remate' && Math.abs(ball.pos.z) > r.remateZone;
+      let aimed = overheadTarget(variant, player.side, player.stick, clean && !far, this.profile, ball.pos.x);
       if (heightOff > 0) {
         const depth = Math.min(HALF_LENGTH_SAFE, Math.abs(aimed.z) + heightOff * r.overheadHighDepth);
         aimed = vec3(aimed.x, aimed.y, -player.side * depth);
       }
       const target = byHeight ? aimed : lateDrift(aimed, player.side, timing, this.profile);
-      this.hit(index, kind, ball.pos, target, clean, timing, volley, false, engagement.manual, { overhead: variant, pressure, error, heightOff });
+      this.hit(index, kind, ball.pos, target, clean, timing, volley, false, engagement.manual, {
+        overhead: variant,
+        pressure,
+        error,
+        heightOff,
+      });
       return;
     }
-    // Toucher : volée coupée sur une balle flottante, chiquita au stick vers soi, ou blocage sans préparation.
-    const prepared = (this.tick - engagement.pressTick) * SIM_DT;
-    const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile);
+    // Toucher : volée coupée sur une balle flottante, chiquita (stick vers soi, ou geste lâché), ou blocage sans
+    // préparation (au stick : le coup sec, sans tirer le stick vers soi).
+    const prepared = engagement.swing && !engagement.swing.prepared ? 0 : (this.tick - engagement.pressTick) * SIM_DT;
+    const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile, engagement.swing?.end === 'letGo');
     // La volée coupée demande du temps : pressée, elle rate plus souvent (plus haute, plus longue).
     if (style === 'cut') error = Math.min(1, error * (1 + r.pressure.cutRush * pressure));
     const tuning = style === 'cut' || style === 'chiquita' ? style : kind;
@@ -773,23 +812,85 @@ export class Duel {
     return ballPressure({ prep: (tick - opponent.lastHitTick) * SIM_DT, height, speed: felt, running, doubleGlass, kind }, this.profile);
   }
 
+  /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`), pour un joueur de cette taille (m). */
+  swingFloor(playerHeight: number): number {
+    if (this.highFloor === 'tete') return playerHeight;
+    if (this.highFloor === 'yeux') return bandejaHeight(this.profile, playerHeight);
+    return this.profile.rally.overheadLow * (playerHeight / PLAYER_HEIGHT);
+  }
+
+  /**
+   * Hauteur à partir de laquelle un coup haut préparé se joue au-dessus de la tête : les épaules pour B, le seuil
+   * réglé au stick. Au stick, après un rebond, au moins les yeux : une balle de fond qui ressort de la vitre à
+   * hauteur d'épaules se joue au sol ; un lob qui rebondit très haut, en bajada.
+   */
+  private overheadFloor(engagement: Engagement, playerHeight: number, bounced = this.bounces > 0): number {
+    if (!engagement.swing) return this.profile.rally.overheadLow;
+    const floor = this.swingFloor(playerHeight);
+    return bounced ? Math.max(floor, bandejaHeight(this.profile, playerHeight) - 0.02) : floor;
+  }
+
+  /**
+   * Coup joué sur une balle qui n'est pas haute :
+   * - B sur une balle basse : coup défensif, coupé ;
+   * - au stick droit : de volée, volée coupée si préparée (bloquée sinon, faute de préparation) ; après le
+   *   rebond, coup normal (tout droit, ou sans préparation : moins fort), lob (en arc), chiquita (lâché).
+   */
+  private lowShotKind(engagement: Engagement, volley: boolean): ShotKind {
+    const swing = engagement.swing;
+    if (swing) {
+      if (volley) return swing.prepared ? 'slice' : 'normal';
+      if (!swing.prepared) return 'normal';
+      return swing.end === 'arc' ? 'lob' : swing.end === 'letGo' ? 'slice' : 'normal';
+    }
+    if (engagement.kind === 'overhead') return 'slice';
+    return engagement.kind;
+  }
+
+  /**
+   * Remate préparé : au stick, tout geste préparé (smash, víbora, feinte : même préparation) ; sinon stick vers
+   * l'avant à l'appui (ou maintenant, avec `now`). La course assistée vise alors la hauteur du remate.
+   */
+  rematePrepared(index: 0 | 1, now = false): boolean {
+    const player = this.players[index];
+    const swing = player.engagement?.swing;
+    if (swing) return swing.prepared;
+    const r = this.profile.rally;
+    return (now && player.stick.forward >= r.overheadStick) || (player.engagement?.pressStick.forward ?? 0) >= r.overheadStick;
+  }
+
+  /**
+   * Variante du coup haut joué en `contact`. Au stick droit : sans préparation, bandeja ; préparé, smash (tout
+   * droit ; bajada sur la balle sortie de la vitre), víbora (en arc), feinte (lâché). Sinon, d'après le stick
+   * de déplacement.
+   */
+  overheadVariant(index: 0 | 1, contact: Vec3): OverheadKind {
+    const player = this.players[index];
+    const swing = player.engagement?.swing;
+    const afterGlass = this.bounces > 0 && this.touchedGlass;
+    if (swing) {
+      if (!swing.prepared) return 'bandeja';
+      if (swing.end === 'arc') return 'vibora';
+      if (swing.end === 'letGo') return 'feinte';
+      return afterGlass ? 'bajada' : 'remate';
+    }
+    return overheadKind(player.stick, contact, this.profile, afterGlass);
+  }
+
   /**
    * Moment idéal pour relâcher un coup haut préparé : quand la balle redescend à hauteur des yeux
    * (bandeja, víbora), ou plus haut pour le remate (`smash` : stick vers l'avant, à l'appui ou maintenant).
    * `null` hors coup haut.
    */
-  overheadReleaseTick(
-    index: 0 | 1,
-    smash = this.players[index].stick.forward >= this.profile.rally.overheadStick ||
-      (this.players[index].engagement?.pressStick.forward ?? 0) >= this.profile.rally.overheadStick,
-  ): number | null {
+  overheadReleaseTick(index: 0 | 1, smash = this.rematePrepared(index, true)): number | null {
     const player = this.players[index];
     const plan = player.engagement?.plan;
     const ball = this.ball;
     if (player.engagement?.kind !== 'overhead' || !plan || !ball) return null;
     const r = this.profile.rally;
-    // Balle trop basse pour un coup haut : préparé comme un coupé, au point prévu.
-    if (plan.contact.y < r.overheadLow) return plan.tick;
+    // Balle trop basse pour un coup haut : préparé comme un coupé, au point prévu. Au stick, un coup préparé se
+    // finit au point prévu par la course assistée (bras tendu près du filet).
+    if (plan.contact.y < r.overheadLow || player.engagement.swing?.prepared) return plan.tick;
     const target = smash ? r.overheadIdeal : bandejaHeight(this.profile, player.height);
     if (Math.abs(plan.contact.y - target) <= r.overheadBand) return plan.tick;
     if (ball.vel.y < 0 && ball.pos.y <= target) return this.tick;

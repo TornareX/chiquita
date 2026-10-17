@@ -1,6 +1,7 @@
 import { crowdReaction } from '../audio/recipes';
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands, type PadState } from '../input/gamepad';
+import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
@@ -48,6 +49,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const rulesOf = (s: DuelSettings): MatchRules | null =>
     s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint };
   const duel = new Duel(rulesOf(settings));
+  duel.highFloor = highFloorFromUrl();
   // Sensations réglées dans le labo, si on a choisi de les garder en match.
   const feel = loadFeel();
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
@@ -82,7 +84,9 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     },
   );
   const menu = createSettingsMenu(settings, apply, () => padTest.open());
-  const inputs = createInputDisplay();
+  /** Frappe au geste du stick droit, une par manette. */
+  const swings = swingEnabled() ? ([new SwingStick(), new SwingStick()] as const) : null;
+  const inputs = createInputDisplay(swings);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
@@ -105,7 +109,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       }
       const pad = pads[index];
       sources[index] = pad ? `Manette ${index + 1}` : 'Clavier';
-      const state: PadState = mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(index));
+      const state: PadState = mergePads(pad ? readGamepad(pad, swings?.[index], SIM_DT) : IDLE_PAD, keyboard.read(index));
       states[index] = state;
       buttons[index] = pad
         ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }

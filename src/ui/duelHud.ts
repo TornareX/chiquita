@@ -1,7 +1,8 @@
+import { buttonsEnabled } from '../input/gamepad';
 import type { OverheadKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
 import type { AssistLevel, Duel, DuelShot, PointReason, ServeFault } from '../sim/duel';
-import { buttonIcon, formatButtons, sourceKey, type InputSource } from './buttonIcons';
+import { buttonIcon, escapeHtml, formatButtons, sourceKey, type InputSource } from './buttonIcons';
 
 export interface DuelHud {
   /**
@@ -45,7 +46,18 @@ const SERVE_FAULTS: Record<ServeFault, string> = {
 
 const COLORS = ['#8cc4ff', '#ff9aa3'] as const;
 
-/** Aide en bas à droite : les jetons `{normal}`… deviennent les boutons de la manette ou du clavier du joueur. */
+/** Aide en bas à droite, tout aux sticks (les boutons sont cachés). */
+const STICK_HELP = [
+  'Stick gauche : se placer, puis viser au moment de la frappe (haut = profond)',
+  'Stick droit tiré vers toi : préparer (plus tu as le temps, plus le coup est fort et précis)',
+  'Puis tout droit : coup normal · en arc : lob · lâché : chiquita',
+  'De volée : préparé = volée coupée · coup sec vers l’avant sans préparer = volée bloquée',
+  'Au-dessus de la tête : tout droit = smash · en arc = víbora · lâché = feinte · coup sec = bandeja',
+  'Service : tire le stick vers toi pour lâcher la balle, ramène-le tout droit au sommet du rebond',
+  'Assistance : bouton Affichage · Réglages : Start',
+];
+
+/** Aide aux boutons (`?boutons=1`) : les jetons `{normal}`… deviennent les boutons de la manette ou du clavier du joueur. */
 const HELP = [
   '{normal} coup normal · {slice} coupé · {lob} lob : maintiens, relâche quand l’anneau se referme',
   'Anneau vert : balle facile (lob, chiquita, attaque) · jaune : transition · rouge : balle dure, remets-la bas',
@@ -59,9 +71,10 @@ const HELP = [
 ];
 
 const OVERHEADS: Record<OverheadKind, string> = {
+  feinte: 'feinte de smash',
   bandeja: 'bandeja',
   vibora: 'víbora',
-  remate: 'remate',
+  remate: 'smash',
   bajada: 'bajada',
 };
 
@@ -108,7 +121,7 @@ export function createDuelHud(): DuelHud {
       const key = sourceKey(main);
       if (key !== helpKey) {
         helpKey = key;
-        help.innerHTML = HELP.map((line) => formatButtons(line, main)).join('<br>');
+        help.innerHTML = buttonsEnabled() ? HELP.map((line) => formatButtons(line, main)).join('<br>') : STICK_HELP.map(escapeHtml).join('<br>');
       }
       const match = duel.match;
       score.style.display = match ? '' : 'none';
@@ -162,7 +175,9 @@ export function createDuelHud(): DuelHud {
       if (duel.phase === 'serve') {
         message.style.color = '#f2f5f7';
         const second = duel.serveNumber === 2 ? ' (second service)' : '';
-        message.innerHTML = `${NAMES[duel.server]} au service${second} : maintiens ${buttonIcon('normal', buttons[duel.server] ?? main)}`;
+        message.innerHTML = buttonsEnabled()
+          ? `${NAMES[duel.server]} au service${second} : maintiens ${buttonIcon('normal', buttons[duel.server] ?? main)}`
+          : `${NAMES[duel.server]} au service${second} : tire le stick droit vers toi`;
       } else if (duel.phase === 'dead' && call) {
         message.style.color = '#ffe27a';
         message.textContent = call.call === 'let' ? 'Let : service à rejouer' : `Faute : ${SERVE_FAULTS[call.reason!]}`;

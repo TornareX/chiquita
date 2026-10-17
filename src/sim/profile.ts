@@ -270,6 +270,11 @@ export interface RallyTuning {
   slice: ShotTypeTuning;
   lob: ShotTypeTuning;
   bandeja: ShotTypeTuning;
+  /**
+   * Feinte de smash (stick droit préparé puis lâché, au-dessus de la tête) : armée comme un smash, mais
+   * frappée lentement et coupée ; la balle meurt vers la vitre après son deuxième rebond.
+   */
+  feinte: ShotTypeTuning;
   vibora: ShotTypeTuning;
   remate: ShotTypeTuning;
   /** Bajada : attaque depuis le fond sur la balle haute qui ressort de la vitre, à plat, profonde. */
@@ -594,6 +599,17 @@ export const REALISTIC: PhysicsProfile = {
       depthNeutral: 8.2,
       depthLong: 8.9,
       spin: -0.3,
+    },
+    feinte: {
+      speed: 9, // ~32 km/h : lente, elle surprend l'adversaire qui recule pour le smash [à calibrer en jouant]
+      speedPerfect: 9,
+      clearance: 0.5,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 4,
+      depthNeutral: 5.5,
+      depthLong: 6.5,
+      spin: -0.6,
     },
     vibora: {
       speed: 26, // ~95 km/h

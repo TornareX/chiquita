@@ -1,5 +1,6 @@
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, toCommands, type PadState } from '../input/gamepad';
+import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
@@ -27,6 +28,7 @@ const REPLAY_DELAY = 1;
  */
 export function startLabo(canvas: HTMLCanvasElement): void {
   const duel = new Duel(null);
+  duel.highFloor = highFloorFromUrl();
   const stored = loadFeel();
   applyFeel(duel.profile, stored.feel);
   const settings = loadSettings(new URLSearchParams());
@@ -77,7 +79,9 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     if (event.code === 'KeyR' && !event.repeat) replay();
   });
 
-  const inputs = createInputDisplay();
+  /** Frappe au geste du stick droit, une par manette. */
+  const swings = swingEnabled() ? ([new SwingStick(), new SwingStick()] as const) : null;
+  const inputs = createInputDisplay(swings);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   const states: [PadState | null, null] = [null, null];
@@ -86,7 +90,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   const sample = (): [ArcadeCommands, ArcadeCommands] => {
     const pad = connectedGamepads()[0];
     sources[0] = pad ? 'Manette 1' : 'Clavier';
-    const state = mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(0));
+    const state = mergePads(pad ? readGamepad(pad, swings?.[0], SIM_DT) : IDLE_PAD, keyboard.read(0));
     states[0] = state;
     buttons[0] = pad ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) } : { kind: 'keyboard', player: 0, layout: keyboardLayout };
     return [toCommands(state, true), bot.commands(duel)];
