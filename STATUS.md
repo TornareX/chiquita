@@ -427,3 +427,34 @@ l'un sur l'autre. Les fins de point ressemblent au simple (deuxième rebond surt
 Reste : jouer à 4 vraies manettes (critère de l'étape) ; calibrer les profondeurs et l'écart ; escalonné, poach
 du joueur de gauche, recroisement après un cambio, lecture du lob adverse (demi-pas en arrière) ; la caméra quand
 les quatre sont au filet.
+
+## Étape E1 : personnages cartoon et course (17/10/2026, branche `feat/etape-e`)
+
+Première étape du plan « Style et juice » (GAME_DESIGN.md §12, étape E), validée avec Xavier : style grosse tête
+façon Wii Sports, quatre personnages inventés aux caractéristiques identiques, tout fait main. La simulation ne
+change pas (`git diff src/sim` vide ; mêmes images de jeu avant/après sur la même graine). 439 tests OK (dont
+`tests/render/pose.test.ts`, 7 tests), typecheck OK, joueur automatique de jouabilité OK, 20 tests navigateur OK
+(trois relancés seuls : chargement des modèles et manette virtuelle trop lents en parallèle). **Pas encore joué à la manette.**
+
+- **Personnages** (`src/render/character.ts`) : Lucho (Bleu 1, casquette), Paloma (Rouge 1, queue de cheval et
+  bandeau), Inés (Bleu 2, chignon et visière), Nico (Rouge 2, boucles et bandeau). Maillot à la couleur de l'équipe
+  (plus claire pour le partenaire), grosse tête dont le haut est à la taille du joueur, ombrage en trois aplats
+  (`MeshToonMaterial`), contour sombre de 1,8 cm, yeux visibles sur les joueurs d'en face. Mis à l'échelle de
+  `DuelPlayer.height`. Les noms ne sont pas encore affichés (le HUD dit toujours Bleu 1, Rouge 2…).
+- **Poses** (`src/render/pose.ts`, fonctions pures) : attente genoux fléchis avec petits rebonds, repos entre les
+  points, course avec foulée calée sur la distance parcourue (pas de pieds qui glissent), pas chassés quand il se
+  déplace lentement de côté, corps tourné dans le sens de la course quand il court vite (de trois quarts en reculant).
+- **Le geste suit enfin la simulation** : avant, la raquette partait de l'arrière *au moment* du contact. Maintenant,
+  la préparation (de l'appui au relâcher) arme le buste et la raquette, de plus en plus jusqu'à 0,6 s (on voit le
+  bonus de préparation du §13) ; l'image d'impact tombe sur le pas du contact (`lastHitTick`, figée pendant la
+  micro-pause d'une frappe parfaite), puis la fin du geste (0,28 s) et le retour en attente (0,3 s). Coup droit ou
+  revers selon le côté de la balle prévue (droitiers), coup au-dessus de la tête bras levé, service à la cuillère,
+  coup dans le vide avec le même geste.
+- `?camera=proche` : caméra de côté près du joueur 1, pour juger les poses.
+- Fluidité : 60 images/s stables en simple et en double (Chromium sans affichage, 1280 × 720).
+- Captures avant/après : `screenshots/40-etape-e1-avant-apres.png`.
+
+Reste pour E2 (frappes calées par famille) : volée, lob, chiquita et smash ont pour l'instant le geste générique de
+leur famille (coup droit, revers, au-dessus de la tête) ; pas encore de trait de mouvement à l'impact ni d'allonge
+quand la balle est loin du corps. Ensuite : E3 effets de balle et de vitre, E4 replay ralenti, E5 célébrations,
+E6 arène et public, E7 sons, E8 clip de validation.

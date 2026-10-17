@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { BALL_RADIUS, HALF_LENGTH, SIM_DT } from '../sim/constants';
+import { BALL_RADIUS, HALF_LENGTH, PLAYER_HEIGHT, SIM_DT } from '../sim/constants';
 import type { CallKind, Duel, DuelPlayer } from '../sim/duel';
 import { predictBall } from '../sim/predict';
 import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
 import { createCourt } from './court';
+import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { loadModel, modelsEnabled } from './models';
+import { bodyYawTarget, computePose, STRIDE, swingSide, type SwingFamily } from './pose';
 
 export interface DuelView {
   render(alpha: number, frameTime: number): void;
@@ -52,8 +54,10 @@ const SHADOW_RADIUS = 0.1;
 /** Part du déplacement latéral du joueur suivie par la caméra, et lissage (1/s) : à peine, comme à la télé. */
 const CAMERA_FOLLOW = 0.15;
 const CAMERA_SMOOTHING = 4;
-/** Durée de l'animation de frappe (s). */
-const SWING_TIME = 0.28;
+/** Lissage (1/s) de la rotation du corps quand il se tourne pour courir. */
+const BODY_TURN = 10;
+/** Hauteur des épaules d'un joueur de 1,80 m : au-dessus, le geste se prépare au-dessus de la tête. */
+const SHOULDERS = 1.45;
 
 /**
  * Côté caméra, tout ce qui dépasse la hauteur des vitres près du fond (grillage, montants) est
@@ -81,7 +85,9 @@ function clipNearWall(court: THREE.Object3D): void {
 
 interface PlayerView {
   object: THREE.Group;
-  racket: THREE.Group;
+  /** Personnage cartoon et son état d'animation, propre au rendu. */
+  rig: CharacterRig;
+  anim: { yaw: number; stride: number; side: 'fore' | 'back'; last: { x: number; z: number } | null };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
    * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
@@ -139,14 +145,9 @@ function drawBubble(sprite: THREE.Sprite, text: string, color: number): void {
 /** L'anneau commence à se resserrer ce temps avant l'impact (s). */
 const RING_LEAD = 0.6;
 
-function createPlayerView(color: number): PlayerView {
+function createPlayerView(color: number, index: number, height: number): PlayerView {
   const object = new THREE.Group();
-  const material = new THREE.MeshLambertMaterial({ color });
-  // Joueur de 1,80 m : corps de 34 cm de large en moyenne jusqu'au cou (1,56 m), tête de 22 cm.
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 1.22, 6, 16), material);
-  body.position.y = 0.78;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 14), new THREE.MeshLambertMaterial({ color: 0xf1c9a5 }));
-  head.position.y = 1.69;
+  const rig = createCharacter(CHARACTERS[index % CHARACTERS.length]!, color, height);
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.36, 24),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
@@ -154,29 +155,12 @@ function createPlayerView(color: number): PlayerView {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.006;
 
-  // Raquette aux dimensions réglementaires : 45,5 cm de long, tamis de 26 × 29 cm, 3,8 cm d'épaisseur.
-  // Tenue sur le côté droit du joueur, le manche vers l'avant (+Z), le tamis dans le plan YZ.
-  const racket = new THREE.Group();
-  const frame = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.13, 0.13, 0.038, 32),
-    new THREE.MeshLambertMaterial({ color: 0x20262c }),
-  );
-  frame.rotation.z = Math.PI / 2;
-  frame.scale.set(1, 1, 1.12);
-  frame.position.set(0, 0, 0.165 + 0.145);
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.165), new THREE.MeshLambertMaterial({ color: 0xe8e8e8 }));
-  handle.position.set(0, 0, 0.0825);
-  racket.add(frame, handle);
-  const pivot = new THREE.Group();
-  pivot.position.set(0, 1.0, 0);
-  pivot.add(racket);
-
   const timingMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false });
   const timingRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40), timingMaterial);
   timingRing.rotation.x = -Math.PI / 2;
   timingRing.position.y = 0.012;
 
-  object.add(body, head, shadow, pivot, timingRing);
+  object.add(rig.object, shadow, timingRing);
 
   const standMarker = new THREE.Mesh(
     new THREE.RingGeometry(0.12, 0.18, 24),
@@ -184,7 +168,8 @@ function createPlayerView(color: number): PlayerView {
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  return { object, racket: pivot, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
+  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', last: null };
+  return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
 /** Agrandissement à appliquer à un objet de diamètre `size` à cette position pour le voir à `BALL_MIN_SCREEN`. */
@@ -288,7 +273,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   const syncPlayers = (): void => {
     while (players.length < duel.players.length) {
       const i = players.length;
-      const view = createPlayerView(i < 2 ? TEAM_COLORS[i]! : PARTNER_COLORS[i - 2]!);
+      const view = createPlayerView(i < 2 ? TEAM_COLORS[i]! : PARTNER_COLORS[i - 2]!, i, duel.players[i]!.height);
       scene.add(view.object, view.standMarker, view.bubble);
       players.push(view);
     }
@@ -328,6 +313,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   }
 
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 200);
+  /** `?camera=proche` : caméra de côté, près du joueur 1, pour juger les poses du personnage. */
+  const closeCamera = new URLSearchParams(location.search).get('camera') === 'proche';
   let cameraX = 0;
   let shake = 0;
   let shakeTime = 0;
@@ -344,7 +331,67 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   window.addEventListener('resize', resize);
   resize();
 
-  const updatePlayer = (view: PlayerView, player: DuelPlayer, index: number, alpha: number): void => {
+  /**
+   * Pose du personnage, lue dans l'état de la simulation sans le modifier : préparation (de l'appui au
+   * relâcher), frappe (l'image d'impact tombe sur le pas du contact, `lastHitTick`), course et attente.
+   */
+  const animate = (view: PlayerView, player: DuelPlayer, pos: Vec3, alpha: number, frameTime: number): void => {
+    const f = player.side < 0 ? 1 : -1;
+    const scale = player.height / PLAYER_HEIGHT;
+    const now = duel.tick + alpha;
+    const localX = (p: Vec3): number => (p.x - pos.x) * f;
+
+    // Coup préparé : l'armé grandit avec le temps de préparation ; le côté suit la balle attendue.
+    const engagement = player.engagement;
+    const isServer = duel.players[duel.server] === player;
+    const toss = duel.phase === 'toss' && isServer ? duel.toss : null;
+    let prep: { family: SwingFamily; seconds: number } | null = null;
+    if (toss && toss.releaseTick === null) {
+      prep = { family: 'serve', seconds: (now - duel.phaseTick) * SIM_DT };
+    } else if (engagement && engagement.releaseTick === null) {
+      const target = engagement.plan?.contact ?? duel.ball?.pos ?? null;
+      if (target) view.anim.side = swingSide(localX(target), view.anim.side);
+      const high = engagement.kind === 'overhead' || (engagement.plan !== null && engagement.plan.contact.y > SHOULDERS * scale);
+      prep = { family: high ? 'overhead' : view.anim.side, seconds: (now - engagement.pressTick) * SIM_DT };
+    }
+
+    // Dernière frappe, ou coup dans le vide.
+    const whiffed = player.lastWhiffTick > player.lastHitTick;
+    const strikeTick = whiffed ? player.lastWhiffTick : player.lastHitTick;
+    let strike: { family: SwingFamily; seconds: number } | null = null;
+    if (Number.isFinite(strikeTick)) {
+      const hit = whiffed ? null : player.lastHit;
+      const kind = whiffed ? player.lastWhiffKind : hit?.kind;
+      if (hit && !hit.serve && kind !== 'overhead') view.anim.side = swingSide(localX(hit.contact), view.anim.side);
+      const family: SwingFamily = hit?.serve ? 'serve' : kind === 'overhead' ? 'overhead' : view.anim.side;
+      strike = { family, seconds: (now - strikeTick) * SIM_DT };
+    }
+
+    // Course : vitesse et direction dans le repère du filet ; la foulée avance avec la distance parcourue.
+    const speed = Math.hypot(player.vel.x, player.vel.z);
+    const heading = Math.atan2(player.vel.x * f, player.vel.z * f);
+    const last = view.anim.last;
+    if (last) view.anim.stride += (Math.hypot(pos.x - last.x, pos.z - last.z) / (STRIDE * scale)) * Math.PI * 2;
+    view.anim.last = { x: pos.x, z: pos.z };
+    const striking = prep !== null || (strike !== null && strike.seconds < 0.5);
+    const yawTarget = bodyYawTarget(speed, heading, striking);
+    view.anim.yaw += (yawTarget - view.anim.yaw) * (1 - Math.exp(-BODY_TURN * frameTime));
+
+    view.rig.apply(
+      computePose({
+        inPlay: duel.phase !== 'dead' && duel.phase !== 'over',
+        prep,
+        strike,
+        speed,
+        heading,
+        bodyYaw: view.anim.yaw,
+        stride: view.anim.stride,
+        time: now * SIM_DT,
+      }),
+    );
+  };
+
+  const updatePlayer = (view: PlayerView, player: DuelPlayer, index: number, alpha: number, frameTime: number): void => {
     const pos = lerp(player.prevPos, player.pos, alpha);
     view.object.position.set(pos.x, 0, pos.z);
     // Annonce entre partenaires, au-dessus de la tête pendant un court instant.
@@ -360,29 +407,9 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       view.bubble.scale.set(scale * 2.67, scale, 1);
       view.bubble.position.set(pos.x, 2.15 + scale * 0.5, pos.z);
     }
-    // Face au filet.
+    // Face au filet ; le repère du joueur a +Z vers le filet et sa droite vers -X.
     view.object.rotation.y = player.side < 0 ? 0 : Math.PI;
-
-    // Frappe, ou coup dans le vide : la raquette balaie de l'arrière vers l'avant ; sinon, position d'attente.
-    const whiffed = player.lastWhiffTick > player.lastHitTick;
-    const sinceHit = (duel.tick - (whiffed ? player.lastWhiffTick : player.lastHitTick)) * SIM_DT;
-    const swing = sinceHit < SWING_TIME ? sinceHit / SWING_TIME : 1;
-    const swingKind = whiffed ? player.lastWhiffKind : player.lastHit?.kind;
-    const engaged = player.engagement !== null;
-    // Repère local : le joueur regarde vers +Z, sa droite est vers -X.
-    view.racket.position.x = -0.35;
-    // Au-dessus de la tête (bouton B) : raquette armée derrière la tête, puis frappe de haut en bas.
-    const overheadSwing = swing < 1 && swingKind === 'overhead';
-    const overheadReady = swing >= 1 && player.engagement?.kind === 'overhead';
-    if (overheadSwing || overheadReady) {
-      view.racket.position.y = 1.75;
-      view.racket.rotation.y = 0;
-      view.racket.rotation.x = overheadSwing ? -Math.PI * 0.9 + swing * Math.PI * 1.25 : -Math.PI * 0.9;
-    } else {
-      view.racket.position.y = 1.0;
-      view.racket.rotation.x = 0;
-      view.racket.rotation.y = swing < 1 ? -Math.PI * 0.85 + swing * Math.PI * 1.4 : engaged ? -Math.PI * 0.8 : -0.4;
-    }
+    animate(view, player, pos, alpha, frameTime);
 
     // Coup préparé, bouton maintenu : en échange, ou balle lâchée au service.
     const engagement = player.engagement;
@@ -436,8 +463,17 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const jitter = shake * 0.06 * Math.sin(shakeTime * 70);
       camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
       camera.lookAt(cameraX * 0.6, 0, CAMERA_LOOK_Z);
+      if (closeCamera) {
+        const p = lerp(near.prevPos, near.pos, alpha);
+        camera.position.set(p.x - 3.4, 1.5, p.z + 2.6);
+        camera.lookAt(p.x, 1.0, p.z);
+        if (camera.fov !== 40) {
+          camera.fov = 40;
+          camera.updateProjectionMatrix();
+        }
+      }
 
-      duel.players.forEach((player, i) => updatePlayer(players[i]!, player, i, alpha));
+      duel.players.forEach((player, i) => updatePlayer(players[i]!, player, i, alpha, frameTime));
 
       const { ball: simBall, prevBallPos } = duel;
       let pos: Vec3 | null = null;
