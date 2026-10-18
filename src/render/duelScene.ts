@@ -64,6 +64,8 @@ const CAMERA_FOLLOW = 0.15;
 const CAMERA_SMOOTHING = 4;
 /** Lissage (1/s) de la rotation du corps quand il se tourne pour courir. */
 const BODY_TURN = 10;
+/** Vitesse à laquelle la foulée affichée suit la vitesse réelle (1/s). */
+const GAIT_FOLLOW = 12;
 
 /**
  * Côté caméra, tout ce qui dépasse la hauteur des vitres près du fond (grillage, montants) est
@@ -93,7 +95,7 @@ interface PlayerView {
   object: THREE.Group;
   /** Personnage cartoon et son état d'animation, propre au rendu. */
   rig: CharacterRig;
-  anim: { yaw: number; stride: number; side: 'fore' | 'back'; high: boolean; highFamily: SwingFamily; volley: boolean; last: { x: number; z: number } | null };
+  anim: { yaw: number; speed: number; stride: number; side: 'fore' | 'back'; high: boolean; highFamily: SwingFamily; volley: boolean; last: { x: number; z: number } | null };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
    * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
@@ -174,7 +176,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null };
+  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null };
   return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
@@ -412,13 +414,15 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const striking = prep !== null || (strike !== null && strike.seconds < 0.5);
     const yawTarget = bodyYawTarget(speed, heading, striking);
     view.anim.yaw += (yawTarget - view.anim.yaw) * (1 - Math.exp(-BODY_TURN * frameTime));
+    // Vitesse lissée pour la pose : un démarrage ou un arrêt brusque ne fait pas sauter les jambes.
+    view.anim.speed += (speed - view.anim.speed) * (1 - Math.exp(-GAIT_FOLLOW * frameTime));
 
     view.rig.apply(
       computePose({
         inPlay: duel.phase !== 'dead' && duel.phase !== 'over',
         prep,
         strike,
-        speed,
+        speed: view.anim.speed,
         heading,
         bodyYaw: view.anim.yaw,
         stride: view.anim.stride,

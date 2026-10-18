@@ -155,6 +155,9 @@ const HIP_SHARE = 0.45;
 /** Longueur d'une foulée complète (deux pas, m) à pleine course, et vitesse de course de référence (m/s). */
 export const STRIDE = 1.7;
 const RUN_SPEED = 5;
+/** Vitesse (m/s) où la foulée commence à se voir, et où elle est entière. */
+const GAIT_START = 0.1;
+const GAIT_FULL = 0.8;
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const smooth = (t: number): number => t * t * (3 - 2 * t);
@@ -253,16 +256,18 @@ export function computePose(input: PoseInput): Pose {
 
   // Course : amplitude selon la vitesse, foulée dans la direction du déplacement vue du corps.
   const run = clamp(input.speed / RUN_SPEED, 0, 1);
-  const moving = input.speed > 0.15;
+  // Foulée qui apparaît progressivement avec la vitesse : pas de bascule d'un coup entre l'attente et la course.
+  const gait = smooth(clamp((input.speed - GAIT_START) / (GAIT_FULL - GAIT_START), 0, 1));
+  const moving = gait > 0;
   const local = input.heading - input.bodyYaw;
   const fwd = moving ? Math.cos(local) : 0;
   const side = moving ? Math.sin(local) : 0;
   const swing = Math.sin(input.stride);
-  const amp = 0.25 + 0.5 * run;
+  const amp = (0.25 + 0.5 * run) * gait;
   const leg = (sign: 1 | -1): LegPose => {
-    const phase = swing * sign * (moving ? amp : 0);
+    const phase = swing * sign * amp;
     // Genou plié surtout quand la jambe revient vers l'avant ; jambes écartées en pas chassé.
-    const lift = moving ? Math.max(0, Math.cos(input.stride) * sign) * (0.3 + 0.9 * run) : 0;
+    const lift = Math.max(0, Math.cos(input.stride) * sign) * (0.3 + 0.9 * run) * gait;
     return { swing: -phase * fwd, spread: phase * side * 0.4, knee: lift };
   };
 
@@ -272,13 +277,13 @@ export function computePose(input: PoseInput): Pose {
   return {
     crouch: upper.crouch + run * 0.05,
     jump: upper.jump,
-    bob: moving ? runBob : idleBob,
+    bob: mix(idleBob, runBob, gait),
     bodyYaw: input.bodyYaw,
     twist: upper.twist,
     hipTwist: upper.twist * HIP_SHARE,
     lean: upper.lean + run * 0.16 * Math.max(0, fwd),
     armR: upper.armR,
-    armL: moving && !input.prep && !s ? mixDir(upper.armL, [0.3, -0.75, -Math.sin(input.stride) * 0.6], run) : upper.armL,
+    armL: moving && !input.prep && !s ? mixDir(upper.armL, [0.3, -0.75, -Math.sin(input.stride) * 0.6], run * gait) : upper.armL,
     elbowR: upper.elbowR,
     racket: upper.racket,
     face: upper.face,

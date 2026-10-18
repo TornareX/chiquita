@@ -218,6 +218,27 @@ describe('2 contre 2 (étape C)', () => {
     expect(checked).toBeGreaterThan(5);
   }, 60_000);
 
+  it("entre les points, l'IA rejoint sa place et s'y arrête au lieu de repartir sans cesse par petits pas", () => {
+    const duel = new Duel({ setsToWin: 1, gamesPerSet: 6, goldenPoint: false }, 'double');
+    const bots = duel.players.map((_, i) => new Bot(i, 7 + i, AI_LEVELS.normal));
+    const moving = duel.players.map(() => false);
+    let starts = 0;
+    let idleTicks = 0;
+    while (duel.time < 120 && duel.phase !== 'over') {
+      duel.step(bots.map((bot) => bot.commands(duel)));
+      const idle = duel.phase === 'dead' || duel.phase === 'serve';
+      duel.players.forEach((player, i) => {
+        const now = Math.hypot(player.vel.x, player.vel.z) > 0.15;
+        if (idle && now && !moving[i]) starts++;
+        moving[i] = now;
+        if (idle) idleTicks++;
+      });
+    }
+    // Avant : plus de 1 500 départs en deux minutes (sa place suit le frappeur adverse au centimètre près).
+    expect(idleTicks).toBeGreaterThan(5000);
+    expect(starts).toBeLessThan(100);
+  });
+
   it('est déterministe', () => {
     const summary = (): string => playDoubles(240, 3, AI_LEVELS.normal, false).results.map((r) => `${r.hits}:${r.reason}:${r.winner}`).join(',');
     expect(summary()).toBe(summary());

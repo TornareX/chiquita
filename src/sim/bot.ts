@@ -97,6 +97,13 @@ const DOUBLES_SPACING_BACK = 3.0;
 const DOUBLES_LOBBED_DEPTH = 6.5;
 /** Partenaire humain : bande centrale (m de part et d'autre du milieu du terrain) où le joueur de gauche peut jouer. */
 const HUMAN_MIDDLE_BAND = 0.7;
+/**
+ * Retour à la position d'attente entre les points : arrivé à moins de `ARRIVED` (m), il s'arrête et ne repart que si sa place
+ * s'éloigne de plus de `DRIFT` (m). Sans cet écart, en double, la place qui suit le frappeur adverse le faisait
+ * repartir et s'arrêter sans cesse par petits pas (jambes qui tremblent).
+ */
+const ARRIVED = 0.1;
+const DRIFT = 0.4;
 
 export type AiLevel = 'facile' | 'normal' | 'fort';
 export const AI_LEVEL_NAMES: readonly AiLevel[] = ['facile', 'normal', 'fort'];
@@ -162,6 +169,8 @@ export class Bot {
   private calledFor: number | null = null;
   /** Balle laissée au partenaire humain, recalculée à chaque frappe, rebond ou vitre. */
   private yieldFor: { key: string; yields: boolean } | null = null;
+  /** Entre les points, arrivé à sa position d'attente : il y reste tant qu'elle ne s'éloigne pas de plus de `DRIFT`. */
+  private settled = false;
 
   constructor(
     private readonly index: number,
@@ -525,9 +534,21 @@ export class Bot {
     const next = waypoint(me.pos, home, me.side);
     const dx = next.x - me.pos.x;
     const dz = next.z - me.pos.z;
-    const axis = (delta: number): number => (Math.abs(delta) < 0.15 ? 0 : Math.max(-1, Math.min(1, delta)));
     const f = forwardFor(me.side);
     const r = rightFor(me.side);
-    return { stick: { forward: axis(dx * f.x + dz * f.z), right: axis(dx * r.x + dz * r.z) }, shot: null };
+    if (duel.phase === 'rally') {
+      // Dans l'échange, il suit sa place au plus près.
+      this.settled = false;
+      const axis = (delta: number): number => (Math.abs(delta) < 0.15 ? 0 : Math.max(-1, Math.min(1, delta)));
+      return { stick: { forward: axis(dx * f.x + dz * f.z), right: axis(dx * r.x + dz * r.z) }, shot: null };
+    }
+    // Entre les points : il rejoint sa place en ralentissant, s'y arrête et n'en repart que si elle s'éloigne.
+    const distance = pathDistance(me.pos, home, me.side);
+    if (distance < ARRIVED) this.settled = true;
+    else if (distance > DRIFT) this.settled = false;
+    const leg = Math.sqrt(dx * dx + dz * dz);
+    if (this.settled || leg < 1e-3) return NEUTRAL_ARCADE;
+    const speed = Math.min(1, distance);
+    return { stick: { forward: ((dx * f.x + dz * f.z) / leg) * speed, right: ((dx * r.x + dz * r.z) / leg) * speed }, shot: null };
   }
 }
