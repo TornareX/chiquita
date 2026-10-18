@@ -859,3 +859,11 @@ filet ; le décompte). **Pas encore joué à la vraie manette.** Sur le lob tend
 0,3 (elle repasse) ; à l'arrivée de la balle, ~0,6 s après, parfaite. Le guide du stick droit cache Bleu quand il est
 contre sa vitre. Vue de la caméra, la vitre proche est masquée : l'anneau
 semble flotter en l'air.
+
+## Polish visuel V0 + V1 (18/10/2026, non commité)
+
+Plan et analyse : `research/rendu/POLISH_VISUEL.md`. Fait : banc d'essai du rendu (`?figer=`, `?perf`,
+`tests/e2e/rendu.spec.ts`, captures dans `screenshots/rendu/`) et rendu soigné par défaut (courbe de tons
+Neutral, lumières recalibrées, reflets d'environnement, repères de jeu à couleur exacte) ; `?rendu=simple`
+garde l'ancien. Typecheck OK ; tests unitaires OK (2 dépassements de délai sous charge, verts relancés seuls) ;
+e2e 29/30 en un seul worker (le 30e : fichier de capture verrouillé par Windows). **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**

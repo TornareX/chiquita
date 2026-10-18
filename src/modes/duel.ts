@@ -15,6 +15,7 @@ import { FixedStepLoop } from '../sim/loop';
 import type { MatchRules } from '../sim/score';
 import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
+import { createPerfMeter } from '../ui/perfMeter';
 import { createInputDisplay } from '../ui/inputDisplay';
 import { createPadTest } from '../ui/padTest';
 import {
@@ -55,6 +56,7 @@ function muteable<T extends object>(sounds: T, audible: () => boolean): T {
  * - `?sets=2`, `?games=4`, `?gold=1` (punto de oro), `?free=1` (échange libre sans score) ;
  * - `?pression=0` (sans), `0.5`, `1.5` ; `?far=own` ; `?assist=full|partial|off|magnet` ou `?assist=full,off`.
  * - `?gaucher=1,3` : places jouées par un gaucher (à partir de 1), les autres droitières.
+ * - `?figer=4` : la simulation s'arrête net à 4 s de jeu, le rendu continue (banc d'essai du rendu, captures).
  */
 export function startDuel(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
@@ -172,7 +174,12 @@ export function startDuel(canvas: HTMLCanvasElement): void {
 
   /** Micro-pause sur une frappe parfaite : fin de la pause, en temps réel (ms). */
   let hitstopUntil = 0;
+  // Banc d'essai du rendu : même graine, même pas de simulation, donc la même image à comparer d'une version à l'autre.
+  const freezeSeconds = Number(params.get('figer'));
+  const freezeTick = freezeSeconds > 0 ? Math.round(freezeSeconds / SIM_DT) : null;
+  const frozen = (): boolean => freezeTick !== null && duel.tick >= freezeTick;
   const loop = new FixedStepLoop(SIM_DT, () => {
+    if (frozen()) return;
     duel.step(sample());
     view.afterStep();
     inputs.step(duel, states);
@@ -209,6 +216,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const debug = import.meta.env.DEV || params.has('debug');
   if (debug) window.__duel = { duel, Bot };
 
+  const perf = debug ? createPerfMeter(params.has('perf')) : null;
   let last = performance.now();
   let alpha = 0;
   let startHeld = false;
@@ -221,7 +229,9 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     startHeld = start;
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
     if (!menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
-    view.render(alpha, frameTime, now < hitstopUntil);
+    const renderStart = performance.now();
+    view.render(frozen() ? 0 : alpha, frameTime, now < hitstopUntil || frozen());
+    perf?.frame(frameTime, performance.now() - renderStart, view.info());
     mood.update(frameTime);
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.
     audio.ambience(settings.sound && !menu.isOpen ? mood.stir : -1);

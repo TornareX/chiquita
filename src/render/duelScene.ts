@@ -9,7 +9,9 @@ import { createEffectsView, effectsEnabled } from './effectsView';
 import { arenaEnabled, createArena } from './arena';
 import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
+import { applyLook, exactColor, renderLook } from './look';
 import { loadModel, modelsEnabled } from './models';
+import type { RenderInfo } from '../ui/perfMeter';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
 export interface DuelView {
@@ -21,7 +23,18 @@ export interface DuelView {
   shake(strength: number): void;
   /** Zone à viser, dessinée au sol (tutoriel), ou `null` pour l'effacer. */
   setTarget(zone: { x0: number; x1: number; z0: number; z1: number } | null): void;
+  /** Appels de dessin et triangles de la dernière image (banc d'essai du rendu). */
+  info(): RenderInfo;
 }
+
+/** Lumières du rendu soigné (`look.ts`). [à calibrer en jouant] */
+const SKY_COLOR = 0xfff9f2;
+const GROUND_COLOR = 0x26375a;
+const HEMI_INTENSITY = 1.6;
+const SUN_COLOR = 0xfff6ec;
+const SUN_INTENSITY = 1.1;
+const SPOT_COLOR = 0xfff6ea;
+const SPOT_INTENSITY = 3.0;
 
 /** Anneau de timing : couleur de la balle à venir (`pressure.ts`). */
 const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23f, rouge: 0xff4436 };
@@ -172,12 +185,12 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   const rig = createCharacter(CHARACTERS[index % CHARACTERS.length]!, color, height);
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.36, 24),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
+    exactColor(new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false })),
   );
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.006;
 
-  const timingMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false });
+  const timingMaterial = exactColor(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
   const timingRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40), timingMaterial);
   timingRing.rotation.x = -Math.PI / 2;
   timingRing.position.y = 0.012;
@@ -186,7 +199,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
 
   const standMarker = new THREE.Mesh(
     new THREE.RingGeometry(0.12, 0.18, 24),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false }),
+    exactColor(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false })),
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
@@ -220,18 +233,18 @@ function createBallView(): {
   const shadowLook = { transparent: true, depthWrite: false, depthTest: false };
   const shadowDisc = new THREE.Mesh(
     new THREE.CircleGeometry(SHADOW_RADIUS, 32),
-    new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0.55, ...shadowLook }),
+    exactColor(new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0.55, ...shadowLook })),
   );
   const shadowRing = new THREE.Mesh(
     new THREE.RingGeometry(SHADOW_RADIUS, SHADOW_RADIUS * 1.35, 32),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, ...shadowLook }),
+    exactColor(new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, ...shadowLook })),
   );
   shadowDisc.renderOrder = shadowRing.renderOrder = 10;
   shadow.add(shadowDisc, shadowRing);
   shadow.rotation.x = -Math.PI / 2;
   const heightLine = new THREE.Mesh(
     new THREE.CylinderGeometry(0.008, 0.008, 1, 6),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }),
+    exactColor(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false })),
   );
   // Traînée : cône allongé derrière la balle, de son diamètre à rien.
   const trailMaterial = new THREE.MeshBasicMaterial({ color: 0xf4ffb0, transparent: true, opacity: 0.4, depthWrite: false });
@@ -279,6 +292,9 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
+  const look = renderLook();
+  applyLook(renderer, scene, look);
+  const soigne = look === 'soigne';
   // Salle sombre autour d'un terrain très éclairé (étape E6) ; sans l'arène, le fond d'avant.
   const arena = arenaEnabled() ? createArena() : null;
   scene.background = new THREE.Color(arena ? 0x07090d : 0x1b2733);
@@ -288,13 +304,16 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     scene.add(arena.object);
     if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__arena = arena;
     // Le terrain sous les projecteurs : un cône de lumière au-dessus, qui laisse les tribunes dans la pénombre.
-    const spot = new THREE.SpotLight(0xdfe8ff, 2.2, 0, Math.atan2(13, 20), 0.35, 0);
+    // Rendu soigné : projecteurs d'un blanc légèrement chaud, pour que les ombres froides de l'ambiance ressortent.
+    const spot = new THREE.SpotLight(soigne ? SPOT_COLOR : 0xdfe8ff, soigne ? SPOT_INTENSITY : 2.2, 0, Math.atan2(13, 20), 0.35, 0);
     spot.position.set(0, 20, 0);
     spot.target.position.set(0, 0, 0);
     scene.add(spot, spot.target);
   }
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4450, 2.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+  // Ciel et sol de l'ambiance : en rendu soigné, côté éclairé chaud et côté ombre froid (ombrage de Gooch, comme
+  // Team Fortress 2), au lieu d'ombres grises.
+  scene.add(soigne ? new THREE.HemisphereLight(SKY_COLOR, GROUND_COLOR, HEMI_INTENSITY) : new THREE.HemisphereLight(0xffffff, 0x3a4450, 2.2));
+  const sun = new THREE.DirectionalLight(soigne ? SUN_COLOR : 0xffffff, soigne ? SUN_INTENSITY : 1.2);
   sun.position.set(6, 12, -4);
   scene.add(sun);
 
@@ -324,13 +343,13 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   };
   syncPlayers();
   // Point de rebond prévu : repère orange au sol.
-  const bounceMaterial = new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.85, depthWrite: false });
+  const bounceMaterial = exactColor(new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.85, depthWrite: false }));
   const bounceMarker = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), bounceMaterial);
   bounceMarker.rotation.x = -Math.PI / 2;
   scene.add(bounceMarker);
   // Contre-vitre : repère sur la vitre du fond, là où la balle va la toucher. Discret tant que la balle n'est pas à
   // portée, plein quand le coup est jouable.
-  const wallMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const wallMaterial = exactColor(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   const wallMarker = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 32), wallMaterial);
   wallMarker.renderOrder = 12;
   wallMarker.visible = false;
@@ -338,7 +357,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   // Zone cible du tutoriel : rectangle translucide au sol.
   const targetZone = new THREE.Mesh(
     new THREE.PlaneGeometry(1, 1),
-    new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.28, depthWrite: false }),
+    exactColor(new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.28, depthWrite: false })),
   );
   targetZone.rotation.x = -Math.PI / 2;
   targetZone.visible = false;
@@ -535,6 +554,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       if (!zone) return;
       targetZone.scale.set(zone.x1 - zone.x0, zone.z1 - zone.z0, 1);
       targetZone.position.set((zone.x0 + zone.x1) / 2, 0.009, (zone.z0 + zone.z1) / 2);
+    },
+
+    info(): RenderInfo {
+      return { drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     },
 
     render(alpha: number, frameTime: number, frozen = false): void {

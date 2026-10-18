@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { predictBall } from '../sim/predict';
+import { exactColor } from './look';
 import type { World } from '../sim/world';
 import type { Aids } from '../ui/aids';
 
@@ -27,7 +28,7 @@ export function createAidsView(): AidsView {
 
   const marker = new THREE.Mesh(
     new THREE.RingGeometry(0.13, 0.19, 32),
-    new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.9, depthWrite: false }),
+    exactColor(new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.9, depthWrite: false })),
   );
   marker.rotation.x = -Math.PI / 2;
   object.add(trajectory, marker);
