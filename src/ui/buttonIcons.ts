@@ -18,6 +18,55 @@ export type InputSource =
   | { kind: 'keyboard'; player: 0 | 1; layout?: ReadonlyMap<string, string> | null };
 
 const SHOT_TOKEN = /\{(normal|overhead|slice|lob)\}/g;
+/** Jetons de touches du clavier : le stick droit virtuel (`k:up`…, `k:sides` = gauche ou droite) et le déplacement. */
+const TOKEN = /\{(normal|overhead|slice|lob|k:(?:up|down|left|right|sides|move))\}/g;
+
+/**
+ * Au clavier, les mots du stick deviennent les touches qui le remplacent (`virtualStick.ts`) : tirer le stick droit
+ * vers soi, c'est tenir K ; le ramener devant, passer à I ; par un côté, J ou L. Les phrases les plus longues d'abord.
+ */
+const KEYBOARD_WORDS: readonly [RegExp, string][] = [
+  [/(g|G)arde le stick(?: droit)? tiré(?: vers toi)?/g, '$1arde {k:down} enfoncé'],
+  [/tire le stick(?: droit)? vers toi/g, 'tiens {k:down}'],
+  [/Tire le stick(?: droit)? vers toi/g, 'Tiens {k:down}'],
+  [/tirer le stick(?: droit)? vers toi/g, 'tenir {k:down}'],
+  [/stick(?: droit)? tiré vers toi/gi, '{k:down} tenu'],
+  [/ramène-le tout droit(?: vers l’avant)?/g, 'passe à {k:up}'],
+  [/ramène(?:-le| le stick)(?: vers l’avant)? en arc, par un côté/g, 'passe par {k:sides}, puis {k:up}'],
+  [/ramène(?:-le| le stick) vers toi/gi, '{k:down}'],
+  [/puis tout droit vers l’avant/g, 'puis {k:up}'],
+  [/puis en arc/g, 'puis {k:sides} et {k:up}'],
+  [/lâche le stick, il revient tout seul au centre/g, 'lâche la touche, sans en presser d’autre'],
+  [/lâche-le|lâche le stick/g, 'lâche tout'],
+  [/Un coup sec du stick vers l’avant, sans le tirer vers toi/g, 'Un appui sec sur {k:up}, sans tenir {k:down} avant'],
+  [/stick droit : un coup sec vers l’avant/g, '{k:up} : un appui sec'],
+  [/un coup sec du stick(?: droit)? vers l’avant/g, 'un appui sec sur {k:up}'],
+  [/stick(?: droit)? en avant, puis vers toi/gi, '{k:up}, puis {k:down}'],
+  [/stick(?: droit)? en avant pour préparer/gi, '{k:up} pour préparer'],
+  [/^Tout droit !$/, '{k:up} !'],
+  [/^En arc, par un côté !$/, '{k:sides}, puis {k:up} !'],
+  [/^Coup sec vers l’avant !$/, '{k:up}, sec !'],
+  [/stick gauche/gi, '{k:move}'],
+];
+
+/** Texte du stick dit avec les touches de ce côté du clavier ; inchangé pour une manette. */
+export function stickWords(text: string, source: InputSource): string {
+  if (source.kind !== 'keyboard') return text;
+  return KEYBOARD_WORDS.reduce((t, [pattern, words]) => t.replace(pattern, words), text);
+}
+
+function kbd(code: string, source: Extract<InputSource, { kind: 'keyboard' }>): string {
+  return `<kbd class="key-icon">${escapeHtml(keyLabel(code, source.layout))}</kbd>`;
+}
+
+/** Icône d'un jeton de touche (`k:up`…) pour ce côté du clavier. */
+function keyToken(token: string, source: Extract<InputSource, { kind: 'keyboard' }>): string {
+  const layout = KEY_LAYOUTS[source.player];
+  if (token === 'k:move') return [layout.up, layout.left, layout.down, layout.right].map((code) => kbd(code, source)).join('');
+  if (token === 'k:sides') return `${kbd(layout.swing.left[0]!, source)}<span style="opacity:.6"> ou </span>${kbd(layout.swing.right[0]!, source)}`;
+  const direction = token.slice(2) as 'up' | 'down' | 'left' | 'right';
+  return kbd(layout.swing[direction][0]!, source);
+}
 
 const DOTS: Record<ButtonPosition, [number, number]> = {
   bottom: [8, 13],
@@ -74,16 +123,20 @@ export function buttonIcon(kind: ShotKind, source: InputSource): string {
 
 /**
  * Texte avec des jetons de bouton (`{normal}`, `{overhead}`, `{slice}`, `{lob}`) rendu en HTML :
- * chaque jeton devient l'icône du bouton sur la manette ou le clavier du joueur. Le reste est échappé.
+ * chaque jeton devient l'icône du bouton sur la manette ou le clavier du joueur. Au clavier, les mots du stick
+ * deviennent ses touches (`stickWords`). Le reste est échappé.
  */
 export function formatButtons(text: string, source: InputSource): string {
   let html = '';
   let last = 0;
-  for (const match of text.matchAll(SHOT_TOKEN)) {
-    html += escapeHtml(text.slice(last, match.index)) + buttonIcon(match[1] as ShotKind, source);
+  const words = stickWords(text, source);
+  for (const match of words.matchAll(TOKEN)) {
+    const token = match[1]!;
+    const icon = token.startsWith('k:') ? (source.kind === 'keyboard' ? keyToken(token, source) : '') : buttonIcon(token as ShotKind, source);
+    html += escapeHtml(words.slice(last, match.index)) + icon;
     last = match.index + match[0].length;
   }
-  return html + escapeHtml(text.slice(last));
+  return html + escapeHtml(words.slice(last));
 }
 
 /** Le même texte sans icônes, avec le symbole de la manette en clair (titres, infobulles). */

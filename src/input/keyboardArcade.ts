@@ -94,13 +94,15 @@ export function createKeyboardPads(target?: HTMLElement): KeyboardPads {
       const layout = KEY_LAYOUTS[player];
       const axis = (positive: string, negative: string): number =>
         (held.has(positive) ? 1 : 0) - (held.has(negative) ? 1 : 0);
-      const shot = buttonsEnabled() ? (layout.shots.find(([code]) => held.has(code))?.[1] ?? null) : null;
+      // Touche de coup pressée : elle frappe seulement aux boutons, mais valide toujours dans les menus (comme `face`).
+      const face = layout.shots.find(([code]) => held.has(code))?.[1] ?? null;
+      const shot = buttonsEnabled() ? face : null;
       const stick = { up: axis(layout.up, layout.down), right: axis(layout.right, layout.left) };
       const assistButton = held.has(layout.assist);
       const keys = sticks[player]!.update(layout.swing, held, dt);
       const aim = player === 0 && mouse ? strongest(keys, mouse.read()) : keys;
-      const idle = stick.up === 0 && stick.right === 0 && !shot && !assistButton && aim.up === 0 && aim.right === 0;
-      return idle ? IDLE_PAD : { stick, shot, assistButton, aim };
+      const idle = stick.up === 0 && stick.right === 0 && !face && !assistButton && aim.up === 0 && aim.right === 0;
+      return idle ? IDLE_PAD : { stick, shot, assistButton, face, aim };
     },
   };
 }

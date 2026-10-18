@@ -1,5 +1,5 @@
 import type { SwingEnd, SwingStick } from '../input/swingStick';
-import { escapeHtml } from './buttonIcons';
+import { escapeHtml, formatButtons, sourceKey, type InputSource } from './buttonIcons';
 
 /** Situation de la balle à jouer : elle décide du coup que donne chaque geste. */
 export type SwingContext = 'sol' | 'volee' | 'haut';
@@ -21,6 +21,8 @@ export interface SwingGuide {
     context: SwingContext,
     /** Ce que le dernier geste a vraiment donné (« volée bloquée », « smash parfait ! »…). */
     result?: string | null,
+    /** Manette ou clavier du joueur : au clavier, les consignes disent les touches. */
+    source?: InputSource,
   ): void;
 }
 
@@ -116,7 +118,7 @@ function build(): Parts {
 export function createSwingGuide(): SwingGuide {
   let parts: Parts | null = null;
   /** Noms affichés : ceux d'un contexte, ou ceux de la contre-vitre. */
-  let named: SwingContext | 'vitre' | null = null;
+  let named: string | null = null;
   let seen = 0;
   let resultUntil = 0;
 
@@ -129,7 +131,9 @@ export function createSwingGuide(): SwingGuide {
   };
 
   return {
-    render(swing, stick, visible, left, bottom, context, result) {
+    render(swing, stick, visible, left, bottom, context, result, source) {
+      /** Consigne en HTML : au clavier, les mots du stick deviennent ses touches. */
+      const say = (text: string): string => (source ? formatButtons(text, source) : escapeHtml(text));
       if (!swing || !stick) {
         if (parts) parts.root.style.display = 'none';
         return;
@@ -152,13 +156,15 @@ export function createSwingGuide(): SwingGuide {
       p.root.style.left = `${left}px`;
       p.root.style.bottom = `${bottom}px`;
       // Les noms des coups suivent la balle à jouer ; contre-vitre : geste inversé, sans fins à choisir.
-      const naming = wall ? 'vitre' : context;
+      const naming = `${wall ? 'vitre' : context}:${source ? sourceKey(source) : ''}`;
       if (named !== naming) {
         named = naming;
         const shots = SWING_SHOTS[context];
         for (const key of ['straight', 'arc', 'letGo'] as const) for (const l of p.labels[key]) l.textContent = wall ? '' : shots[key];
-        p.hint.textContent = wall ? 'en avant : préparer · vers toi ou lâché : frapper' : 'préparer : stick tiré vers toi';
-        p.flick.textContent = wall ? 'contre la vitre, elle repasse le filet' : `sans préparer, coup sec ↑ : ${shots.flick}`;
+        p.hint.innerHTML = say(wall ? (source?.kind === 'keyboard' ? '{k:up} : préparer · {k:down} ou lâché : frapper' : 'en avant : préparer · vers toi ou lâché : frapper') : 'préparer : stick droit tiré vers toi');
+        p.flick.innerHTML = wall
+          ? 'contre la vitre, elle repasse le filet'
+          : `${source?.kind === 'keyboard' ? say('sans préparer, appui sec sur {k:up}') : 'sans préparer, coup sec ↑'} : ${escapeHtml(shots.flick)}`;
       }
       let text: string;
       if (showResult) {
@@ -171,8 +177,8 @@ export function createSwingGuide(): SwingGuide {
         light(null);
         text =
           swing.phase === 'wallArmed'
-            ? `<span style="color:${LIT}">Contre-vitre : ramène le stick vers toi pour frapper</span>`
-            : 'Contre-vitre possible : stick en avant pour préparer';
+            ? `<span style="color:${LIT}">${say('Contre-vitre : ramène le stick vers toi pour frapper')}</span>`
+            : say('Contre-vitre possible : stick en avant pour préparer');
       } else if (swing.phase === 'swing' && swing.sideSeen) {
         light('arc');
         text = `${escapeHtml(SWING_SHOTS[context].arc)}… finis le geste`;

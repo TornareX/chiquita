@@ -140,7 +140,7 @@ export function createTutorialPanel(actions: TutorialPanelActions): TutorialPane
     showCard(lesson, source) {
       card.innerHTML =
         `<h1>${escapeHtml(lesson.title)}</h1>` +
-        `<p class="muted">Boutons : ${formatButtons(lesson.buttons, source)}</p>` +
+        `<p class="muted">${source.kind === 'keyboard' ? 'Touches' : 'Boutons'} : ${formatButtons(lesson.buttons, source)}</p>` +
         `<h2>Quand</h2><p style="margin:0">${formatButtons(lesson.when, source)}</p>` +
         `<h2>Comment</h2><ul>${lesson.how.map((line) => `<li>${formatButtons(line, source)}</li>`).join('')}</ul>` +
         `<p class="muted">D’abord une démo au ralenti, puis tu essaies avec de l’aide, puis seul : ${lesson.goal} réussites pour valider.</p>`;

@@ -6,6 +6,8 @@ import { ARCADE } from '../../src/sim/profile';
 import { vec3 } from '../../src/sim/vec3';
 import { buttonIcon, formatButtons, plainButtons } from '../../src/ui/buttonIcons';
 import { describeShot, describeStick, ReleaseTracker } from '../../src/ui/inputDisplay';
+import { STICK_HOW, STICK_LESSONS } from '../../src/sim/lessons';
+import { SITUATIONS } from '../../src/sim/situations';
 
 describe('famille de manette', () => {
   it('reconnaît les identifiants de Chrome et de Firefox', () => {
@@ -119,5 +121,36 @@ describe('retour des entrées', () => {
     tracker.step(duel, IDLE_PAD);
     expect(tracker.history[0]).toMatchObject({ button: 'lob', quality: 'miss' });
     expect(tracker.history).toHaveLength(2);
+  });
+});
+
+describe('au clavier, les consignes du stick disent les touches', () => {
+  const keyboard = { kind: 'keyboard', player: 0 } as const;
+  const pad = { kind: 'pad', family: 'xbox' } as const;
+  /** Toutes les consignes au stick droit : leçons, situations du labo, aide du match. */
+  const texts = (): string[] => [
+    ...Object.values(STICK_HOW),
+    ...STICK_LESSONS.flatMap((l) => [l.buttons, l.when, ...l.how, l.instruction(0)]),
+    ...SITUATIONS.map((s) => s.hint),
+    'tire le stick droit vers toi',
+    'Garde le stick tiré…',
+  ];
+
+  it('plus de stick droit au clavier, les touches à la place', () => {
+    for (const text of texts()) {
+      const html = formatButtons(text, keyboard);
+      expect(html, text).not.toMatch(/stick droit|stick (tiré )?vers toi|ramène-le|lâche-le|stick gauche|coup sec du stick/i);
+    }
+    expect(formatButtons('tire le stick droit vers toi', keyboard)).toBe('tiens <kbd class="key-icon">K</kbd>');
+    expect(formatButtons(STICK_HOW.lob, keyboard)).toContain('passe par <kbd class="key-icon">J</kbd>');
+  });
+
+  it('le clavier rouge dit son pavé numérique', () => {
+    expect(formatButtons('tire le stick droit vers toi', { kind: 'keyboard', player: 1 })).toContain('5 (pavé)');
+  });
+
+  it('à la manette, rien ne change', () => {
+    for (const text of texts()) expect(formatButtons(text, pad)).toBe(formatButtons(text, pad).replace(/<kbd/g, ''));
+    expect(formatButtons('tire le stick droit vers toi', pad)).toBe('tire le stick droit vers toi');
   });
 });

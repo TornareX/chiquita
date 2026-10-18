@@ -346,7 +346,7 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
         const tracker = trackers[i]!;
         const lastNote = tracker.history[0];
         const recent = lastNote?.bySwing && (duel.tick - tracker.noteTick) * SIM_DT < NOTE_TIME ? lastNote.text : null;
-        guide.render(swings?.[i] ?? null, state.swing ?? null, !compact, 16 + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent);
+        guide.render(swings?.[i] ?? null, state.swing ?? null, !compact, 16 + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent, source);
 
         const key = source.kind === 'pad' ? source.family : `kbd${source.player}${source.layout?.size ?? 0}`;
         if (key !== w.key) {
@@ -400,7 +400,7 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
           note = last && since < NOTE_TIME ? `<span style="color:${QUALITY_COLORS[last.quality]}">${escapeHtml(last.text)}</span>` : '';
           w.note.style.display = note ? '' : 'none';
         } else if (state.shot && swingHeld(state)) {
-          note = `${SWING_BADGE} <span style="color:#c9d3db">armé au stick droit : choisis la fin du geste</span>`;
+          note = `${SWING_BADGE} <span style="color:#c9d3db">armé ${source.kind === 'keyboard' ? 'au clavier' : 'au stick droit'} : choisis la fin du geste</span>`;
         } else if (state.shot && buttonsEnabled()) note = `${buttonIcon(state.shot, source)} <span style="color:#c9d3db">${SHOT_NAMES[state.shot]} : armé, relâche au bon moment</span>`;
         else if (last && since < NOTE_TIME) note = noteHtml(last, source);
         if (w.note.innerHTML !== note) w.note.innerHTML = note;

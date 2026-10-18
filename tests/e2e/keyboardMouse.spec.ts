@@ -33,7 +33,7 @@ test('servir au clavier : K tenu (préparation), puis I (tout droit)', async ({ 
   await startOnKeyboard(page);
   const display = page.locator('.input-display[data-player="0"]');
   await page.keyboard.down('KeyK');
-  await expect(display).toContainText('armé au stick droit');
+  await expect(display).toContainText('armé au clavier');
   await atIdealToss(
     page,
     `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyI' }));
@@ -53,7 +53,7 @@ test('servir à la souris : bouton tenu, tirée vers soi, puis poussée vers l�
   await page.mouse.move(640, 300);
   await page.mouse.down();
   await page.mouse.move(640, 450);
-  await expect(display).toContainText('armé au stick droit');
+  await expect(display).toContainText('armé au clavier');
   await tossed;
   // Poussée vers l'écran tant que la balle est en l'air : le service part (bon ou pas, c'est l'affaire du timing).
   await page.mouse.move(640, 200);
