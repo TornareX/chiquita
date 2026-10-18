@@ -24,8 +24,8 @@ export const CHARACTERS: readonly CharacterLook[] = [
   { name: 'Nico', skin: 0xf1c9a5, hair: 0xd9a441, hairStyle: 'boucles', accessory: 'bandeau', accessoryColor: 0x20262c, shorts: 0xf2f2f2 },
 ];
 
-/** Épaisseur du contour (m) : ~1,5 px au fond du terrain avec la caméra télé. [à calibrer] */
-const OUTLINE = 0.018;
+/** Épaisseur du contour (m) : ~1,5 px pour le joueur proche avec la caméra télé (le rendu soigné la garde constante à l'écran). [à calibrer] */
+export const OUTLINE = 0.018;
 // Proportions (m) pour 1,80 m : jambes jusqu'au bassin, buste, grosse tête dont le haut est à la taille du joueur.
 const THIGH = 0.4;
 const SHIN = 0.4;
@@ -48,7 +48,7 @@ function gradient(): THREE.DataTexture {
   return toonGradient;
 }
 
-const outlineMaterial = new THREE.MeshBasicMaterial({ color: 0x10141a, side: THREE.BackSide });
+const outlineMaterial = new THREE.MeshBasicMaterial({ name: 'contour', color: 0x10141a, side: THREE.BackSide });
 
 function toon(color: number): THREE.MeshToonMaterial {
   return new THREE.MeshToonMaterial({ color, gradientMap: gradient() });

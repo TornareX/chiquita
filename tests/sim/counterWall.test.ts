@@ -169,36 +169,6 @@ describe('contre-vitre : en jeu', () => {
     expect(low.shot!.error).toBeGreaterThan(lob.shot!.error);
   });
 
-  // Le geste de Xavier (18/10) : il court jusqu'à sa vitre, stick gauche tiré vers elle, devant la balle qui arrive ;
-  // puis un coup de stick droit vers soi, lâché aussitôt. Placement manuel, préparation bloquée (ses réglages).
-  for (const id of ['lob-qui-passe', 'balle-qui-meurt']) {
-    it(`${id} : il court jusqu'à sa vitre et donne un coup de stick : la contre-vitre part et repasse le filet`, () => {
-      // Sans le geste de contre-vitre, la raquette n'attend la balle que si elle est déjà proche : frappe à son arrivée.
-      for (const flick of id === 'lob-qui-passe' ? [0.35, 0.45] : [0, 0.1]) {
-        const duel = new Duel(null);
-        duel.players[0].assist = 'off';
-        duel.players[0].prepMove = 'bloque';
-        SITUATIONS.find((s) => s.id === id)!.start(duel);
-        let bounceTick: number | null = null;
-        let shot: DuelShot | null = null;
-        let crossed = false;
-        for (let i = 0; i < 6 / SIM_DT && !duel.result; i++) {
-          if (bounceTick === null && duel.bounces === 1) bounceTick = duel.tick;
-          const rel = bounceTick === null ? null : duel.tick - bounceTick - Math.round(flick / SIM_DT);
-          let cmd: ArcadeCommands = { stick: { forward: shot ? 0 : -1, right: 0 }, shot: null };
-          // Stick droit tiré vers soi 8 pas, puis lâché.
-          if (!shot && rel !== null && rel >= 0 && rel < 8) cmd = { ...cmd, shot: 'overhead', swing: { prepared: true } };
-          else if (!shot && rel !== null && rel >= 8 && rel < 12) cmd = { ...cmd, swing: { prepared: true, end: 'letGo' } };
-          duel.step([cmd]);
-          if (duel.shot?.player === 0) shot = duel.shot;
-          if (shot && duel.ball && duel.ball.pos.z > 0) crossed = true;
-        }
-        expect(shot?.counterWall, `coup de stick ${flick} s après le rebond`).toBe(true);
-        expect(crossed, `coup de stick ${flick} s après le rebond`).toBe(true);
-      }
-    });
-  }
-
   // Le geste proposé par Xavier (18/10) : tourné vers sa vitre, stick droit poussé vers l'avant pour préparer, ramené
   // vers sa vitre pour frapper. Il court vers sa vitre au stick gauche (placement manuel, préparation bloquée).
   for (const id of ['lob-qui-passe', 'balle-qui-meurt']) {
@@ -233,6 +203,37 @@ describe('contre-vitre : en jeu', () => {
         // Ni smash ni volée en préparant : rien n'est parti avant le rebond.
         expect(shot!.volley).toBe(false);
       }
+    });
+  }
+
+  // Retour de Xavier (18/10) : lobé, il recule au stick gauche et prépare au stick droit tiré vers soi. C'est un coup
+  // haut (ou au sol après le rebond), jamais une contre-vitre : le stick gauche vers sa vitre, c'est reculer.
+  for (const id of ['lob-sur-toi', 'lob-qui-passe']) {
+    it(`${id} : lobé, il recule et prépare au stick droit tiré vers soi : pas de contre-vitre`, () => {
+      const duel = new Duel(null);
+      duel.players[0].assist = 'off';
+      duel.players[0].prepMove = 'bloque';
+      SITUATIONS.find((s) => s.id === id)!.start(duel);
+      const swing = new SwingStick();
+      let shot: DuelShot | null = null;
+      let armedTick: number | null = null;
+      for (let i = 0; i < 6 / SIM_DT && !duel.result && !shot; i++) {
+        swing.wallReady = duel.counterWallReady(0);
+        const me = duel.players[0];
+        // Il recule 0,5 s, puis arme (stick droit vers soi) en gardant le stick gauche vers sa vitre ; il finit le geste
+        // tout droit au moment prévu.
+        const arming = duel.time - duel.phaseTick * SIM_DT >= 0.5;
+        if (arming && armedTick === null && me.engagement) armedTick = duel.tick;
+        const plan = me.engagement?.plan;
+        const release = plan !== null && plan !== undefined && duel.tick >= plan.tick - 2;
+        const out = swing.update(0, release ? 1 : arming ? -1 : 0, SIM_DT);
+        duel.step([{ stick: { forward: -1, right: 0 }, shot: out.shot, ...(out.swing ? { swing: out.swing } : {}) }]);
+        if (me.engagement) expect(me.engagement.letPass ?? false).toBe(false);
+        if (duel.shot?.player === 0) shot = duel.shot;
+      }
+      expect(armedTick).not.toBeNull();
+      expect(shot).not.toBeNull();
+      expect(shot!.counterWall).not.toBe(true);
     });
   }
 

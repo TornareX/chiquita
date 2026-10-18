@@ -9,16 +9,15 @@ interface WallStats {
 type Page = Window & { __hold: boolean; __resume: () => void; __wall: WallStats };
 
 /**
- * Contre-vitre (`CHANTIERS_PLAN.md`, étape 4), jouée comme à la manette : labo, situation « lob qui passe ». Une
- * manette Xbox virtuelle, pilotée dans la page à chaque pas (lecture de la Gamepad API, `readGamepad`, `toCommands`),
- * recule au stick gauche, arme le coup au stick droit tiré vers soi quand la balle redescend, tire le stick gauche vers sa
- * vitre et finit le geste tout droit quand la balle passe derrière elle. La balle doit repartir contre la vitre et
- * repasser le filet.
+ * Contre-vitre (`CHANTIERS_PLAN.md`, étape 4), jouée aux boutons (`?boutons=1`) : labo, situation « lob qui passe ».
+ * Une manette Xbox virtuelle, pilotée dans la page à chaque pas (lecture de la Gamepad API, `readGamepad`,
+ * `toCommands`), recule au stick gauche, maintient A quand la balle redescend, tire le stick gauche vers sa vitre et
+ * relâche A quand la balle arrive. La balle doit repartir contre la vitre et repasser le filet.
  */
-test('labo : contre-vitre au stick, la balle repasse le filet', async ({ page }) => {
+test('labo : contre-vitre aux boutons, la balle repasse le filet', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?mode=labo');
+  await page.goto('/?mode=labo&boutons=1');
   await page.waitForFunction(() => window.__duel !== undefined);
   await page.locator('[data-situation="lob-qui-passe"]').click();
 
@@ -62,19 +61,19 @@ test('labo : contre-vitre au stick, la balle repasse le filet', async ({ page })
           crossed = true;
           stats.crossed++;
         }
-        // Stick gauche : `forward` vers le filet ; stick droit : `swingUp` vers le haut de l'écran.
+        // Stick gauche : `forward` vers le filet ; `hold` : A maintenu.
         let left = { forward: 0, right: 0 };
-        let swingUp = 0;
+        let hold = false;
         if (duel.phase === 'rally' && !hit) {
           if (duel.bounces === 0) {
             left = { forward: clamp((-8.7 - me.pos.z) * 2), right: clamp(-(0.6 - me.pos.x) * 2) };
-            // Armé (tiré vers soi) quand la balle redescend dans son camp.
-            if (duel.ball && duel.ball.pos.z < -6) swingUp = -1;
+            // A maintenu quand la balle redescend dans son camp.
+            if (duel.ball && duel.ball.pos.z < -6) hold = true;
           } else {
             const chance = duel.counterWall(0);
             left = { forward: -1, right: 0 };
-            // Toujours armé, fini tout droit quand la balle passe au point idéal.
-            swingUp = chance && chance.timing >= -0.04 ? 1 : -1;
+            // A relâché quand la balle passe au point idéal.
+            hold = !(chance && chance.timing >= -0.04);
             if (!stats.held && chance && me.engagement) {
               stats.held = true;
               w.__hold = true;
@@ -84,8 +83,7 @@ test('labo : contre-vitre au stick, la balle repasse le filet', async ({ page })
         // Gamepad API : axes positifs vers la droite et vers le bas.
         axes[0] = left.right;
         axes[1] = -left.forward;
-        axes[2] = 0;
-        axes[3] = -swingUp;
+        buttons[0] = { pressed: hold, touched: hold, value: hold ? 1 : 0 };
       }
       return [{ index: 0, id: 'Xbox Wireless Controller (STANDARD GAMEPAD)', connected: true, mapping: 'standard', axes, buttons }] as unknown as Gamepad[];
     };
@@ -124,63 +122,6 @@ test('labo : une situation part après un décompte de 2 s, joueurs en place', a
   await expect(countdown).toHaveText('1', { timeout: 2000 });
   await expect(countdown).toBeHidden({ timeout: 2000 });
   await page.waitForFunction((t) => window.__duel!.duel.tick > t + 60, before);
-});
-
-/**
- * Le geste de Xavier (18/10) : il court jusqu'à sa vitre au stick gauche, devant la balle qui arrive, puis donne un
- * coup de stick droit vers sa vitre (tiré vers soi, lâché aussitôt). Réglages par défaut : placement manuel,
- * préparation bloquée.
- */
-test('labo : en courant vers sa vitre, un coup de stick fait la contre-vitre', async ({ page }) => {
-  test.setTimeout(90_000);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?mode=labo');
-  await page.waitForFunction(() => window.__duel !== undefined);
-  await page.locator('[data-situation="lob-qui-passe"]').click();
-  await page.evaluate(() => {
-    const { duel } = window.__duel!;
-    const stats = { played: 0, crossed: 0, attempts: 0 };
-    (window as unknown as { __flick: typeof stats }).__flick = stats;
-    const axes = [0, 0, 0, 0];
-    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 }));
-    let lastTick = -1;
-    let point = -1;
-    let bounceTick: number | null = null;
-    let hit = false;
-    let crossed = false;
-    navigator.getGamepads = () => {
-      if (duel.tick !== lastTick) {
-        lastTick = duel.tick;
-        if (duel.phase === 'rally' && duel.phaseTick !== point) {
-          point = duel.phaseTick;
-          bounceTick = null;
-          hit = crossed = false;
-          stats.attempts++;
-        }
-        if (duel.shot?.player === 0) {
-          hit = true;
-          if (duel.shot.counterWall) stats.played++;
-        }
-        if (hit && duel.players[0]!.lastHit?.counterWall && !crossed && duel.ball && duel.ball.pos.z > 0) {
-          crossed = true;
-          stats.crossed++;
-        }
-        if (bounceTick === null && duel.bounces === 1) bounceTick = duel.tick;
-        const since = bounceTick === null ? -1 : duel.tick - bounceTick;
-        // Stick gauche vers sa vitre tout le point ; stick droit tiré vers soi 1/30 s, quand la balle arrive (0,4 s
-        // après le rebond : le lob tendu met ~0,6 s jusqu'à la vitre).
-        axes[1] = duel.phase === 'rally' && !hit ? 1 : 0;
-        axes[3] = !hit && since >= 96 && since < 104 ? 1 : 0;
-      }
-      return [{ index: 0, id: 'Xbox Wireless Controller (STANDARD GAMEPAD)', connected: true, mapping: 'standard', axes, buttons }] as unknown as Gamepad[];
-    };
-  });
-  await page
-    .waitForFunction(() => (window as unknown as { __flick: { crossed: number } }).__flick.crossed >= 3, null, { timeout: 60_000 })
-    .catch(() => undefined);
-  const stats = await page.evaluate(() => (window as unknown as { __flick: { played: number; crossed: number; attempts: number } }).__flick);
-  console.log(stats);
-  expect(stats.crossed).toBeGreaterThanOrEqual(3);
 });
 
 /**

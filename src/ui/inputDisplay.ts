@@ -16,9 +16,9 @@ import { createSwingGuide, type SwingContext } from './swingGuide';
  */
 export function swingContext(duel: Duel, index: number): SwingContext {
   const me = duel.players[index]!;
-  // Contre-vitre en vue, stick gauche tiré vers sa vitre : un coup normal, quelle que soit la hauteur de la balle.
+  // Contre-vitre préparée ou demandée : un coup au sol, quelle que soit la hauteur de la balle.
   const letting = me.engagement?.letPass === true || me.engagement?.counterWall !== undefined;
-  if (letting || (me.stick.forward <= -duel.profile.rally.counterWall.stick && duel.counterWall(index))) return 'sol';
+  if (letting) return 'sol';
   const plan = me.engagement?.plan;
   const ball = duel.ball;
   const height = plan ? plan.contact.y : (ball?.pos.y ?? 0);

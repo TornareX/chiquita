@@ -3,7 +3,7 @@ import { planIntercept } from '../../src/sim/assist';
 import { createBall } from '../../src/sim/ball';
 import { AI_LEVELS, Bot, type BotOptions } from '../../src/sim/bot';
 import { NEUTRAL_ARCADE, type ArcadeCommands, type ShotKind } from '../../src/sim/commands';
-import { HALF_WIDTH, SIM_DT } from '../../src/sim/constants';
+import { HALF_LENGTH, HALF_WIDTH, SIM_DT } from '../../src/sim/constants';
 import { Duel, type DuelShot, type PointReason } from '../../src/sim/duel';
 import { ARCADE } from '../../src/sim/profile';
 import { DEFAULT_RULES } from '../../src/sim/score';
@@ -210,8 +210,9 @@ describe('portes et sortie du terrain (salida de pista)', () => {
     for (let i = 0; i < 60; i++) pos = moveWithin(pos, vec3(pos.x + 0.03, 0, pos.z), 1, r);
     expect(outsideCourt(pos)).toBe(true);
     expect(isWalkable(vec3(HALF_WIDTH + 3, 0, 5), 1, r)).toBe(true);
-    // Jamais de l'autre côté du filet, ni dans le mur.
-    expect(isWalkable(vec3(HALF_WIDTH + 3, 0, -2), 1, r)).toBe(false);
+    // Dehors, on va partout, même de l'autre côté du filet ; jamais dans le mur.
+    expect(isWalkable(vec3(HALF_WIDTH + 3, 0, -2), 1, r)).toBe(true);
+    expect(isWalkable(vec3(0, 0, -(HALF_LENGTH + 2)), 1, r)).toBe(true);
     expect(isWalkable(vec3(HALF_WIDTH, 0, 4), 1, r)).toBe(false);
     expect(clampWalkable(vec3(HALF_WIDTH + 0.1, 0, 4), 1, r).x).toBeGreaterThanOrEqual(HALF_WIDTH + r);
   });
@@ -223,6 +224,23 @@ describe('portes et sortie du terrain (salida de pista)', () => {
     // Joueur 0 : sa droite est vers -X. Pas de service avant 1,4 s.
     for (let i = 0; i < 1 / SIM_DT; i++) duel.step([{ stick: { forward: 0, right: 1 }, shot: null }, NEUTRAL_ARCADE]);
     expect(outsideCourt(duel.players[0].pos)).toBe(true);
+  });
+
+  it('dehors, loin de la porte, pousser vers le terrain ramène le joueur dedans', () => {
+    // Derrière son mur du fond, dans le coin : le stick vers le filet le fait longer les murs jusqu'à la porte.
+    for (const start of [vec3(-2, 0, -(HALF_LENGTH + 1.5)), vec3(HALF_WIDTH + 2, 0, -8), vec3(HALF_WIDTH + 2, 0, 3)]) {
+      const duel = new Duel();
+      duel.phase = 'dead';
+      duel.players[0].pos = duel.players[0].prevPos = start;
+      const toward = start.x > HALF_WIDTH ? { forward: 0, right: 1 } : { forward: 1, right: 0 };
+      let inside = false;
+      for (let i = 0; i < 5 / SIM_DT && !inside; i++) {
+        duel.phaseTick = duel.tick; // Le point ne repart pas pendant le trajet.
+        duel.step([{ stick: toward, shot: null }, NEUTRAL_ARCADE]);
+        inside = !outsideCourt(duel.players[0].pos);
+      }
+      expect(inside).toBe(true);
+    }
   });
 
   /** Remate parfait du joueur 0 qui sort par le côté, haut et loin, avec du temps pour le rattraper. */

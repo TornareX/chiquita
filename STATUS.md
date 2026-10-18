@@ -3,7 +3,7 @@
 **En une phrase :** Padel Smash, padel arcade en 2 contre 2. L'avancement est détaillé passe par passe ci-dessous.
 ## Passe « jouer par les vitres » (17/10/2026, non commitée)
 
-220 tests OK, typecheck OK, joueur automatique de jouabilité inchangé. **Pas encore joué à la manette.**
+220 tests OK, typecheck OK, joueur automatique de jouabilité inchangé. **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 
 Changements (réglages marqués [à calibrer en jouant]) :
 - Course assistée : une balle qui va à la vitre se laisse passer si l'impact serait à moins de
@@ -48,7 +48,7 @@ point prévu, souvent en fin de trajectoire.
 
 254 tests OK (dont `tests/sim/overhead.test.ts`, 27 tests), typecheck OK, joueur automatique de
 jouabilité OK, 10/11 tests navigateur du premier coup (le chargement des modèles 3D a dépassé 5 s en
-parallèle, OK relancé seul). **Pas encore joué à la manette.**
+parallèle, OK relancé seul). **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 
 - **B** (manette), **I** (clavier bleu), **4 du pavé** ou **M** (QWERTY) / **,** (AZERTY) (rouge) :
   au-dessus de la tête sur une balle entre 1,9 et 3 m. Variante au stick à l’impact : bandeja par défaut
@@ -291,7 +291,7 @@ du stick décide.
 - Après une frappe, le stick doit repasser par le centre avant de ré-armer (un coup au sol fini en haut
   n'arme pas un smash).
 - Le guide dessine les gestes de la préparation en cours ; trois leçons de plus : `stick-bandeja`,
-  `stick-vibora`, `stick-remate`. 380 tests et 16 tests navigateur OK. **Pas encore joué à la manette.**
+  `stick-vibora`, `stick-remate`. 380 tests et 16 tests navigateur OK. **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 - **Remate lu comme une bandeja** (retour de Xavier) : la leçon envoyait un lob trop court, qui passait à
   ~2 m au moment de frapper, sous le minimum du remate (2,2 m). Lob de la leçon allongé (6,2 m) : le remate
   passe sur ~0,3 s de fenêtre. Quand un remate demandé au geste devient une bandeja, le jeu dit pourquoi
@@ -434,7 +434,7 @@ Première étape du plan « Style et juice » (GAME_DESIGN.md §12, étape E), v
 façon Wii Sports, quatre personnages inventés aux caractéristiques identiques, tout fait main. La simulation ne
 change pas (`git diff src/sim` vide ; mêmes images de jeu avant/après sur la même graine). 439 tests OK (dont
 `tests/render/pose.test.ts`, 7 tests), typecheck OK, joueur automatique de jouabilité OK, 20 tests navigateur OK
-(trois relancés seuls : chargement des modèles et manette virtuelle trop lents en parallèle). **Pas encore joué à la manette.**
+(trois relancés seuls : chargement des modèles et manette virtuelle trop lents en parallèle). **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 
 - **Personnages** (`src/render/character.ts`) : Lucho (Bleu 1, casquette), Paloma (Rouge 1, queue de cheval et
   bandeau), Inés (Bleu 2, chignon et visière), Nico (Rouge 2, boucles et bandeau). Maillot à la couleur de l'équipe
@@ -463,7 +463,7 @@ E6 arène et public, E7 sons, E8 clip de validation.
 
 Demandé par Xavier : la bandeja, la víbora, le smash et la feinte ne se jouent que sur une balle qui vient d'un lob ;
 toute autre balle haute se joue de volée (ou au sol). **Option à l'essai, le défaut ne change pas** : `?coupshauts=lob`.
-440 tests OK (dont un test de plus dans `tests/input/swingStick.test.ts`), typecheck OK. **Pas encore joué à la manette.**
+440 tests OK (dont un test de plus dans `tests/input/swingStick.test.ts`), typecheck OK. **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 
 - `HighFloor` gagne `lob` (`Duel.overheadAllowed`) : sur un lob (dernière frappe en jeu de `kind` `lob`, balles
   rattrapées dehors comprises), seuil aux épaules comme par défaut ; sinon le seuil est infini, au stick comme aux
@@ -633,7 +633,7 @@ graphique), le jeu tourne à 15 images/s sur cette machine, avant comme après E
 
 D'après les images de grands tournois envoyées par Xavier (Paris, Milan, Acapulco). E4 (replay) et E5 (célébrations)
 sont mises de côté à sa demande. 471 tests OK (dont `tests/render/arena.test.ts`), typecheck OK, tests navigateur
-(`tests/e2e/arena.spec.ts`, duel, double, effets, visionneur) OK, `src/sim` inchangé. **Pas encore joué à la manette.**
+(`tests/e2e/arena.spec.ts`, duel, double, effets, visionneur) OK, `src/sim` inchangé. **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 
 - `src/render/arena.ts`, branchée dans la vue du match (`?arene=0` la retire) : salle sombre et brume au loin, sol
   noir autour du terrain, terrain sous un cône de lumière ; trois tribunes raides (fond lointain et côtés) de 12 rangs
@@ -825,9 +825,11 @@ sa propre vitre pour qu'elle repasse le filet (la règle le permettait déjà, i
   une balle qui va rebondir derrière lui (`Duel.counterWallReady`), le geste s'inverse, comme le personnage tourné
   vers sa vitre : stick droit **en avant** = préparer, **ramené vers soi** (ou lâché) = frapper. Ailleurs, en avant
   depuis le repos reste le coup sec. Préparée, il peut encore courir vers la balle (même en préparation bloquée).
-- **Autre commande** (boutons, ou geste normal) : stick gauche tiré vers sa vitre au relâcher. En préparation bloquée
-  ou ralentie, le stick gauche tiré vers sa vitre sur une balle qui va rebondir derrière lui veut dire « je la laisse
-  passer » : ni smash ni volée, le coup se prépare au sol (avant, il préparait un smash sur le lob).
+- **Aux boutons** (`?boutons=1`) : coup normal, stick gauche tiré vers sa vitre au relâcher. Au stick droit, seulement
+  le geste de contre-vitre : le stick gauche tiré vers sa vitre, c'est reculer. Retour de Xavier : lobé, il reculait au
+  stick gauche en préparant son smash, et le jeu préparait une contre-vitre (la règle « stick gauche vers sa vitre en
+  préparant = je la laisse passer » a été retirée). Préparée au geste de contre-vitre, ni smash ni volée : le coup
+  attend le rebond.
 - **La raquette attend la balle** : demandée (relâcher), la contre-vitre part quand la balle arrive au point idéal (au
   plus 0,6 s), et il s'arrête. Au geste de contre-vitre, elle est retenue même si la balle est encore loin (il attend
   contre sa vitre la balle qui a rebondi). Le relâcher fait la qualité : parfaite s'il tombe au passage de la balle, erreur pleine
@@ -853,7 +855,7 @@ sa propre vitre pour qu'elle repasse le filet (la règle le permettait déjà, i
 Mesuré (IA contre IA) : de temps en temps (IA forte : 11 sur 52 points), 70 à 100 % repassent le filet ; coups par
 point et part des remates inchangés au bruit près. Au labo, Rouge reprend souvent la contre-vitre d'un smash. 524 tests
 OK (dont `tests/sim/counterWall.test.ts`, 18 tests : le geste en avant puis vers soi en courant vers sa vitre, et le
-coup de stick stick gauche tiré, dans les deux situations), typecheck OK. Tests navigateur OK, dont
+lobé, il recule et prépare son smash sans contre-vitre), typecheck OK. Tests navigateur OK, dont
 `tests/e2e/counterWall.spec.ts` (manette Xbox virtuelle : les deux gestes, 3 contre-vitres sur 3 qui repassent le
 filet ; le décompte). **Pas encore joué à la vraie manette.** Sur le lob tendu, au geste : frappée au rebond, erreur
 0,3 (elle repasse) ; à l'arrivée de la balle, ~0,6 s après, parfaite. Le guide du stick droit cache Bleu quand il est

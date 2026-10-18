@@ -4,6 +4,7 @@ import type { CallKind, Duel, DuelPlayer } from '../sim/duel';
 import { predictBall } from '../sim/predict';
 import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
+import { outsideCourt } from '../sim/walkable';
 import { createCourt } from './court';
 import { createEffectsView, effectsEnabled } from './effectsView';
 import { arenaEnabled, createArena } from './arena';
@@ -11,6 +12,7 @@ import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { applyLook, enableShadows, exactColor, renderLook, setShadows } from './look';
 import { loadModel, modelsEnabled } from './models';
+import { dressCharacter, toonLookEnabled, updateOutline } from './toonLook';
 import { dressCourt, turfEnabled } from './turf';
 import type { RenderInfo } from '../ui/perfMeter';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
@@ -81,6 +83,17 @@ const SHADOW_RADIUS = 0.1;
 /** Part du déplacement latéral du joueur suivie par la caméra, et lissage (1/s) : à peine, comme à la télé. */
 const CAMERA_FOLLOW = 0.15;
 const CAMERA_SMOOTHING = 4;
+/**
+ * Dézoom automatique, seulement hors du terrain : quand la balle sort (por tres, por cuatro) ou qu'un
+ * joueur sort par la porte (salida de pista), le champ s'élargit pour garder à l'écran ce qui est dehors ;
+ * sur le terrain, la caméra ne bouge pas (un lob très haut peut quitter le cadre). Le champ va jusqu'à
+ * `CAMERA_MAX_ZOOM` fois le champ normal. Marge : part de l'écran (depuis le centre) où l'on veut les garder. Lissage (1/s) : vite pour reculer,
+ * lentement pour revenir.
+ */
+const CAMERA_MAX_ZOOM = 2.6;
+const CAMERA_FRAME_MARGIN = 0.88;
+const CAMERA_ZOOM_OUT = 6;
+const CAMERA_ZOOM_IN = 1.5;
 /** Lissage (1/s) de la rotation du corps quand il se tourne pour courir. */
 const BODY_TURN = 10;
 /** Vitesse à laquelle la foulée affichée suit la vitesse réelle (1/s). */
@@ -354,6 +367,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     while (players.length < duel.players.length) {
       const i = players.length;
       const view = createPlayerView(i < 2 ? TEAM_COLORS[i]! : PARTNER_COLORS[i - 2]!, i, duel.players[i]!.height);
+      // Rendu soigné : ombres teintées, liseré de lumière et trait constant à l'écran (`toonLook.ts`).
+      if (soigne && toonLookEnabled()) dressCharacter(view.rig.object);
       // Ombre portée : le disque sous les pieds s'efface, il ne reste qu'un léger contact.
       if (shadows) {
         setShadows(view.rig.object, false);
@@ -413,6 +428,9 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
    */
   const closeCamera = new URLSearchParams(location.search).get('camera');
   let cameraX = 0;
+  let baseFov = CAMERA_FOV;
+  let zoom = 1;
+  const framePoint = new THREE.Vector3();
   let shake = 0;
   let shakeTime = 0;
 
@@ -422,7 +440,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     const fovFactor = Math.max(1, CAMERA_ASPECT / camera.aspect);
-    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) * fovFactor));
+    baseFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) * fovFactor));
+    camera.fov = baseFov;
     camera.updateProjectionMatrix();
   };
   window.addEventListener('resize', resize);
@@ -530,7 +549,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       prepared !== null &&
       (prepared.letPass === true ||
         prepared.counterWall !== undefined ||
-        (chance !== null && player.stick.forward <= -duel.profile.rally.counterWall.stick));
+        (chance !== null && !prepared.swing && player.stick.forward <= -duel.profile.rally.counterWall.stick));
     view.anim.turn += ((wallStrike || aimsWall ? 1 : 0) - view.anim.turn) * (1 - Math.exp(-WALL_TURN * frameTime));
     // Face au filet ; le repère du joueur a +Z vers le filet et sa droite vers -X.
     view.object.rotation.y = (player.side < 0 ? 0 : Math.PI) + view.anim.turn * Math.PI;
@@ -563,6 +582,37 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const stand = plan?.stand;
     view.standMarker.visible = stand !== undefined;
     if (stand) view.standMarker.position.set(stand.x, 0.011, stand.z);
+  };
+
+  /** Élargit le champ juste assez pour garder à l'écran la balle et les joueurs sortis du terrain (voir `CAMERA_MAX_ZOOM`). */
+  const frameAll = (alpha: number, frameTime: number): void => {
+    camera.fov = baseFov;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    let need = 1;
+    const fit = (x: number, y: number, z: number): void => {
+      framePoint.set(x, y, z).project(camera);
+      if (framePoint.z > 1) return;
+      need = Math.max(need, Math.abs(framePoint.x) / CAMERA_FRAME_MARGIN, Math.abs(framePoint.y) / CAMERA_FRAME_MARGIN);
+    };
+    for (const player of duel.players) {
+      const p = lerp(player.prevPos, player.pos, alpha);
+      if (!outsideCourt(p)) continue;
+      fit(p.x, 0, p.z);
+      fit(p.x, player.height, p.z);
+    }
+    const { ball: simBall, prevBallPos } = duel;
+    if (simBall && prevBallPos && duel.phase === 'rally') {
+      const b = lerp(prevBallPos, simBall.pos, alpha);
+      if (duel.exit || outsideCourt(b)) fit(b.x, b.y, b.z);
+    }
+    const target = Math.min(CAMERA_MAX_ZOOM, need);
+    const rate = target > zoom ? CAMERA_ZOOM_OUT : CAMERA_ZOOM_IN;
+    zoom += (target - zoom) * (1 - Math.exp(-rate * frameTime));
+    if (zoom < 1.001) zoom = 1;
+    const half = THREE.MathUtils.degToRad(baseFov / 2);
+    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(half) * zoom));
+    camera.updateProjectionMatrix();
   };
 
   return {
@@ -602,6 +652,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const jitter = shake * 0.06 * Math.sin(shakeTime * 70);
       camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
       camera.lookAt(cameraX * 0.6, 0, CAMERA_LOOK_Z);
+      if (!closeCamera) frameAll(alpha, frameTime);
       if (closeCamera === 'proche' || closeCamera === 'dos') {
         const p = lerp(near.prevPos, near.pos, alpha);
         if (closeCamera === 'dos') camera.position.set(p.x + 0.6, 1.7, p.z - 4.2);
@@ -645,6 +696,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
         }
       }
       effects?.update(frozen ? 0 : frameTime, camera, renderer.getDrawingBufferSize(drawingSize).y);
+      updateOutline(camera);
       renderer.render(scene, camera);
     },
   };

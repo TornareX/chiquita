@@ -3,9 +3,9 @@ import type { CourtSide } from './shots';
 import { vec3, type Vec3 } from './vec3';
 
 /**
- * Où un joueur peut se tenir (GAME_DESIGN.md §5, salida de pista) : sa moitié du terrain, ou la zone
- * autour du terrain de son côté du filet. On passe de l'un à l'autre seulement par la porte de son
- * côté, dans l'un ou l'autre mur latéral. Un joueur est un disque de rayon `radius` ; dans la porte,
+ * Où un joueur peut se tenir (GAME_DESIGN.md §5, salida de pista) : sa moitié du terrain, ou toute la
+ * zone autour du terrain (dehors, on va partout, jusque derrière le fond adverse). On passe de l'un à
+ * l'autre seulement par la porte de son côté, dans l'un ou l'autre mur latéral. Un joueur est un disque de rayon `radius` ; dans la porte,
  * on tolère un rayon réduit (`DOOR_RADIUS`) pour qu'elle se franchisse sans viser au centimètre.
  */
 const DOOR_RADIUS = 0.15;
@@ -18,10 +18,10 @@ export function inCourt(p: Vec3, side: CourtSide, radius: number): boolean {
   return Math.abs(p.x) <= HALF_WIDTH - radius && depth >= radius && depth <= HALF_LENGTH - radius;
 }
 
-/** Hors du terrain (au-delà d'un mur, de son côté du filet), dans la zone praticable. */
-export function inRunoff(p: Vec3, side: CourtSide, radius: number): boolean {
-  const depth = p.z * side;
-  if (depth < radius || depth > HALF_LENGTH + RUNOFF_BACK || Math.abs(p.x) > HALF_WIDTH + RUNOFF_SIDE) return false;
+/** Hors du terrain (au-delà d'un mur, d'un côté ou de l'autre du filet), dans la zone praticable. */
+export function inRunoff(p: Vec3, _side: CourtSide, radius: number): boolean {
+  const depth = Math.abs(p.z);
+  if (depth > HALF_LENGTH + RUNOFF_BACK || Math.abs(p.x) > HALF_WIDTH + RUNOFF_SIDE) return false;
   return Math.abs(p.x) >= HALF_WIDTH + radius || depth >= HALF_LENGTH + radius;
 }
 
@@ -53,15 +53,15 @@ export function clampWalkable(p: Vec3, side: CourtSide, radius: number): Vec3 {
     return vec3(x, p.y, depth * side);
   }
   let x = Math.min(HALF_WIDTH + RUNOFF_SIDE, Math.max(-(HALF_WIDTH + RUNOFF_SIDE), p.x));
-  let depth = Math.min(HALF_LENGTH + RUNOFF_BACK, Math.max(radius, p.z * side));
+  let z = Math.min(HALF_LENGTH + RUNOFF_BACK, Math.max(-(HALF_LENGTH + RUNOFF_BACK), p.z));
   // Trop près d'un mur, côté extérieur : écarté vers le mur le plus proche.
-  if (Math.abs(x) < HALF_WIDTH + radius && depth < HALF_LENGTH + radius) {
+  if (Math.abs(x) < HALF_WIDTH + radius && Math.abs(z) < HALF_LENGTH + radius) {
     const toSide = HALF_WIDTH + radius - Math.abs(x);
-    const toBack = HALF_LENGTH + radius - depth;
+    const toBack = HALF_LENGTH + radius - Math.abs(z);
     if (toSide <= toBack) x = Math.sign(x || 1) * (HALF_WIDTH + radius);
-    else depth = HALF_LENGTH + radius;
+    else z = Math.sign(z || side) * (HALF_LENGTH + radius);
   }
-  return vec3(x, p.y, depth * side);
+  return vec3(x, p.y, z);
 }
 
 /**
@@ -95,13 +95,18 @@ export function pathDistance(from: Vec3, to: Vec3, side: CourtSide): number {
 
 /**
  * Prochain point vers lequel courir pour aller de `from` à `to` : `to` lui-même, ou, s'il faut
- * sortir ou rentrer, d'abord l'entrée de la porte (en face d'elle), puis sa sortie.
+ * sortir ou rentrer, d'abord l'entrée de la porte (en face d'elle), puis sa sortie. Derrière un mur
+ * du fond, le coin du terrain passe avant.
  */
 export function waypoint(from: Vec3, to: Vec3, side: CourtSide): Vec3 {
   const via = door(from, to, side);
   if (!via) return to;
   const inward = outsideCourt(from) ? -1 : 1;
   const sign = Math.sign(via.x);
+  // Dehors, derrière un mur du fond : d'abord le coin du terrain, pour ne pas frotter le long du mur.
+  if (inward < 0 && Math.abs(from.z) > HALF_LENGTH && Math.abs(from.x) < HALF_WIDTH + 0.6) {
+    return vec3(sign * (HALF_WIDTH + 0.7), 0, Math.sign(from.z) * (HALF_LENGTH + 0.7));
+  }
   const depth = from.z * side;
   const aligned = depth >= DOOR_NEAR + DOOR_RADIUS + 0.05 && depth <= DOOR_FAR - DOOR_RADIUS - 0.05;
   // En face de la porte : on la franchit ; sinon on s'y présente, à 60 cm du mur.

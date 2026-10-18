@@ -85,9 +85,8 @@ export interface Engagement {
    */
   swing?: { prepared: boolean; end?: SwingEnd; wall?: boolean };
   /**
-   * Il la laisse passer pour une contre-vitre : stick tiré vers sa vitre pendant la préparation (quand le stick ne
-   * déplace pas le joueur), sur une balle qui va rebondir derrière lui. Ni volée ni coup haut : le coup se prépare
-   * au sol, après le rebond.
+   * Il la laisse passer pour une contre-vitre (geste de contre-vitre au stick droit), sur une balle qui va rebondir
+   * derrière lui. Ni volée ni coup haut : le coup se prépare au sol, après le rebond.
    */
   letPass?: boolean;
   /**
@@ -154,6 +153,8 @@ export interface DuelPlayer {
   assist: AssistLevel;
   /** Stick gauche pendant la préparation (`PrepMove`) ; les IA restent en `libre`. */
   prepMove: PrepMove;
+  /** Dehors, le stick a demandé de rentrer : il suit le chemin jusqu'à la porte tant qu'il ne le contredit pas. */
+  doorRoute: boolean;
 }
 
 export interface DuelShot {
@@ -340,6 +341,8 @@ const RECEIVER_PARTNER_DEPTH = 7.4;
 const DOUBLE_ROTATION = [0, 1, 2, 3] as const;
 /** Deux partenaires ne se chevauchent pas : écart minimal entre leurs centres (m). */
 const PARTNER_GAP = 0.75;
+/** Dedans, distance au filet (m, depuis la porte) jusqu'où pousser vers le mur latéral mène à la porte. */
+const DOOR_ASSIST = 3;
 /** Bande centrale partagée entre partenaires, de part et d'autre du centre de la paire (m), et égalité d'arrivée (s). */
 const MIDDLE_BAND = 0.7;
 const MIDDLE_TIE = 0.15;
@@ -408,6 +411,7 @@ function createDuelPlayer(index: number, format: DuelFormat): DuelPlayer {
     hand: 'right',
     assist: 'magnet',
     prepMove: 'libre',
+    doorRoute: false,
   };
 }
 
@@ -833,11 +837,10 @@ export class Duel {
     const engagement = player.engagement;
     // Fin du geste au stick droit : connue au relâcher.
     if (engagement?.swing && cmd.swing?.end) engagement.swing.end = cmd.swing.end;
-    // Stick tiré vers sa vitre pendant la préparation, sur une balle qui va le passer : il la laisse passer. Seulement
-    // si le stick ne le déplace pas (préparation bloquée ou ralentie) : en libre, il courrait vers sa vitre.
+    // Contre-vitre préparée au stick droit, sur une balle qui va le passer : il la laisse passer. Seulement ce geste : le
+    // stick gauche tiré vers sa vitre veut dire qu'il recule (sous un lob, pour le smash), pas qu'il la laisse passer.
     if (engagement && engagement.releaseTick === null && this.isReceiving(index)) {
-      const aims = PREP_MOVE[player.prepMove] < 1 && player.prepMove !== 'tard';
-      const letPass = (engagement.swing?.wall === true || (aims && cmd.stick.forward <= -r.counterWall.stick)) && this.passesBehind(index);
+      const letPass = engagement.swing?.wall === true && this.passesBehind(index);
       if (letPass !== (engagement.letPass ?? false)) {
         engagement.letPass = letPass;
         engagement.plan = null;
@@ -922,7 +925,8 @@ export class Duel {
     // Sinon, tirer le stick vers sa vitre le ferait courir avec la balle, qui ne serait jamais derrière lui.
     const counterWall =
       engagement !== null &&
-      (engagement.counterWall !== undefined || (cmd.stick.forward <= -r.counterWall.stick && this.counterWall(index)?.playable === true));
+      (engagement.counterWall !== undefined ||
+        (!engagement.swing && cmd.stick.forward <= -r.counterWall.stick && this.counterWall(index)?.playable === true));
     if (counterWall) {
       desired = vec3(0, 0, 0);
     } else if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
@@ -955,10 +959,6 @@ export class Duel {
     player.pos = vec3(moved.x, 0, moved.z);
   }
 
-  /**
-   * Aide à franchir la porte au stick : contre le mur latéral, près de la porte, pousser vers le mur
-   * (pour sortir) ou vers le terrain (pour rentrer) fait glisser le joueur jusqu'à l'embrasure.
-   */
 
   /** Vitesse voulue au stick gauche, à `scale` de la vitesse de course (normée : la diagonale ne va pas plus vite). */
   private stickVelocity(player: DuelPlayer, stick: ArcadeCommands['stick'], scale: number): Vec3 {
@@ -971,18 +971,47 @@ export class Duel {
     const speed = this.profile.player.maxSpeed * scale;
     return addScaled(addScaled(vec3(0, 0, 0), forwardFor(player.side), forward * speed), rightFor(player.side), right * speed);
   }
+  /**
+   * Aide à franchir la porte au stick. Dedans, contre le mur latéral à moins de `DOOR_ASSIST` de la porte,
+   * pousser vers le mur fait glisser le joueur jusqu'à l'embrasure. Dehors, où qu'il soit, pousser vers le
+   * terrain (ou à peu près vers la porte) le ramène à la porte de son côté, coin du terrain compris, puis le
+   * fait rentrer.
+   */
   private towardDoor(player: DuelPlayer, desired: Vec3): Vec3 {
     const { pos, side } = player;
     const radius = this.profile.player.radius;
+    const push = length(desired);
+    if (push < 1e-3 || !outsideCourt(pos)) player.doorRoute = false;
+    if (push < 1e-3) return desired;
+    if (outsideCourt(pos)) {
+      const sign = Math.sign(pos.x || 1);
+      const next = waypoint(pos, vec3(sign * (HALF_WIDTH - 1), 0, side * DOOR_MID), side);
+      const leg = flatDistance(next, pos);
+      if (leg < 1e-3) return desired;
+      const route = vec3((next.x - pos.x) / leg, 0, (next.z - pos.z) / leg);
+      // Vers le terrain (le point du terrain le plus proche), ou à peu près vers la porte : on suit le chemin.
+      const nx = Math.max(-HALF_WIDTH, Math.min(HALF_WIDTH, pos.x)) - pos.x;
+      const nz = Math.max(-HALF_LENGTH, Math.min(HALF_LENGTH, pos.z)) - pos.z;
+      const n = Math.sqrt(nx * nx + nz * nz);
+      const towardCourt = n > 1e-6 && (desired.x * nx + desired.z * nz) / (push * n) >= 0.5;
+      const along = (desired.x * route.x + desired.z * route.z) / push;
+      player.doorRoute = towardCourt || along >= 0.7 || (player.doorRoute && along > -0.2);
+      if (!player.doorRoute) return desired;
+      // Freine à l'approche de l'embrasure, pour ne pas la dépasser sur son élan.
+      const t = this.profile.player;
+      const entrance = flatDistance(pos, vec3(sign * (HALF_WIDTH + 0.6), 0, side * DOOR_MID));
+      return scale(route, Math.min(push, Math.max(2.5, Math.sqrt(2 * t.deceleration * entrance))));
+    }
     const sign = Math.sign(pos.x || 1);
     const outward = desired.x * sign;
     const nearWall = Math.abs(Math.abs(pos.x) - HALF_WIDTH) < radius + 0.15;
     const offset = side * DOOR_MID - pos.z;
-    const pushing = inCourt(pos, side, radius) ? outward > 0.5 : outsideCourt(pos) && outward < -0.5;
-    if (!nearWall || !pushing || Math.abs(offset) > 1.5 || Math.abs(offset) < 0.05) return desired;
+    const pushing = inCourt(pos, side, radius) && outward > 0.5;
+    if (!nearWall || !pushing || Math.abs(offset) > DOOR_ASSIST || Math.abs(offset) < 0.05) return desired;
     const speed = this.profile.player.maxSpeed * 0.8;
     return vec3(desired.x, 0, Math.sign(offset) * Math.min(speed, Math.abs(offset) * 12));
   }
+
 
   /** Le serveur lâche la balle : elle rebondit, il la frappera au relâcher. */
   private startToss(kind: ShotKind): void {
@@ -1052,7 +1081,9 @@ export class Duel {
     const chance = this.counterWall(index);
     // Geste de contre-vitre au stick droit : retenu même si la balle est encore loin (elle arrive vers lui).
     const wallGesture = engagement.swing?.wall === true;
-    const wantsWall = wallGesture || player.stick.forward <= -r.counterWall.stick;
+    // Aux boutons, stick gauche tiré vers sa vitre au relâcher. Au stick droit, seulement son geste : le stick gauche
+    // tiré vers sa vitre, c'est reculer.
+    const wantsWall = wallGesture || (!engagement.swing && player.stick.forward <= -r.counterWall.stick);
     const elapsed = (this.tick - engagement.releaseTick) * SIM_DT;
     if (!engagement.counterWall && wantsWall && (chance?.playable || (wallGesture && this.counterWallReady(index)))) {
       engagement.counterWall = { timing: null };
