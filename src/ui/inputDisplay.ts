@@ -7,7 +7,7 @@ import type { PhysicsProfile } from '../sim/profile';
 import { buttonsEnabled } from '../input/gamepad';
 import type { SwingStick } from '../input/swingStick';
 import { buttonIcon, escapeHtml, keysFor, type InputSource } from './buttonIcons';
-import { playerName } from './duelSettings';
+import { playerName, type InputDisplayMode } from './duelSettings';
 import { createSwingGuide, type SwingContext } from './swingGuide';
 
 /**
@@ -166,8 +166,11 @@ export class ReleaseTracker {
 export interface InputDisplay {
   /** Après chaque pas de simulation : état lu pour chaque joueur, `null` pour une IA. */
   step(duel: Duel, states: readonly (PadState | null)[]): void;
-  /** À chaque image : `sources[i]` est `null` pour une IA (pas d'affichage). */
-  render(duel: Duel, states: readonly (PadState | null)[], sources: readonly (InputSource | null)[], visible: boolean): void;
+  /**
+   * À chaque image : `sources[i]` est `null` pour une IA (pas d'affichage). `mode` : discret, les sticks en petit
+   * dans le coin ; détaillé, avec le dernier relâcher, l'historique et le guide du geste.
+   */
+  render(duel: Duel, states: readonly (PadState | null)[], sources: readonly (InputSource | null)[], mode: InputDisplayMode): void;
 }
 
 /** Couleur de chaque joueur : celle de son équipe, plus claire pour le partenaire en double. */
@@ -187,6 +190,7 @@ interface Widget {
   buttons: Record<ShotKind, { circle: SVGCircleElement; label: SVGTextElement }>;
   note: HTMLDivElement;
   history: HTMLDivElement;
+  compact: boolean;
   key: string;
   historyHtml: string;
 }
@@ -213,20 +217,25 @@ function sourceName(source: InputSource): string {
 /** Centre du stick droit dans le dessin : après les boutons quand ils sont affichés (`?boutons=1`). */
 const swingX = (): number => (buttonsEnabled() ? 160 : 98);
 
-function createWidget(index: number): Widget {
+/** Échelle du dessin des sticks en mode discret. */
+const COMPACT_SCALE = 0.55;
+
+function createWidget(index: number, compact: boolean): Widget {
   const withButtons = buttonsEnabled();
   const SWING_X = swingX();
   const root = document.createElement('div');
   root.className = 'input-display';
   root.dataset.player = String(index);
   root.style.cssText =
-    'position:fixed;left:16px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;' +
-    'background:rgba(10,16,24,.6);color:#f2f5f7;font:12px/1.35 system-ui,sans-serif;pointer-events:none;' +
-    `border-left:3px solid ${TEAM[index]!};width:min(400px,calc(100vw - 32px));box-sizing:border-box`;
+    'position:fixed;left:16px;display:flex;gap:10px;align-items:flex-start;border-radius:10px;' +
+    'color:#f2f5f7;font:12px/1.35 system-ui,sans-serif;pointer-events:none;box-sizing:border-box;' +
+    `border-left:3px solid ${TEAM[index]!};` +
+    (compact ? 'padding:3px 5px;background:rgba(10,16,24,.45);opacity:.85' : 'padding:8px 10px;background:rgba(10,16,24,.6);width:min(400px,calc(100vw - 32px))');
   const pads = document.createElement('div');
   pads.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px';
   const width = SWING_X + 30;
-  const row = svg('svg', { width, height: 60, viewBox: `0 0 ${width} 60` });
+  const scale = compact ? COMPACT_SCALE : 1;
+  const row = svg('svg', { width: Math.round(width * scale), height: Math.round(60 * scale), viewBox: `0 0 ${width} 60` });
   // Stick : cercle et point.
   row.append(svg('circle', { cx: 30, cy: 30, r: 26, fill: 'rgba(255,255,255,.06)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
   row.append(svg('line', { x1: 30, y1: 6, x2: 30, y2: 54, stroke: '#3a4a58', 'stroke-width': 1 }));
@@ -261,6 +270,8 @@ function createWidget(index: number): Widget {
   row.append(swingTrail, swingDot);
   const title = document.createElement('div');
   title.style.cssText = 'font-size:11px;color:#c9d3db;white-space:nowrap';
+  // Discret : ni titre ni texte, la couleur du bord dit qui est qui.
+  title.style.display = compact ? 'none' : '';
   pads.append(title, row);
   const text = document.createElement('div');
   text.style.cssText = 'display:flex;flex-direction:column;gap:2px;min-width:0';
@@ -269,9 +280,14 @@ function createWidget(index: number): Widget {
   const history = document.createElement('div');
   history.style.cssText = 'opacity:.8';
   text.append(note, history);
-  root.append(pads, text);
+  root.append(pads);
+  if (compact) {
+    // Discret : seulement le nom du dernier coup, à droite des sticks, le temps de le lire.
+    note.style.cssText = 'font-size:13px;font-weight:600;align-self:center;white-space:nowrap;padding-right:4px;display:none';
+    root.append(note);
+  } else root.append(text);
   document.body.append(root);
-  return { root, title, dot, swingDot, swingTrail, buttons, note, history, key: '', historyHtml: '' };
+  return { root, title, dot, swingDot, swingTrail, buttons, note, history, compact, key: '', historyHtml: '' };
 }
 
 function noteHtml(note: ReleaseNote, source: InputSource): string {
@@ -284,7 +300,7 @@ function noteHtml(note: ReleaseNote, source: InputSource): string {
 /**
  * Retour des entrées (TUTORIEL_PLAN.md §1) : pour chaque joueur humain, le stick, les 4 boutons de coup
  * avec les symboles de sa manette (le bouton maintenu s'allume, puis prend la couleur du résultat au
- * relâcher), ce que le dernier relâcher a donné, et les 5 précédents.
+ * relâcher). En mode détaillé, aussi ce que le dernier relâcher a donné, les 5 précédents, et le guide du geste.
  */
 export function createInputDisplay(swings?: readonly (SwingStick | null)[] | null): InputDisplay {
   const trackers = Array.from({ length: MAX_PLAYERS }, (_, i) => new ReleaseTracker(i));
@@ -296,14 +312,14 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
     step(duel, states) {
       states.forEach((state, i) => state && i < duel.players.length && trackers[i]!.step(duel, state));
     },
-    render(duel, states, sources, visible) {
+    render(duel, states, sources, mode) {
       const indices = trackers.map((_, i) => i);
-      const shown = indices.filter((i) => visible && i < duel.players.length && sources[i] && states[i]);
-      // En bas à gauche, au-dessus des noms des joueurs, empilés dans l'ordre des joueurs (Bleu en bas). À plus de
-      // deux (double à 3 ou 4 manettes), sans l'historique : ils tiennent dans l'écran sans cacher le score.
-      const base = (document.getElementById('players')?.offsetHeight ?? 36) + 22;
-      const compact = shown.length > 2;
-      let stack = base;
+      const shown = indices.filter((i) => mode !== 'off' && i < duel.players.length && sources[i] && states[i]);
+      const compact = mode === 'compact';
+      // En bas à gauche, empilés dans l'ordre des joueurs (Bleu en bas). Détaillé, à plus de deux (double à 3 ou
+      // 4 manettes) : sans l'historique, pour ne pas cacher le score.
+      const crowded = shown.length > 2;
+      let stack = compact ? 10 : 14;
       indices.forEach((i) => {
         const source = sources[i];
         const state = states[i];
@@ -313,16 +329,20 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
           guide.render(null, null, false, 0, 0, 'sol');
           return;
         }
-        const w = (widgets[i] ??= createWidget(i));
+        if (widgets[i] && widgets[i]!.compact !== compact) {
+          widgets[i]!.root.remove();
+          widgets[i] = null;
+        }
+        const w = (widgets[i] ??= createWidget(i, compact));
         w.root.style.display = 'flex';
         const bottom = stack;
-        w.history.style.display = compact ? 'none' : '';
+        w.history.style.display = crowded ? 'none' : '';
         w.root.style.bottom = `${bottom}px`;
-        stack += w.root.offsetHeight + 8;
+        stack += w.root.offsetHeight + (compact ? 4 : 8);
         const tracker = trackers[i]!;
         const lastNote = tracker.history[0];
         const recent = lastNote?.bySwing && (duel.tick - tracker.noteTick) * SIM_DT < NOTE_TIME ? lastNote.text : null;
-        guide.render(swings?.[i] ?? null, state.swing ?? null, true, 16 + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent);
+        guide.render(swings?.[i] ?? null, state.swing ?? null, !compact, 16 + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent);
 
         const key = source.kind === 'pad' ? source.family : `kbd${source.player}${source.layout?.size ?? 0}`;
         if (key !== w.key) {
@@ -372,7 +392,10 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
 
         // Pendant le maintien : quel bouton est armé. Sinon : le dernier relâcher, un court instant.
         let note = '';
-        if (state.shot && swingHeld(state)) {
+        if (compact) {
+          note = last && since < NOTE_TIME ? `<span style="color:${QUALITY_COLORS[last.quality]}">${escapeHtml(last.text)}</span>` : '';
+          w.note.style.display = note ? '' : 'none';
+        } else if (state.shot && swingHeld(state)) {
           note = `${SWING_BADGE} <span style="color:#c9d3db">armé au stick droit : choisis la fin du geste</span>`;
         } else if (state.shot && buttonsEnabled()) note = `${buttonIcon(state.shot, source)} <span style="color:#c9d3db">${SHOT_NAMES[state.shot]} : armé, relâche au bon moment</span>`;
         else if (last && since < NOTE_TIME) note = noteHtml(last, source);

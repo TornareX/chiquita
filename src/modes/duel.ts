@@ -206,8 +206,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     mood.update(frameTime);
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.
     audio.ambience(settings.sound && !menu.isOpen ? mood.stir : -1);
-    hud.update(duel, sources, buttons);
-    inputs.render(duel, states, buttons, settings.inputDisplay && !menu.isOpen && !padTest.isOpen);
+    hud.update(duel, sources, buttons, settings.inputDisplay === 'full');
+    inputs.render(duel, states, buttons, menu.isOpen || padTest.isOpen ? 'off' : settings.inputDisplay);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

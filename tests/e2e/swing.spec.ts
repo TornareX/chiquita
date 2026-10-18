@@ -27,7 +27,7 @@ async function rightStick(page: Page, right: number, up: number): Promise<void> 
 
 test('servir au stick droit : tiré vers soi, puis ramené devant', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?ai=normal');
+  await page.goto('/?ai=normal&entrees=detaille');
   await page.waitForFunction(() => window.__duel !== undefined);
   await plugPad(page);
 
@@ -56,7 +56,7 @@ test('servir au stick droit : tiré vers soi, puis ramené devant', async ({ pag
 
 test('par défaut, tout se joue aux sticks : pas de boutons affichés, aide aux sticks', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?ai=normal');
+  await page.goto('/?ai=normal&entrees=detaille');
   await page.waitForFunction(() => window.__duel !== undefined);
   await plugPad(page);
   await expect(page.locator('#help')).toContainText('Stick droit tiré vers toi');

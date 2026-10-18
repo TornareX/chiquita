@@ -37,7 +37,7 @@ async function press(page: Page, index: number, pressed: boolean): Promise<void>
 
 test('les boutons pressés s’affichent avec les symboles de la manette', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?ai=normal&boutons=1');
+  await page.goto('/?ai=normal&boutons=1&entrees=detaille');
   await page.waitForFunction(() => window.__duel !== undefined);
   await plugPlayStation(page);
 

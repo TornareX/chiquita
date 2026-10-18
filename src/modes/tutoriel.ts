@@ -388,7 +388,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     const paused = speed === undefined || padTest.isOpen;
     if (!paused && now >= hitstopUntil) alpha = loop.advance(frameTime * speed);
     view.render(alpha, frameTime, now < hitstopUntil);
-    inputs.render(duel, states, buttons, settings.inputDisplay && !paused);
+    inputs.render(duel, states, buttons, settings.inputDisplay === 'off' || paused ? 'off' : 'full');
     updateStatus();
     requestAnimationFrame(frame);
   };

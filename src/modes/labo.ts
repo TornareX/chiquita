@@ -127,9 +127,9 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     last = now;
     if (now >= hitstopUntil) alpha = loop.advance(frameTime);
     view.render(alpha, frameTime, now < hitstopUntil);
-    hud.update(duel, sources, buttons);
+    hud.update(duel, sources, buttons, true);
     panel.update(won, played, buttons[0]);
-    inputs.render(duel, states, buttons, settings.inputDisplay);
+    inputs.render(duel, states, buttons, settings.inputDisplay === 'off' ? 'off' : 'full');
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

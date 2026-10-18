@@ -3,6 +3,15 @@ import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { ASSIST_LEVELS, PREP_MOVES, type AssistLevel, type PrepMove } from '../sim/duel';
 import { DEFAULT_RULES } from '../sim/score';
 
+/** Retour des entrées : masqué, discret (match) ou détaillé (tests). */
+export type InputDisplayMode = 'off' | 'compact' | 'full';
+export const INPUT_DISPLAY_MODES: readonly InputDisplayMode[] = ['compact', 'full', 'off'];
+const INPUT_DISPLAY_LABELS: Record<InputDisplayMode, string> = {
+  compact: 'Discret (les sticks, dans le coin)',
+  full: 'Détaillé (tests : historique, guide du geste, aide)',
+  off: 'Masqué',
+};
+
 /** Qui joue un côté : un humain (manette ou clavier), ou l'IA à un niveau. */
 export type Controller = 'humain' | AiLevel;
 
@@ -30,8 +39,11 @@ export interface DuelSettings {
   farOwnView: boolean;
   /** Symboles des boutons : détectés sur la manette, ou imposés (manette mal reconnue). */
   padStyle: PadStyle;
-  /** Affiche les boutons pressés et le stick de chaque joueur humain, avec le résultat de ses frappes. */
-  inputDisplay: boolean;
+  /**
+   * Retour des entrées de chaque joueur humain : discret (les sticks, petits, dans le coin), détaillé (pour les
+   * tests : historique des frappes, guide du geste, aide aux coups et retour sur chaque frappe), ou masqué.
+   */
+  inputDisplay: InputDisplayMode;
   match: MatchSettings;
 }
 
@@ -46,7 +58,7 @@ export const DEFAULT_SETTINGS: DuelSettings = {
   sound: true,
   farOwnView: false,
   padStyle: 'auto',
-  inputDisplay: true,
+  inputDisplay: 'compact',
   match: { free: false, doubles: false, ...DEFAULT_RULES },
 };
 
@@ -111,7 +123,10 @@ function sanitize(raw: unknown): DuelSettings {
   if (typeof r.sound === 'boolean') s.sound = r.sound;
   if (typeof r.farOwnView === 'boolean') s.farOwnView = r.farOwnView;
   if (PAD_STYLES.includes(r.padStyle as PadStyle)) s.padStyle = r.padStyle as PadStyle;
-  if (typeof r.inputDisplay === 'boolean') s.inputDisplay = r.inputDisplay;
+  // Avant les trois niveaux, c'était oui ou non : « oui » devient discret.
+  const shown: unknown = r.inputDisplay;
+  if (typeof shown === 'boolean') s.inputDisplay = shown ? 'compact' : 'off';
+  else if (INPUT_DISPLAY_MODES.includes(shown as InputDisplayMode)) s.inputDisplay = shown as InputDisplayMode;
   const m = r.match;
   if (m && typeof m === 'object') {
     if (typeof m.free === 'boolean') s.match.free = m.free;
@@ -162,7 +177,9 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
   if (PREP_MOVES.includes(prep as PrepMove)) s.prepMove = prep as PrepMove;
   const style = params.get('manette');
   if (PAD_STYLES.includes(style as PadStyle)) s.padStyle = style as PadStyle;
-  if (params.has('entrees')) s.inputDisplay = params.get('entrees') !== '0';
+  // `?entrees=0` (masqué), `1` (discret) ou `detaille`.
+  const entrees = params.get('entrees');
+  if (entrees !== null) s.inputDisplay = entrees === '0' ? 'off' : entrees === 'detaille' ? 'full' : 'compact';
   if (params.has('free')) s.match.free = true;
   const positive = (name: string): number | null => {
     const value = Number(params.get(name));
@@ -352,9 +369,9 @@ export function createSettingsMenu(
   row(controls, 'Symboles des boutons', padSelect);
   row(
     controls,
-    'Afficher les boutons pressés',
-    check(settings.inputDisplay, (on) => {
-      settings.inputDisplay = on;
+    'Retour des entrées',
+    select(INPUT_DISPLAY_MODES, (m) => INPUT_DISPLAY_LABELS[m], settings.inputDisplay, (m) => {
+      settings.inputDisplay = m;
       changed();
     }),
   );
