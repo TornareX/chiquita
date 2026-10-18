@@ -895,3 +895,10 @@ commité d'un bloc par une autre session.
 Projecteurs des montants qui rayonnent (halos), faisceaux de lumière légers sur le terrain, salle bleu nuit façon
 Premier Padel (`?salle=0` pour comparer). Le sol de salle satiné a été abandonné (gris clair vu en rasant).
 Typecheck OK, 537 tests unitaires OK, e2e 30/30 en un seul worker. **Pas encore joué.**
+
+## Polish visuel V6 : post-traitement (19/10/2026)
+
+pmndrs/postprocessing + N8AO : occlusion aux contacts, bloom sur les projecteurs (cœur intense au centre du halo),
+courbe Neutral dans le compositeur, vignette douce, SMAA ; vitres compensées (mélange linéaire). +0,45 ms par image
+sur RTX 4070 ; coupure automatique sous 45 i/s, en rendu logiciel et par `?postfx=0`. Typecheck OK, 537 tests
+unitaires OK, e2e 30/30 en un seul worker, build OK. **Pas encore joué.**

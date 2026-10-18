@@ -21,7 +21,10 @@ const DIR = 'screenshots/rendu';
 /** `RENDU_SCENE=jeu` : une seule scène, pour régler vite. */
 // Chromium sur la vraie carte graphique : en rendu logiciel, ombres et reflets sont coupés (`look.ts`) et le temps
 // par image ne vaut rien. `RENDU_LOGICIEL=1` pour voir ce rendu de secours. Sans carte, Chromium y retombe seul.
-if (!env.RENDU_LOGICIEL) test.use({ launchOptions: { args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] } });
+// `RENDU_SANS_VSYNC=1` : images non plafonnées à 60 i/s, pour lire le vrai coût d'une image.
+const GPU_ARGS = ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'];
+const UNCAPPED = env.RENDU_SANS_VSYNC ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : [];
+if (!env.RENDU_LOGICIEL) test.use({ launchOptions: { args: [...GPU_ARGS, ...UNCAPPED] } });
 const SCENES = ALL_SCENES.filter((scene) => !env.RENDU_SCENE || scene.name === env.RENDU_SCENE);
 
 async function frozenScene(page: Page, query: string): Promise<void> {
@@ -43,6 +46,11 @@ for (const [variant, extra] of VARIANTS) {
     test.setTimeout(120_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    // Shaders patchés et post-traitement : une erreur de compilation ne lève pas d'exception, elle s'écrit en console.
+    // (Les avertissements du compilateur Direct3D sur les shaders de N8AO et SMAA, sans effet, ne comptent pas.)
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
     const perf: Record<string, unknown> = {};
     for (const scene of SCENES) {
       await frozenScene(page, scene.query + extra);

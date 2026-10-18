@@ -93,7 +93,7 @@ export function setShadows(object: THREE.Object3D, receive: boolean): void {
 }
 
 /** Navigateur sans accélération graphique (pilote absent, liste noire, Chromium des tests sans écran). */
-function softwareRendering(renderer: THREE.WebGLRenderer): boolean {
+export function softwareRendering(renderer: THREE.WebGLRenderer): boolean {
   const gl = renderer.getContext();
   const info = gl.getExtension('WEBGL_debug_renderer_info');
   const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));

@@ -293,6 +293,32 @@ npx playwright test tests/e2e/rendu.spec.ts
 
 À juger en jeu (`?salle=0` pour comparer).
 
+**V6 — post-traitement** (19/10/2026 ; `src/render/postfx.ts`) :
+- Dépendances ajoutées : `postprocessing` 6.39.5 (pmndrs, compatible three < 0.187) et `n8ao` 2.0.1 (sans types :
+  `src/n8ao.d.ts`).
+- Chaîne : rendu en tampon flottant → **N8AO** (occlusion, demi-résolution, qualité « Performance », rayon 0,6 m)
+  → **bloom** à seuil haut (4, en lumière linéaire) → **courbe Neutral** (déplacée du moteur au compositeur, même
+  exposition) → contraste +0,03 → **vignette** douce → **SMAA** (le MSAA du moteur est coupé).
+- Pièges trouvés :
+  - les lignes et la casquette, sous le projecteur, valent plus de 3 fois le blanc : seuil du bloom à 4, et les
+    projecteurs ont un **cœur** très intense (×14, 45 cm) au centre de leur halo doux, seul à fleurir ;
+  - le compositeur mélange les transparents en lumière linéaire : à opacité égale, les **vitres** devenaient
+    laiteuses. Opacité ×0,4 avec le post-traitement (`linearGlass`) ;
+  - +0,06 de saturation poussait le bleu vers le violet : retiré. Vignette à 0,35 (à 0,5, elle assombrissait de
+    20 % les coins où se tiennent les joueurs).
+- Couleur du sol au centre : (35, 91, 224) contre (43, 108, 216) en V5 ; balle aussi lisible en gris.
+- Coût, sans plafond à 60 i/s (RTX 4070, 1280 × 720) : +0,45 ms par image en vue de jeu (1,47 contre 1,02 ms),
+  +0,5 ms en double. Pas mesuré sur une petite carte graphique.
+- **Qualité automatique** : sous 45 i/s en moyenne pendant 3 s (après 2 s de mise en route, onglet visible), le
+  post-traitement se coupe pour la partie et le moteur reprend sa courbe de tons. Coupé aussi en rendu
+  logiciel et par `?postfx=0`.
+- Le banc d'essai échoue désormais sur une erreur de console (shader qui ne compile pas). Les avertissements
+  du compilateur Direct3D sur les shaders de N8AO/SMAA (précision, dérivée dans une boucle) sont sans effet.
+- `RENDU_SANS_VSYNC=1` : le banc mesure sans plafond à 60 i/s. `comparaison-v6-*.png` (V5 | V6).
+- Pas fait : étalonnage par LUT (contraste et courbe suffisent pour l'instant).
+
+À juger en jeu (`?postfx=0` pour comparer).
+
 ## 5. Risques
 
 - **Lisibilité** : le principal risque. Halo, occlusion ou étalonnage qui noient la balle jaune

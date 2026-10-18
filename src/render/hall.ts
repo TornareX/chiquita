@@ -18,6 +18,12 @@ const LAMPS: readonly { pos: [number, number, number]; aim: [number, number, num
 const HALO_SIZE = 1.6;
 const HALO_OPACITY = 0.85;
 const HALO_COLOR = 0xfff1dc;
+/**
+ * Avec le post-traitement (V6) : un petit cœur bien plus intense que le blanc, seul à franchir le seuil du bloom,
+ * au centre du halo doux. Taille (m) et intensité. [à calibrer]
+ */
+const CORE_SIZE = 0.45;
+const CORE_HDR = 14;
 /** Faisceau : demi-angle d'ouverture et opacité au plus fort (près du projecteur). Très faible : la balle y passe. */
 const BEAM_ANGLE = THREE.MathUtils.degToRad(24);
 const BEAM_OPACITY = 0.09;
@@ -84,9 +90,9 @@ function beamMaterial(): THREE.ShaderMaterial {
 
 /**
  * Habille la salle : halos et faisceaux des projecteurs ajoutés à `scene`, ambiance appliquée à l'arène (`arena`,
- * ses meshes `sol-salle` et `tribunes`) et au fond. Rien n'est modifié sans arène.
+ * ses meshes `sol-salle` et `tribunes`) et au fond. `hdr` : post-traitement actif (bloom). Rien n'est modifié sans arène.
  */
-export function dressHall(scene: THREE.Scene, arena: THREE.Object3D): void {
+export function dressHall(scene: THREE.Scene, arena: THREE.Object3D, hdr = false): void {
   scene.background = new THREE.Color(HALL_BACKGROUND);
   if (scene.fog instanceof THREE.Fog) scene.fog.color.set(HALL_BACKGROUND);
   arena.traverse((node) => {
@@ -104,6 +110,8 @@ export function dressHall(scene: THREE.Scene, arena: THREE.Object3D): void {
     depthWrite: false,
     fog: false,
   });
+  const core = hdr ? halo.clone() : null;
+  core?.color.multiplyScalar(CORE_HDR);
   const beam = beamMaterial();
   const up = new THREE.Vector3(0, -1, 0);
   for (const lamp of LAMPS) {
@@ -114,6 +122,13 @@ export function dressHall(scene: THREE.Scene, arena: THREE.Object3D): void {
     sprite.position.copy(pos).add(new THREE.Vector3(-Math.sign(pos.x) * 0.15, 0, 0));
     sprite.renderOrder = 5;
     scene.add(sprite);
+    if (core) {
+      const glow = new THREE.Sprite(core);
+      glow.scale.setScalar(CORE_SIZE);
+      glow.position.copy(sprite.position);
+      glow.renderOrder = 6;
+      scene.add(glow);
+    }
 
     const aim = new THREE.Vector3(...lamp.aim);
     const length = pos.distanceTo(aim);

@@ -10,11 +10,12 @@ import { createEffectsView, effectsEnabled } from './effectsView';
 import { arenaEnabled, createArena } from './arena';
 import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
-import { applyLook, enableShadows, exactColor, renderLook, setShadows } from './look';
+import { applyLook, enableShadows, exactColor, renderLook, setShadows, softwareRendering } from './look';
 import { loadModel, modelsEnabled } from './models';
 import { dressCharacter, toonLookEnabled, updateOutline } from './toonLook';
 import { dressCourt, turfEnabled } from './turf';
 import { dressHall, hallEnabled } from './hall';
+import { createPostfx, linearGlass, postfxWanted } from './postfx';
 import type { RenderInfo } from '../ui/perfMeter';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
@@ -307,12 +308,17 @@ function createBallView(): {
 }
 
 export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const look = renderLook();
+  // Avec le post-traitement, l'anticrénelage est un SMAA en fin de chaîne : le MSAA du moteur gênerait l'occlusion.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !postfxWanted(look) });
+  // Plusieurs passes par image : le compteur du banc d'essai est remis à zéro à chaque image, pas à chaque passe.
+  renderer.info.autoReset = false;
+  /** Post-traitement actif (`postfx.ts`) : rendu en lumière linéaire, bloom ; jamais en rendu logiciel. */
+  const hdr = postfxWanted(look) && !softwareRendering(renderer);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
-  const look = renderLook();
   applyLook(renderer, scene, look);
   const soigne = look === 'soigne';
   // Salle sombre autour d'un terrain très éclairé (étape E6) ; sans l'arène, le fond d'avant.
@@ -325,7 +331,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   if (arena) {
     scene.add(arena.object);
     // Rendu soigné : halos et faisceaux des projecteurs, salle bleu nuit (`hall.ts`).
-    if (soigne && hallEnabled()) dressHall(scene, arena.object);
+    if (soigne && hallEnabled()) dressHall(scene, arena.object, hdr);
     if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__arena = arena;
     // Le terrain sous les projecteurs : un cône de lumière au-dessus, qui laisse les tribunes dans la pénombre.
     // Rendu soigné : projecteurs d'un blanc légèrement chaud, pour que les ombres froides de l'ambiance ressortent.
@@ -356,6 +362,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   // Rendu soigné : tapis bleu façon Premier Padel, lignes blanches (avant le découpage de la vitre proche, qui touche aux matériaux).
   const turf = soigne && turfEnabled();
   if (turf) dressCourt(court.object);
+  if (hdr) linearGlass(court.object);
   clipNearWall(court.object);
   if (shadows) setShadows(court.object, true);
   const ball = createBallView();
@@ -414,6 +421,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       if (courtModel) {
         court.setModel(courtModel, false);
         if (turf) dressCourt(court.object);
+        if (hdr) linearGlass(court.object);
         clipNearWall(court.object);
         if (shadows) setShadows(court.object, true);
       }
@@ -425,6 +433,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   }
 
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 200);
+  const postfx = hdr ? createPostfx(renderer, scene, camera) : null;
   /**
    * `?camera=proche` : de trois quarts face, côté coup droit, près du joueur 1 ; `?camera=dos` : derrière lui.
    * Pour juger les poses du personnage.
@@ -441,6 +450,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     renderer.setSize(width, height, false);
+    postfx?.setSize(width, height);
     camera.aspect = width / height;
     const fovFactor = Math.max(1, CAMERA_ASPECT / camera.aspect);
     baseFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) * fovFactor));
@@ -700,7 +710,9 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       }
       effects?.update(frozen ? 0 : frameTime, camera, renderer.getDrawingBufferSize(drawingSize).y);
       updateOutline(camera);
-      renderer.render(scene, camera);
+      renderer.info.reset();
+      if (postfx) postfx.render(frameTime);
+      else renderer.render(scene, camera);
     },
   };
 }
