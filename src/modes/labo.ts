@@ -1,5 +1,5 @@
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { applySwing, connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
@@ -51,7 +51,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
 
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
-  const keyboard = createKeyboardPads();
+  const keyboard = createKeyboardPads(canvas);
   const sounds = createSounds();
   for (const type of ['pointerdown', 'keydown'] as const) {
     window.addEventListener(type, () => sounds.unlock(), { once: true });
@@ -112,7 +112,8 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     sources[0] = pad ? 'Manette 1' : 'Clavier';
     // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).
     if (swings) swings[0].wallReady = duel.counterWallReady(0);
-    const state = mergePads(pad ? readGamepad(pad, swings?.[0], SIM_DT) : IDLE_PAD, keyboard.read(0));
+    // Manette, clavier et souris : un seul stick droit, le plus poussé, et un seul geste reconnu.
+    const state = applySwing(mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(0, SIM_DT)), swings?.[0], SIM_DT);
     states[0] = state;
     buttons[0] = pad ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) } : { kind: 'keyboard', player: 0, layout: keyboardLayout };
     return [toCommands(state, true), bot.commands(duel)];

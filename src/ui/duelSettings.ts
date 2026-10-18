@@ -1,5 +1,5 @@
 import { connectedGamepads } from '../input/gamepad';
-import { KEY_LAYOUTS } from '../input/keyboardArcade';
+import { KEY_LAYOUTS, layoutKeys } from '../input/keyboardArcade';
 import { PAD_FAMILY_NAMES, PAD_STYLES, type PadStyle } from '../input/padStyle';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { ASSIST_LEVELS, PREP_MOVES, type AssistLevel, type PrepMove } from '../sim/duel';
@@ -117,8 +117,8 @@ export const CONTROLLER_LABELS: Record<Controller, string> = {
   manette2: 'Manette 2',
   manette3: 'Manette 3',
   manette4: 'Manette 4',
-  clavier1: 'Clavier bleu (ZQSD + J K L I)',
-  clavier2: 'Clavier rouge (flèches + pavé)',
+  clavier1: 'Clavier bleu (ZQSD + I J K L ou souris)',
+  clavier2: 'Clavier rouge (flèches + pavé 8 4 5 6)',
   facile: 'IA facile',
   normal: 'IA normale',
   fort: 'IA forte',
@@ -445,8 +445,7 @@ export function createSettingsMenu(
   window.addEventListener('keydown', (event) => {
     if (overlay.hidden) return;
     KEY_LAYOUTS.forEach((layout, k) => {
-      const keys = [layout.up, layout.down, layout.left, layout.right, layout.assist, ...layout.shots.map(([code]) => code)];
-      if (keys.includes(event.code)) light(k === 0 ? 'clavier1' : 'clavier2');
+      if (layoutKeys(layout).includes(event.code)) light(k === 0 ? 'clavier1' : 'clavier2');
     });
   });
   /** Boutons tenus au dernier passage, par manette : on allume à l'appui. */

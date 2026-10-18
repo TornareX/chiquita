@@ -1,5 +1,5 @@
 import { createSounds } from '../audio/sounds';
-import { buttonsEnabled, connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { applySwing, buttonsEnabled, connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
@@ -71,7 +71,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   duel.players[0].prepMove = settings.prepMove;
 
   const view = createDuelView(canvas, duel);
-  const keyboard = createKeyboardPads();
+  const keyboard = createKeyboardPads(canvas);
   const sounds = createSounds();
   for (const type of ['pointerdown', 'keydown'] as const) window.addEventListener(type, () => sounds.unlock(), { once: true });
   window.addEventListener('gamepadconnected', () => sounds.unlock());
@@ -119,7 +119,8 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
     buttons[0] = pad
       ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
       : { kind: 'keyboard', player: 0, layout: keyboardLayout };
-    return mergePads(pad ? readGamepad(pad, gesture ? swings?.[0] : undefined, SIM_DT) : IDLE_PAD, keyboard.read(0));
+    // Manette, clavier et souris : un seul stick droit, le plus poussé, et un seul geste reconnu.
+    return applySwing(mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(0, SIM_DT)), gesture ? swings?.[0] : undefined, SIM_DT);
   };
 
   const expected = (): ShotKind => lesson.demo(attempt).kind;

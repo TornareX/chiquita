@@ -1,5 +1,6 @@
 import type { ArcadeCommands, ShotKind } from '../sim/commands';
 import { rightStickAxes, type SwingStick } from './swingStick';
+import { strongest } from './virtualStick';
 
 /** Stick et boutons d'un joueur, dans le repère de l'écran : `up` vers le haut de l'écran. */
 export interface PadState {
@@ -16,6 +17,11 @@ export interface PadState {
    * valider dans les menus.
    */
   face?: ShotKind | null;
+  /**
+   * Stick droit lu, avant la reconnaissance du geste (`applySwing`) : celui de la manette, ou le stick virtuel du
+   * clavier et de la souris (`virtualStick.ts`). Repère de l'écran.
+   */
+  aim?: { right: number; up: number };
 }
 
 export const IDLE_PAD: PadState = { stick: { up: 0, right: 0 }, shot: null, assistButton: false };
@@ -57,14 +63,23 @@ export function readGamepad(pad: Gamepad, swing?: SwingStick, dt = 0): PadState 
   if (button(15)) x = 1;
   const face = SHOT_BUTTONS.find(([i]) => button(i))?.[1] ?? null;
   const shot = buttonsEnabled() ? face : null;
-  if (!swing) return { stick: { up: y, right: x }, shot, assistButton: button(8), face };
-  const right = rightStickAxes(pad.axes[2] ?? 0, -(pad.axes[3] ?? 0));
+  const aim = rightStickAxes(pad.axes[2] ?? 0, -(pad.axes[3] ?? 0));
+  return applySwing({ stick: { up: y, right: x }, shot, assistButton: button(8), face, aim }, swing, dt);
+}
+
+/**
+ * Reconnaît le geste du stick droit (`state.aim`), quelle que soit la source : manette, clavier ou souris passent
+ * par le même `SwingStick`, donc les mêmes gestes et le même ressenti. Un pas de `dt` s. Sans `swing`, rien ne change.
+ * Un bouton de coup tenu garde la priorité.
+ */
+export function applySwing(state: PadState, swing?: SwingStick, dt = 0): PadState {
+  if (!swing) return state;
+  const right = state.aim ?? { right: 0, up: 0 };
   const gesture = swing.update(right.right, right.up, dt);
+  const { shot } = state;
   return {
-    stick: { up: y, right: x },
+    ...state,
     shot: shot ?? gesture.shot,
-    assistButton: button(8),
-    face,
     ...(!shot && gesture.swing ? { gesture: gesture.swing } : {}),
     swing: { ...right, shot: gesture.shot },
   };
@@ -110,5 +125,7 @@ export function mergePads(a: PadState, b: PadState): PadState {
     ...((a.gesture ?? b.gesture) ? { gesture: (a.gesture ?? b.gesture)! } : {}),
     swing: a.swing ?? b.swing,
     face: a.face ?? b.face ?? null,
+    // Stick droit : le plus poussé, pour que le geste se reconnaisse une seule fois sur les deux sources.
+    ...((a.aim ?? b.aim) ? { aim: strongest(a.aim ?? { right: 0, up: 0 }, b.aim ?? { right: 0, up: 0 }) } : {}),
   };
 }

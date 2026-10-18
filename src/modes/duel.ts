@@ -2,7 +2,7 @@ import { createAnnouncer } from '../audio/announcer';
 import { shotPower, SqueakDetector, stepCrowdReactions, VOICES } from '../audio/recipes';
 import { CrowdMood } from '../render/arena';
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { applySwing, connectedGamepads, IDLE_PAD, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
@@ -68,7 +68,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
-  const keyboard = createKeyboardPads();
+  const keyboard = createKeyboardPads(canvas);
   const audio = createSounds();
   const sounds = muteable(audio, () => settings.sound);
   const announcer = createAnnouncer();
@@ -117,8 +117,11 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     },
   );
   const menu = createSettingsMenu(settings, apply, () => padTest.open());
-  /** Frappe au geste du stick droit, une par manette ; et celle de la manette tenue par chaque joueur. */
-  const swings = swingEnabled() ? [new SwingStick(), new SwingStick(), new SwingStick(), new SwingStick()] : null;
+  /**
+   * Frappe au geste du stick droit, une par manette puis une par côté du clavier (touches, et souris pour le bleu) ;
+   * et celle tenue par chaque joueur.
+   */
+  const swings = swingEnabled() ? Array.from({ length: 6 }, () => new SwingStick()) : null;
   const playerSwings: (SwingStick | null)[] = [null, null, null, null];
   const inputs = createInputDisplay(swings && playerSwings);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
@@ -145,11 +148,13 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const keys = keyboardOf(controller);
       const pad = padIndex === null ? undefined : pads[padIndex];
       if (padIndex !== null && !pad) sources[index] += ' (pas branchée)';
-      const swing = padIndex === null ? null : (swings?.[padIndex] ?? null);
+      const slot = padIndex ?? (keys === null ? null : 4 + keys);
+      const swing = slot === null ? null : (swings?.[slot] ?? null);
       playerSwings[index] = swing;
       // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).
       if (swing) swing.wallReady = duel.counterWallReady(index);
-      const state: PadState = pad ? readGamepad(pad, swing ?? undefined, SIM_DT) : keys === null ? IDLE_PAD : keyboard.read(keys);
+      const raw: PadState = pad ? readGamepad(pad) : keys === null ? IDLE_PAD : keyboard.read(keys, SIM_DT);
+      const state = applySwing(raw, swing ?? undefined, SIM_DT);
       states[index] = state;
       buttons[index] = pad
         ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
