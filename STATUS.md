@@ -767,3 +767,20 @@ Retour de Xavier : au filet, face à une chiquita, il la ratait souvent quand il
 Retour de Xavier après essai : moins facile, viser tôt au stick gauche le déplace. `bloque` redevient immobile dès
 l'appui (défaut) ; le blocage tardif devient une option à part, `tard` (« Bloqué au dernier moment », `?prepa=tard`).
 Le point d'impact qui suit le joueur en placement manuel reste.
+
+## Gameplay : écran de composition des équipes (18/10/2026, étape 1 de `CHANTIERS_PLAN.md`)
+
+Demandé par Xavier : pouvoir jouer à gauche ou à droite avec une seule manette. Avant, la manette n° N jouait
+forcément la place n° N (Bleu 1, à droite), et le clavier ne servait que Bleu 1 et Rouge 1.
+
+- **Réglages → Équipes** : le terrain vu comme à l'écran (Bleu en bas, de dos ; Rouge en haut ; en double, la
+  droite de Bleu à droite de l'écran, celle de Rouge à gauche). Une carte par place : qui la joue (Manette 1 à 4,
+  Clavier bleu, Clavier rouge, IA facile, normale ou forte) et, pour un humain, sa course assistée. Une manette ou
+  un clavier ne joue qu'une place : la donner ailleurs remet l'ancienne place à l'IA normale.
+- Un bouton d'une manette (ou une touche d'un clavier), menu ouvert, allume la place qu'elle joue ; la liste des
+  manettes branchées s'affiche sous le terrain. La case « 2 contre 2 » montre tout de suite les 4 places.
+- Anciens réglages : « humain » devient la manette de son numéro de place, comme avant. Une manette ne lit plus le
+  clavier en plus : pour jouer au clavier, choisir « Clavier bleu » ou « Clavier rouge ».
+- Vérifié : 2 tests de simulation (humain à gauche : l'IA de droite lui laisse les balles de gauche et du milieu,
+  il sert), 4 tests des réglages, un test navigateur (`tests/e2e/places.spec.ts` : une manette virtuelle donnée à
+  Bleu 2 dans le menu allume sa place et frappe à gauche en double). **Pas encore joué à la vraie manette.**

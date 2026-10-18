@@ -1,3 +1,5 @@
+import { connectedGamepads } from '../input/gamepad';
+import { KEY_LAYOUTS } from '../input/keyboardArcade';
 import { PAD_FAMILY_NAMES, PAD_STYLES, type PadStyle } from '../input/padStyle';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { ASSIST_LEVELS, PREP_MOVES, type AssistLevel, type PrepMove } from '../sim/duel';
@@ -12,8 +14,40 @@ const INPUT_DISPLAY_LABELS: Record<InputDisplayMode, string> = {
   off: 'Masqué',
 };
 
-/** Qui joue un côté : un humain (manette ou clavier), ou l'IA à un niveau. */
-export type Controller = 'humain' | AiLevel;
+/** Ce que tient un humain : la manette n° 1 à 4 (dans l'ordre où elles sont branchées), ou un des deux claviers. */
+export type Device = 'manette1' | 'manette2' | 'manette3' | 'manette4' | 'clavier1' | 'clavier2';
+export const DEVICES: readonly Device[] = ['manette1', 'manette2', 'manette3', 'manette4', 'clavier1', 'clavier2'];
+
+/** Qui joue une place : un humain avec sa manette ou son clavier, ou l'IA à un niveau. */
+export type Controller = Device | AiLevel;
+export const CONTROLLERS: readonly Controller[] = [...DEVICES, ...AI_LEVEL_NAMES];
+
+export function isHuman(controller: Controller): controller is Device {
+  return DEVICES.includes(controller as Device);
+}
+
+/** Manette n° 0 à 3 tenue par ce contrôleur, ou `null`. */
+export function padOf(controller: Controller): number | null {
+  return controller.startsWith('manette') ? Number(controller.slice(7)) - 1 : null;
+}
+
+/** Clavier tenu par ce contrôleur (0 : bleu, ZQSD ; 1 : rouge, flèches), ou `null`. */
+export function keyboardOf(controller: Controller): 0 | 1 | null {
+  return controller === 'clavier1' ? 0 : controller === 'clavier2' ? 1 : null;
+}
+
+/**
+ * Donne la place `index` à `controller`. Une manette ou un clavier ne joue qu'une place : s'il en tenait déjà une
+ * autre, celle-ci passe à l'IA normale.
+ */
+export function assignController(players: DuelSettings['players'], index: number, controller: Controller): void {
+  if (isHuman(controller)) {
+    players.forEach((c, i) => {
+      if (i !== index && c === controller) players[i] = 'normal';
+    });
+  }
+  players[index] = controller;
+}
 
 export interface MatchSettings {
   /** Échange libre, sans score. */
@@ -27,7 +61,10 @@ export interface MatchSettings {
 
 /** Réglages du mode match, modifiables dans le menu (Échap ou Start) et mémorisés dans le navigateur. */
 export interface DuelSettings {
-  /** Qui joue chaque joueur : Bleu, Rouge, puis en double Bleu 2 et Rouge 2 (`playerName`). */
+  /**
+   * Qui joue chaque place : Bleu, Rouge, puis en double Bleu 2 et Rouge 2 (`playerName`). En double, les places 0
+   * et 1 sont à droite, 2 et 3 à gauche.
+   */
   players: [Controller, Controller, Controller, Controller];
   assists: [AssistLevel, AssistLevel, AssistLevel, AssistLevel];
   /** Pression des balles (vertes, jaunes, rouges) : 0 = sans, 1 = normale, 1,5 = forte. */
@@ -49,7 +86,7 @@ export interface DuelSettings {
 
 export const DEFAULT_SETTINGS: DuelSettings = {
   // En double, les partenaires sont des IA tant qu'on ne choisit pas d'autres manettes.
-  players: ['humain', 'humain', 'normal', 'normal'],
+  players: ['manette1', 'manette2', 'normal', 'normal'],
   // Comme Xavier aime jouer : placement manuel, immobile pendant la préparation (le stick gauche vise). Les IA
   // gardent l'aimant (voir `src/modes/duel.ts`).
   assists: ['off', 'off', 'off', 'off'],
@@ -63,17 +100,31 @@ export const DEFAULT_SETTINGS: DuelSettings = {
 };
 
 const STORAGE_KEY = 'padel-smash.reglages';
+/** Bouton Start (Menu) : il ouvre et ferme le menu, il n'allume pas de place. */
+const START_BUTTON = 9;
 /**
  * Version des réglages par défaut. On l'augmente quand un défaut change : les réglages enregistrés avant
  * reprennent alors le nouveau défaut au lieu de le masquer. 2 : placement manuel et préparation bloquée.
  */
 const DEFAULTS_VERSION = 2;
 
-const CONTROLLER_LABELS: Record<Controller, string> = {
-  humain: 'Humain (manette ou clavier)',
+export const CONTROLLER_LABELS: Record<Controller, string> = {
+  manette1: 'Manette 1',
+  manette2: 'Manette 2',
+  manette3: 'Manette 3',
+  manette4: 'Manette 4',
+  clavier1: 'Clavier bleu (ZQSD + J K L I)',
+  clavier2: 'Clavier rouge (flèches + pavé)',
   facile: 'IA facile',
   normal: 'IA normale',
   fort: 'IA forte',
+};
+
+/** Nom court, pour l'affichage pendant le match. */
+export const CONTROLLER_SHORT: Record<Controller, string> = {
+  ...CONTROLLER_LABELS,
+  clavier1: 'Clavier bleu',
+  clavier2: 'Clavier rouge',
 };
 
 const ASSIST_LABELS: Record<AssistLevel, string> = {
@@ -82,8 +133,6 @@ const ASSIST_LABELS: Record<AssistLevel, string> = {
   partial: 'Assistance partielle',
   off: 'Placement manuel',
 };
-
-const CONTROLLERS: readonly Controller[] = ['humain', ...AI_LEVEL_NAMES];
 
 const PREP_MOVE_LABELS: Record<PrepMove, string> = {
   libre: 'Libre (le stick déplace)',
@@ -104,14 +153,16 @@ export function playerName(index: number, doubles: boolean, long = false): strin
 }
 
 /** Copie sûre des réglages enregistrés : toute valeur inconnue est remplacée par la valeur par défaut. */
-function sanitize(raw: unknown): DuelSettings {
+export function sanitize(raw: unknown): DuelSettings {
   const s = structuredClone(DEFAULT_SETTINGS);
   if (!raw || typeof raw !== 'object') return s;
   const r = raw as Partial<DuelSettings> & { version?: number };
   // Enregistrés avant le dernier changement de défaut : aide à la course et préparation reprennent le défaut.
   const current = r.version === DEFAULTS_VERSION;
-  r.players?.forEach((c, i) => {
-    if (i < 4 && CONTROLLERS.includes(c)) s.players[i] = c;
+  // Avant le choix des manettes, « humain » jouait avec la manette de son numéro de place.
+  r.players?.forEach((c: string, i) => {
+    const controller = (c === 'humain' ? `manette${i + 1}` : c) as Controller;
+    if (i < 4 && CONTROLLERS.includes(controller)) assignController(s.players, i, controller);
   });
   if (current) {
     r.assists?.forEach((a, i) => {
@@ -159,7 +210,7 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
     // `?bot=1`, `2`, `both` (tout le monde), `none` (personne), ou une liste de numéros de joueurs à partir de 1 : `?bot=2,3,4`.
     const ai = level ?? 'normal';
     const listed = bot === 'both' ? [1, 2, 3, 4] : bot.split(',').map(Number);
-    s.players = ['humain', 'humain', 'humain', 'humain'];
+    s.players = ['manette1', 'manette2', 'manette3', 'manette4'];
     for (const n of listed) if (n >= 1 && n <= 4) s.players[n - 1] = ai;
     // Un seul côté donné : en double, son partenaire aussi.
     if (bot === '1') s.players[2] = ai;
@@ -279,40 +330,112 @@ export function createSettingsMenu(
     return element;
   };
 
-  // Manette n° 1 pour Bleu (1), n° 2 pour Rouge (1) ; en double, n° 3 pour Bleu 2 et n° 4 pour Rouge 2.
-  const players = section('Joueurs');
-  const playerRows = ([0, 1, 2, 3] as const).map((i) =>
-    row(
-      players,
-      playerName(i, true, true),
-      select(CONTROLLERS, (c) => CONTROLLER_LABELS[c], settings.players[i], (c) => {
-        settings.players[i] = c;
-        changed();
-      }),
-    ),
-  );
+  const teams = section('Équipes');
+  const teamsHint = document.createElement('p');
+  teamsHint.className = 'hint';
+  teamsHint.textContent =
+    "Comme à l'écran : Bleu en bas, de dos ; Rouge en haut, face à toi. Appuie sur un bouton d'une manette (ou une touche) : sa place s'allume.";
+  const court = document.createElement('div');
+  court.className = 'teams-court';
+  const net = document.createElement('div');
+  net.className = 'net';
+  net.textContent = 'filet';
+  const padList = document.createElement('p');
+  padList.className = 'hint pads';
+  teams.append(teamsHint, court, padList);
 
-  const assist = section('Assistance de course');
-  const assistRows = ([0, 1, 2, 3] as const).map((i) =>
-    row(
-      assist,
-      playerName(i, true, true),
-      select(ASSIST_LEVELS, (a) => ASSIST_LABELS[a], settings.assists[i], (a) => {
-        settings.assists[i] = a;
-        changed();
-      }),
-    ),
-  );
-  /** Les joueurs 3 et 4 n'apparaissent qu'en double ; les noms suivent le format. */
+  /** Une carte par place : qui la joue, et sa course assistée (pour un humain). */
+  const cards = ([0, 1, 2, 3] as const).map((i) => {
+    const card = document.createElement('div');
+    card.className = `place ${i % 2 === 0 ? 'blue' : 'red'}`;
+    card.dataset.place = String(i);
+    const title = document.createElement('div');
+    title.className = 'place-name';
+    const who = select(CONTROLLERS, (c) => CONTROLLER_LABELS[c], settings.players[i], (c) => {
+      assignController(settings.players, i, c);
+      refreshCards();
+      changed();
+    });
+    who.setAttribute('aria-label', 'Qui joue cette place');
+    const assistControl = select(ASSIST_LEVELS, (a) => ASSIST_LABELS[a], settings.assists[i], (a) => {
+      settings.assists[i] = a;
+      changed();
+    });
+    assistControl.setAttribute('aria-label', 'Course');
+    const assistRow = document.createElement('label');
+    const assistText = document.createElement('span');
+    assistText.textContent = 'Course';
+    assistRow.append(assistText, assistControl);
+    card.append(title, who, assistRow);
+    return { card, title, who, assistControl, assistRow };
+  });
+
+  /**
+   * Place des cartes : vue de la caméra, derrière Bleu. La droite de Bleu est à droite de l'écran, celle de Rouge
+   * (qui regarde vers nous) à gauche. En simple, une carte par équipe.
+   */
+  let shownDoubles = settings.match.doubles;
   const showFormat = (doubles: boolean): void => {
-    for (const rows of [playerRows, assistRows]) {
-      rows.forEach((element, i) => {
-        element.hidden = i >= 2 && !doubles;
-        element.querySelector('span')!.textContent = playerName(i, doubles, true);
-      });
-    }
+    shownDoubles = doubles;
+    court.classList.toggle('doubles', doubles);
+    const order = doubles ? [1, 3, -1, 2, 0] : [1, -1, 0];
+    court.replaceChildren(...order.map((i) => (i < 0 ? net : cards[i]!.card)));
+    cards.forEach(({ title }, i) => {
+      title.textContent = doubles ? `${playerName(i, true)} · ${i < 2 ? 'droite (drive)' : 'gauche (revés)'}` : playerName(i, false);
+    });
+  };
+  /** Manettes branchées, dans l'ordre : leurs numéros dans les choix, et la liste sous le terrain. */
+  const refreshCards = (): void => {
+    const pads = connectedGamepads();
+    cards.forEach(({ who, assistControl, assistRow }, i) => {
+      for (const option of who.options) {
+        const controller = option.value as Controller;
+        const pad = padOf(controller);
+        option.textContent = CONTROLLER_LABELS[controller] + (pad !== null && !pads[pad] ? ' (pas branchée)' : '');
+      }
+      who.value = settings.players[i]!;
+      assistControl.value = settings.assists[i]!;
+      assistRow.hidden = !isHuman(settings.players[i]!);
+    });
+    padList.textContent = pads.length
+      ? pads.map((pad, n) => `Manette ${n + 1} : ${pad.id.replace(/\s*\(.*$/, '')}`).join(' · ')
+      : 'Aucune manette détectée : appuie sur un de ses boutons pour la réveiller.';
   };
   showFormat(settings.match.doubles);
+  refreshCards();
+  window.addEventListener('gamepadconnected', () => refreshCards());
+  window.addEventListener('gamepaddisconnected', () => refreshCards());
+
+  /** Allume un instant les places jouées par ce contrôleur. */
+  const light = (controller: Controller): void => {
+    cards.forEach(({ card }, i) => {
+      if (settings.players[i] !== controller || (i >= 2 && !shownDoubles)) return;
+      card.classList.remove('lit');
+      void card.offsetWidth;
+      card.classList.add('lit');
+    });
+  };
+  window.addEventListener('keydown', (event) => {
+    if (overlay.hidden) return;
+    KEY_LAYOUTS.forEach((layout, k) => {
+      const keys = [layout.up, layout.down, layout.left, layout.right, layout.assist, ...layout.shots.map(([code]) => code)];
+      if (keys.includes(event.code)) light(k === 0 ? 'clavier1' : 'clavier2');
+    });
+  });
+  /** Boutons tenus au dernier passage, par manette : on allume à l'appui. */
+  let padsHeld: boolean[] = [];
+  const watchPads = (): void => {
+    if (overlay.hidden) return;
+    const pads = connectedGamepads();
+    // Une manette se réveille à son premier bouton : la liste et les choix suivent.
+    if (pads.length !== padsHeld.length) refreshCards();
+    const held = pads.map((pad) => pad.buttons.some((b, n) => n !== START_BUTTON && b.pressed));
+    held.forEach((now, n) => {
+      if (now && !padsHeld[n]) light(`manette${n + 1}` as Controller);
+    });
+    padsHeld = held;
+    requestAnimationFrame(watchPads);
+  };
 
   const game = section('Jeu');
   const pressure = document.createElement('input');
@@ -378,7 +501,14 @@ export function createSettingsMenu(
 
   const match = section('Match (appliqué à la prochaine partie)');
   const draft = structuredClone(settings.match);
-  row(match, '2 contre 2 (une manette par joueur, IA aux places libres)', check(draft.doubles, (on) => (draft.doubles = on)));
+  row(
+    match,
+    '2 contre 2 (choisis les places dans « Équipes »)',
+    check(draft.doubles, (on) => {
+      draft.doubles = on;
+      showFormat(on);
+    }),
+  );
   row(match, 'Échange libre, sans score', check(draft.free, (on) => (draft.free = on)));
   row(match, 'Sets', select([1, 2] as const, (n) => (n === 1 ? 'Un set' : 'Deux sets gagnants'), draft.setsToWin as 1 | 2, (n) => (draft.setsToWin = n)));
   const games = [...new Set([2, 4, 6, draft.gamesPerSet])].sort((a, b) => a - b);
@@ -420,7 +550,13 @@ export function createSettingsMenu(
     toggle(): void {
       overlay.hidden = !overlay.hidden;
       // Les symboles peuvent avoir été changés dans « Teste ta manette ».
-      if (!overlay.hidden) padSelect.value = settings.padStyle;
+      if (!overlay.hidden) {
+        padSelect.value = settings.padStyle;
+        // L'assistance a pu changer en jeu (bouton d'assistance), et des manettes être branchées.
+        refreshCards();
+        padsHeld = connectedGamepads().map(() => true);
+        requestAnimationFrame(watchPads);
+      }
       gear.hidden = !overlay.hidden;
       // Le menu ne doit pas garder le focus : les touches de jeu repartent vers la partie.
       if (overlay.hidden && document.activeElement instanceof HTMLElement) document.activeElement.blur();

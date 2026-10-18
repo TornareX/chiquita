@@ -2,7 +2,7 @@ import { createAnnouncer } from '../audio/announcer';
 import { shotPower, SqueakDetector, stepCrowdReactions, VOICES } from '../audio/recipes';
 import { CrowdMood } from '../render/arena';
 import { createSounds } from '../audio/sounds';
-import { connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
+import { connectedGamepads, IDLE_PAD, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
@@ -17,11 +17,18 @@ import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
 import { createInputDisplay } from '../ui/inputDisplay';
 import { createPadTest } from '../ui/padTest';
-import { createSettingsMenu, loadSettings, saveSettings, type DuelSettings } from '../ui/duelSettings';
+import {
+  CONTROLLER_SHORT,
+  createSettingsMenu,
+  isHuman,
+  keyboardOf,
+  loadSettings,
+  padOf,
+  saveSettings,
+  type DuelSettings,
+} from '../ui/duelSettings';
 import { loadFeel } from '../ui/feelStorage';
 import { applyFeel } from '../sim/feel';
-
-const AI_NAMES = { facile: 'IA facile', normal: 'IA normale', fort: 'IA forte' } as const;
 
 /** Bouton Start (Menu) de la disposition standard : ouvre et ferme les réglages. */
 const START_BUTTON = 9;
@@ -39,7 +46,8 @@ function muteable<T extends object>(sounds: T, audible: () => boolean): T {
 
 /**
  * Mode principal (GAME_DESIGN.md §12) : match en 1 contre 1 ou en 2 contre 2, une manette par joueur, au
- * clavier ou contre l'IA. Tout se règle dans le menu (Échap ou Start) : simple ou double, qui joue chaque place,
+ * clavier ou contre l'IA. Tout se règle dans le menu (Échap ou Start) : simple ou double, qui joue chaque place
+ * (quelle manette, quel clavier ou quelle IA),
  * assistance, pression, son, règles du match. Les réglages sont mémorisés dans le navigateur. Raccourcis d'URL,
  * pour les tests :
  * - `?double=1` : 2 contre 2 (manettes 1 à 4 pour Bleu 1, Rouge 1, Bleu 2, Rouge 2) ;
@@ -84,16 +92,17 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     // En double, une IA dont le partenaire est humain se cale sur lui (les deux au filet ou les deux au fond).
     bots = duel.players.map((_, i) => {
       const c = s.players[i]!;
-      if (c === 'humain') return null;
+      if (isHuman(c)) return null;
       const partner = duel.partnerOf(i);
-      const followPartner = partner !== null && s.players[partner] === 'humain';
+      const followPartner = partner !== null && isHuman(s.players[partner]!);
       return new Bot(i, i + 1, { ...AI_LEVELS[c], followPartner });
     });
     duel.players.forEach((player, i) => {
       // Une IA ne sait pas se placer seule sans course assistée : en placement manuel, elle garde l'aimant.
-      player.assist = s.players[i] !== 'humain' && s.assists[i] === 'off' ? 'magnet' : s.assists[i]!;
+      const human = isHuman(s.players[i]!);
+      player.assist = !human && s.assists[i] === 'off' ? 'magnet' : s.assists[i]!;
       // Les IA gardent le stick libre : le réglage ne change que le ressenti des humains.
-      player.prepMove = s.players[i] === 'humain' ? s.prepMove : 'libre';
+      player.prepMove = human ? s.prepMove : 'libre';
     });
     duel.profile.rally.pressure.scale = s.pressure;
   };
@@ -106,9 +115,10 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     },
   );
   const menu = createSettingsMenu(settings, apply, () => padTest.open());
-  /** Frappe au geste du stick droit, une par manette. */
+  /** Frappe au geste du stick droit, une par manette ; et celle de la manette tenue par chaque joueur. */
   const swings = swingEnabled() ? [new SwingStick(), new SwingStick(), new SwingStick(), new SwingStick()] : null;
-  const inputs = createInputDisplay(swings);
+  const playerSwings: (SwingStick | null)[] = [null, null, null, null];
+  const inputs = createInputDisplay(swings && playerSwings);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
@@ -118,28 +128,28 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   /** Bouton d'assistance maintenu au pas précédent : un appui fait passer au niveau suivant. */
   const assistHeld = [false, false, false, false];
 
-  /**
-   * Commandes de chaque joueur : manette n° i pour le joueur i ; le clavier en complément pour les deux
-   * premiers (Bleu et Rouge, ou Bleu 1 et Rouge 1 en double).
-   */
+  /** Commandes de chaque joueur : la manette ou le clavier choisis pour sa place, ou son IA. */
   const sample = (): ArcadeCommands[] => {
     const pads = connectedGamepads();
     const read = (index: number): ArcadeCommands => {
       const bot = bots[index];
       const controller = settings.players[index]!;
-      if (bot && controller !== 'humain') {
-        sources[index] = AI_NAMES[controller];
-        states[index] = buttons[index] = null;
+      sources[index] = CONTROLLER_SHORT[controller];
+      if (bot && !isHuman(controller)) {
+        states[index] = buttons[index] = playerSwings[index] = null;
         return bot.commands(duel);
       }
-      const pad = pads[index];
-      sources[index] = pad ? `Manette ${index + 1}` : 'Clavier';
-      const typed = index < 2 ? keyboard.read(index as 0 | 1) : IDLE_PAD;
-      const state: PadState = mergePads(pad ? readGamepad(pad, swings?.[index], SIM_DT) : IDLE_PAD, typed);
+      const padIndex = padOf(controller);
+      const keys = keyboardOf(controller);
+      const pad = padIndex === null ? undefined : pads[padIndex];
+      if (padIndex !== null && !pad) sources[index] += ' (pas branchée)';
+      const swing = padIndex === null ? null : (swings?.[padIndex] ?? null);
+      playerSwings[index] = swing;
+      const state: PadState = pad ? readGamepad(pad, swing ?? undefined, SIM_DT) : keys === null ? IDLE_PAD : keyboard.read(keys);
       states[index] = state;
       buttons[index] = pad
         ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
-        : { kind: 'keyboard', player: (index % 2) as 0 | 1, layout: keyboardLayout };
+        : { kind: 'keyboard', player: keys ?? ((index % 2) as 0 | 1), layout: keyboardLayout };
       if (state.assistButton && !assistHeld[index]) {
         const player = duel.players[index]!;
         player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;

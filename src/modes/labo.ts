@@ -14,7 +14,7 @@ import type { Situation } from '../sim/situations';
 import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
 import { createInputDisplay } from '../ui/inputDisplay';
-import { loadSettings } from '../ui/duelSettings';
+import { isHuman, loadSettings } from '../ui/duelSettings';
 import { loadFeel, saveFeel } from '../ui/feelStorage';
 import { createLaboPanel } from '../ui/laboPanel';
 
@@ -45,7 +45,8 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   }
   window.addEventListener('gamepadconnected', () => sounds.unlock());
 
-  let level: AiLevel = settings.players[1] === 'humain' ? 'normal' : settings.players[1];
+  const rouge = settings.players[1];
+  let level: AiLevel = isHuman(rouge) ? 'normal' : rouge;
   let situation: Situation | null = null;
   let bot = new Bot(1, 2, AI_LEVELS[level]);
   let won = 0;

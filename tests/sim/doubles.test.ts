@@ -199,6 +199,40 @@ describe('2 contre 2 (étape C)', () => {
     expect(stolen).toBe(0);
   }, 120_000);
 
+  it("partenaire humain à gauche : l'IA de droite lui laisse les balles de gauche et du milieu", () => {
+    const duel = new Duel(null, 'double');
+    // Le joueur 2 (gauche) tient lieu d'humain ; son partenaire IA, à droite, se cale sur lui.
+    const bots = duel.players.map((_, i) => new Bot(i, 41 + i, i === 0 ? { ...AI_LEVELS.normal, followPartner: true } : AI_LEVELS.normal));
+    const right = rightFor(duel.players[0]!.side).x;
+    let endOffset: number | null = null;
+    let stolen = 0;
+    let aiShots = 0;
+    let humanShots = 0;
+    let humanServes = 0;
+    while (duel.time < 900) {
+      duel.step(bots.map((bot) => bot.commands(duel)));
+      const shot = duel.shot;
+      if (!shot) continue;
+      if (teamOf(shot.player) === 1 && duel.ball) {
+        const { end } = predictBall(duel.ball, duel.profile, 5, 8);
+        endOffset = end ? end.x * right : null;
+      } else if (teamOf(shot.player) === 0) {
+        if (shot.serve) {
+          if (shot.player === 2) humanServes++;
+        } else if (shot.player === 0) {
+          aiShots++;
+          // Au milieu, c'est au joueur de gauche : l'IA de droite ne prend que les balles nettement à droite.
+          if (endOffset !== null && endOffset < 0.6) stolen++;
+        } else humanShots++;
+      }
+    }
+    console.log(`partenaire humain à gauche : IA ${aiShots} coups, « humain » ${humanShots}, services ${humanServes}, balles prises par l'IA ${stolen}`);
+    expect(aiShots).toBeGreaterThan(30);
+    expect(humanShots).toBeGreaterThan(30);
+    expect(humanServes).toBeGreaterThan(5);
+    expect(stolen).toBe(0);
+  }, 120_000);
+
   it('le service tombe dans le carré du receveur', () => {
     const duel = new Duel(null, 'double');
     const bots = duel.players.map((_, i) => new Bot(i, 5 + i, AI_LEVELS.normal));
