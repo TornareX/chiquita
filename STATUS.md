@@ -873,3 +873,10 @@ e2e 29/30 en un seul worker (le 30e : fichier de capture verrouillé par Windows
 Le projecteur du terrain porte les ombres des joueurs, raquettes, poteaux et du filet (`?ombres=0` pour les
 couper ; absentes en `?rendu=simple` et en rendu logiciel). 60 i/s sur RTX 4070. Typecheck OK, 537 tests unitaires
 OK, e2e 29/30 en un seul worker (le 30e : capture PNG verrouillée par Windows). **Validé par Xavier en jeu.**
+
+## Polish visuel V3 : tapis bleu façon Premier Padel (18/10/2026, non commité)
+
+Le sol devient une moquette d'un bleu vif uniforme, d'après la surface officielle (Mondo Supercourt X3) et une
+capture TV de Premier Padel : velours plus clair au fond, grain et grains de silice de près, lignes blanc net
+(`?gazon=0` pour comparer). Le premier essai, gazon sablé et usé, a été abandonné. Typecheck OK, 537 tests
+unitaires OK, e2e 30/30 en un seul worker. **Validé par Xavier en jeu.**

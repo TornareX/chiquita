@@ -86,7 +86,8 @@ export function setShadows(object: THREE.Object3D, receive: boolean): void {
     if (!(node instanceof THREE.Mesh)) return;
     const material: THREE.Material = Array.isArray(node.material) ? node.material[0] : node.material;
     const opaque = !material.transparent && material.side !== THREE.BackSide;
-    node.castShadow = opaque && !(material instanceof THREE.MeshBasicMaterial);
+    // Objets plats posés au sol (lignes) : ils reçoivent l'ombre sans en porter.
+    node.castShadow = opaque && !(material instanceof THREE.MeshBasicMaterial) && node.userData.flat !== true;
     node.receiveShadow = receive && opaque;
   });
 }

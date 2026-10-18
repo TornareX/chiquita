@@ -239,6 +239,29 @@ npx playwright test tests/e2e/rendu.spec.ts
 
 **V2 validé en jeu par Xavier** (comparé à `?ombres=0`). Suite : V3 (matière du sol).
 
+**V3 — matière du sol : tapis façon Premier Padel** (18/10/2026, non commité ; `src/render/turf.ts`) :
+- Référence : la surface officielle de Premier Padel et de la FIP est le **Premier Supercourt X3 de Mondo**,
+  trois monofilaments texturés sur sable de silice ([Mondo](https://www.mondoworldwide.com/na/en/sport/padel/)).
+  Les fibres texturées tiennent debout avec peu de sable : à la télé, une moquette d'un bleu vif uniforme, un peu
+  plus claire au fond (vue de biais) ; de près, des fibres bleues et de fins grains de silice clairs.
+- **Premier essai abandonné** : gazon chargé de sable avec usure, lés et sable contre les vitres. Jugé par Xavier
+  trop « club » et pas assez Premier Padel.
+- Tapis : `MeshPhysicalMaterial` bleu vif (`CARPET_COLOR` 0x00349c) qui remplace le sol ; le grain de la texture
+  du modèle ne garde que ses nuances de clarté ; velours par le `sheen` des matériaux physiques (fait pour les
+  tissus), qui éclaircit le fond du terrain ; reflet spéculaire presque nul (un tissu n'a pas de vernis) ; grains de
+  silice tirés des grains les plus clairs de la texture, donc lissés au loin par les mipmaps, sans scintiller.
+- Piège trouvé : la courbe de tons Neutral désature les couleurs très lumineuses ; un albédo bleu trop clair
+  virait au lavande. D'où un albédo plus sombre qu'on ne l'imagine.
+- Mesuré contre une capture TV de Premier Padel (Milan P1, `reference-premier-padel.png`, gardée en local : image de retransmission, pas à nous) : sol proche
+  (40, 99, 198) contre (6, 94, 190), fond (15, 91, 233) contre (7, 112, 225).
+- Lignes : `MeshStandardMaterial` blanc net (0xf7f8fb), éclairées, qui reçoivent les ombres sans en porter.
+- Lisibilité (en gris) : sol plus sombre qu'en V2 (94 contre 114), donc balle, lignes et joueurs ressortent mieux ;
+  maillot bleu à 132 sur ce sol. À surveiller en jeu : équipe bleue sur terrain bleu.
+- Coût : nul mesurable (60 i/s, mêmes appels de dessin).
+- `?gazon=0` garde le sol de V2 ; `comparaison-v3-*.png` : V2 à gauche, V3 à droite.
+
+**V3 validé en jeu par Xavier** (comparé à `?gazon=0`). Suite : V4 (personnages).
+
 ## 5. Risques
 
 - **Lisibilité** : le principal risque. Halo, occlusion ou étalonnage qui noient la balle jaune

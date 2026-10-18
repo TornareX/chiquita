@@ -11,6 +11,7 @@ import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
 import { applyLook, enableShadows, exactColor, renderLook, setShadows } from './look';
 import { loadModel, modelsEnabled } from './models';
+import { dressCourt, turfEnabled } from './turf';
 import type { RenderInfo } from '../ui/perfMeter';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
@@ -336,6 +337,9 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
 
   const court = createCourt();
   scene.add(court.object);
+  // Rendu soigné : tapis bleu façon Premier Padel, lignes blanches (avant le découpage de la vitre proche, qui touche aux matériaux).
+  const turf = soigne && turfEnabled();
+  if (turf) dressCourt(court.object);
   clipNearWall(court.object);
   if (shadows) setShadows(court.object, true);
   const ball = createBallView();
@@ -391,6 +395,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     void Promise.all([loadModel('court'), loadModel('ball')]).then(([courtModel, ballModel]) => {
       if (courtModel) {
         court.setModel(courtModel, false);
+        if (turf) dressCourt(court.object);
         clipNearWall(court.object);
         if (shadows) setShadows(court.object, true);
       }

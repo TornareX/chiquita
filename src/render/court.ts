@@ -86,6 +86,7 @@ function createGround(shapes: THREE.Group, kept: THREE.Group): void {
     new THREE.MeshLambertMaterial({ color: 0x2f6fb5 }),
   );
   turf.rotation.x = -Math.PI / 2;
+  turf.name = 'gazon';
   shapes.add(turf);
 
   const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -93,6 +94,7 @@ function createGround(shapes: THREE.Group, kept: THREE.Group): void {
     const line = new THREE.Mesh(new THREE.PlaneGeometry(sizeX, sizeZ), lineMaterial);
     line.rotation.x = -Math.PI / 2;
     line.position.set(x, 0.004, z);
+    line.name = 'ligne';
     kept.add(line);
   };
   for (const side of [-1, 1]) {
