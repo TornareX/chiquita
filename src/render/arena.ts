@@ -225,10 +225,12 @@ export function createArena(): Arena {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshLambertMaterial({ color: 0x14161a }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.015;
+  floor.name = 'sol-salle';
   object.add(floor);
 
   // Tribunes : marches gris très sombre, dans la pénombre.
   const steps = new THREE.Mesh(mergeGeometries(STANDS.map(standGeometry))!, new THREE.MeshLambertMaterial({ color: 0x23262d }));
+  steps.name = 'tribunes';
   object.add(steps);
 
   // Foule.

@@ -14,6 +14,7 @@ import { applyLook, enableShadows, exactColor, renderLook, setShadows } from './
 import { loadModel, modelsEnabled } from './models';
 import { dressCharacter, toonLookEnabled, updateOutline } from './toonLook';
 import { dressCourt, turfEnabled } from './turf';
+import { dressHall, hallEnabled } from './hall';
 import type { RenderInfo } from '../ui/perfMeter';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
 
@@ -323,6 +324,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   let shadowLight: THREE.SpotLight | THREE.DirectionalLight | null = null;
   if (arena) {
     scene.add(arena.object);
+    // Rendu soigné : halos et faisceaux des projecteurs, salle bleu nuit (`hall.ts`).
+    if (soigne && hallEnabled()) dressHall(scene, arena.object);
     if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__arena = arena;
     // Le terrain sous les projecteurs : un cône de lumière au-dessus, qui laisse les tribunes dans la pénombre.
     // Rendu soigné : projecteurs d'un blanc légèrement chaud, pour que les ombres froides de l'ambiance ressortent.

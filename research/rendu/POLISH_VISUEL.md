@@ -277,6 +277,22 @@ npx playwright test tests/e2e/rendu.spec.ts
 
 **V4 validé en jeu par Xavier** (comparé à `?toon=0`). Suite : V5 (salle).
 
+**V5 — salle** (18/10/2026 ; `src/render/hall.ts`) :
+- Constat de cadrage : la caméra télé (8,7 m, champ de 20°) ne voit rien au-dessus de ~3 m au fond de la salle ;
+  des rampes au plafond seraient hors cadre, donc pas faites. On travaille ce qui est dans l'image.
+- **Halos** sur les quatre projecteurs des montants du modèle (x ±4,85, y 4,8, z ±4,95) : sprites additifs à
+  dégradé radial, en attendant un vrai bloom (V6).
+- **Faisceaux** : un cône additif par projecteur, dirigé vers le terrain, dense près de la lampe, bords fondus
+  (shader), opacité 0,09 au plus : une brume qui éclaircit un peu le terrain sous les projecteurs. Clarté
+  moyenne du sol inchangée en gris (100 contre 99), balle aussi lisible.
+- **Ambiance** façon Premier Padel : fond et brouillard bleu nuit (0x070a18), tribunes bleutées, sol de la
+  salle sombre et mat.
+- **Essai abandonné** : sol de salle satiné. La caméra le voit en rasant et un sol satiné y renvoie presque
+  toute la lumière (Fresnel) : il devenait gris clair.
+- Coût : +8 appels de dessin, 60 i/s. `?salle=0` garde la salle de V4 ; `comparaison-v5-*.png` (V4 | V5).
+
+À juger en jeu (`?salle=0` pour comparer).
+
 ## 5. Risques
 
 - **Lisibilité** : le principal risque. Halo, occlusion ou étalonnage qui noient la balle jaune

@@ -889,3 +889,9 @@ Ombres toon teintées froides façon TF2, liseré de lumière en haut des silhou
 l'écran (le joueur du fond garde le même trait) ; `?toon=0` pour comparer. Typecheck OK, 537 tests unitaires OK,
 e2e 30/30 en un seul worker. **Validé par Xavier en jeu.** Le code est parti dans le commit f22220f (contre-vitre),
 commité d'un bloc par une autre session.
+
+## Polish visuel V5 : salle (18/10/2026)
+
+Projecteurs des montants qui rayonnent (halos), faisceaux de lumière légers sur le terrain, salle bleu nuit façon
+Premier Padel (`?salle=0` pour comparer). Le sol de salle satiné a été abandonné (gris clair vu en rasant).
+Typecheck OK, 537 tests unitaires OK, e2e 30/30 en un seul worker. **Pas encore joué.**
