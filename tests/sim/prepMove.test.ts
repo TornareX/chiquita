@@ -70,7 +70,25 @@ describe('stick gauche pendant la préparation', () => {
     expect(play('bloque', { forward: 0, right: 1 }, 3.5).shot).toBeTruthy();
   });
 
-  it('les IA et le placement manuel ne sont pas concernés : le défaut reste libre', () => {
+  it('placement manuel : bloqué immobilise pendant la préparation, ralenti laisse de petits pas, libre court', () => {
+    const moved = (mode: PrepMove): number => {
+      const duel = new Duel(null);
+      duel.players[0].assist = 'off';
+      duel.players[0].prepMove = mode;
+      duel.playSituation(1, [vec3(0, 0, -8.5), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.9, 8.5), target: vec3(0.9, 0.03, -6.8) });
+      const start = { ...duel.players[0].pos };
+      const held: ArcadeCommands = { ...NEUTRAL_ARCADE, stick: { forward: 0, right: 1 }, shot: 'normal' };
+      for (let i = 0; i < 0.5 / SIM_DT; i++) duel.step([held, NEUTRAL_ARCADE]);
+      const end = duel.players[0].pos;
+      return Math.hypot(end.x - start.x, end.z - start.z);
+    };
+    expect(moved('bloque')).toBeLessThan(0.01);
+    expect(moved('ralenti')).toBeGreaterThan(0.3);
+    expect(moved('ralenti')).toBeLessThan(1);
+    expect(moved('libre')).toBeGreaterThan(2);
+  });
+
+  it('les IA ne sont pas concernées : le défaut reste libre', () => {
     expect(new Duel(null).players.every((p) => p.prepMove === 'libre')).toBe(true);
   });
 });

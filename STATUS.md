@@ -700,7 +700,8 @@ tests navigateur (duel, double, stick, tutoriel, manette) OK. **À juger à la m
   - `ralenti` (**par défaut**) : dès qu'un point d'impact est prévu, la course assistée y mène ; le stick n'ajoute que
     de petits pas (25 % de la vitesse) et sert à viser ; mesuré : < 1,2 m parcourus dans le même cas ;
   - `bloque` : façon Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser.
-  Le placement manuel (assistance « Placement manuel ») n'est pas concerné. Le choix s'applique tout de suite, en
-  pleine partie, pour comparer.
+  En placement manuel (assistance « Placement manuel »), il n'y a pas de course assistée : `ralenti` laisse de petits
+  pas au stick, `bloque` immobilise jusqu'au relâcher (retour de Xavier : il jouait en manuel et « bloqué » ne
+  bloquait pas). Le choix s'applique tout de suite, en pleine partie, pour comparer.
 - Recherche sur VT4 / Top Spin 4 : rien de net en ligne. Le manuel de VT4 dit que le stick règle la direction après
   l'appui ; une critique de Top Spin 4 reproche au stick gauche de faire à la fois le déplacement et la visée.

@@ -43,7 +43,8 @@ export type AssistLevel = 'magnet' | 'full' | 'partial' | 'off';
  * - `ralenti` : la course assistée mène le joueur au point d'impact dès qu'il est prévu, le stick n'ajoute que de
  *   petits pas d'ajustement (`PREP_MOVE.ralenti` de la vitesse) et sert surtout à viser ;
  * - `bloque` : comme Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser.
- * Le placement manuel (`assist` `off`) n'est pas concerné.
+ * En placement manuel (`assist` `off`), il n'y a pas de course assistée : `ralenti` laisse de petits pas au stick,
+ * `bloque` immobilise le joueur jusqu'au relâcher.
  */
 export type PrepMove = 'libre' | 'ralenti' | 'bloque';
 export const PREP_MOVES: readonly PrepMove[] = ['libre', 'ralenti', 'bloque'];
@@ -815,7 +816,8 @@ export class Duel {
     const gap = target ? pathDistance(player.pos, target, player.side) : 0;
     // Préparation en cours, stick gauche ralenti ou bloqué : la course assistée mène au point d'impact dès qu'il est
     // prévu, le stick ne fait plus que de petits pas (ou rien) et sert à viser.
-    const preparing = engagement !== null && engagement.releaseTick === null && player.assist !== 'off';
+    // En placement manuel, pas de course assistée : ralenti = petits pas au stick, bloqué = immobile.
+    const preparing = engagement !== null && engagement.releaseTick === null;
     const prepScale = preparing ? PREP_MOVE[player.prepMove] : 1;
     // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
     if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
