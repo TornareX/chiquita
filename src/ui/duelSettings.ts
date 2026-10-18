@@ -51,6 +51,11 @@ export const DEFAULT_SETTINGS: DuelSettings = {
 };
 
 const STORAGE_KEY = 'padel-smash.reglages';
+/**
+ * Version des réglages par défaut. On l'augmente quand un défaut change : les réglages enregistrés avant
+ * reprennent alors le nouveau défaut au lieu de le masquer. 2 : placement manuel et préparation bloquée.
+ */
+const DEFAULTS_VERSION = 2;
 
 const CONTROLLER_LABELS: Record<Controller, string> = {
   humain: 'Humain (manette ou clavier)',
@@ -89,15 +94,19 @@ export function playerName(index: number, doubles: boolean, long = false): strin
 function sanitize(raw: unknown): DuelSettings {
   const s = structuredClone(DEFAULT_SETTINGS);
   if (!raw || typeof raw !== 'object') return s;
-  const r = raw as Partial<DuelSettings>;
+  const r = raw as Partial<DuelSettings> & { version?: number };
+  // Enregistrés avant le dernier changement de défaut : aide à la course et préparation reprennent le défaut.
+  const current = r.version === DEFAULTS_VERSION;
   r.players?.forEach((c, i) => {
     if (i < 4 && CONTROLLERS.includes(c)) s.players[i] = c;
   });
-  r.assists?.forEach((a, i) => {
-    if (i < 4 && ASSIST_LEVELS.includes(a)) s.assists[i] = a;
-  });
+  if (current) {
+    r.assists?.forEach((a, i) => {
+      if (i < 4 && ASSIST_LEVELS.includes(a)) s.assists[i] = a;
+    });
+  }
   if (typeof r.pressure === 'number' && r.pressure >= 0 && r.pressure <= 2) s.pressure = r.pressure;
-  if (PREP_MOVES.includes(r.prepMove as PrepMove)) s.prepMove = r.prepMove as PrepMove;
+  if (current && PREP_MOVES.includes(r.prepMove as PrepMove)) s.prepMove = r.prepMove as PrepMove;
   if (typeof r.sound === 'boolean') s.sound = r.sound;
   if (typeof r.farOwnView === 'boolean') s.farOwnView = r.farOwnView;
   if (PAD_STYLES.includes(r.padStyle as PadStyle)) s.padStyle = r.padStyle as PadStyle;
@@ -166,7 +175,7 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
 
 export function saveSettings(settings: DuelSettings): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...settings, version: DEFAULTS_VERSION }));
   } catch {
     // Stockage indisponible (navigation privée…) : les réglages valent pour cette partie seulement.
   }
