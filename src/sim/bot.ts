@@ -6,6 +6,7 @@ import { ballColor, type BallColor } from './pressure';
 import { Prng } from './prng';
 import { forwardFor, rightFor } from './shots';
 import { vec3, type Vec3 } from './vec3';
+import { predictBall } from './predict';
 import { pathDistance, waypoint } from './walkable';
 
 /**
@@ -94,6 +95,8 @@ const DOUBLES_BACK_DEPTH = 8.2;
 const DOUBLES_SPACING_NET = 3.2;
 const DOUBLES_SPACING_BACK = 3.0;
 const DOUBLES_LOBBED_DEPTH = 6.5;
+/** Partenaire humain : bande centrale (m de part et d'autre du milieu du terrain) où le joueur de gauche peut jouer. */
+const HUMAN_MIDDLE_BAND = 0.7;
 
 export type AiLevel = 'facile' | 'normal' | 'fort';
 export const AI_LEVEL_NAMES: readonly AiLevel[] = ['facile', 'normal', 'fort'];
@@ -157,6 +160,8 @@ export class Bot {
   private pointTick = -Infinity;
   /** Frappe adverse pour laquelle il a déjà annoncé « à toi ». */
   private calledFor: number | null = null;
+  /** Balle laissée au partenaire humain, recalculée à chaque frappe, rebond ou vitre. */
+  private yieldFor: { key: string; yields: boolean } | null = null;
 
   constructor(
     private readonly index: number,
@@ -438,7 +443,8 @@ export class Bot {
     // En double, il ne joue que les balles qui lui reviennent (sa moitié, ou le milieu s'il y est le mieux placé) ;
     // celles du partenaire, il les lui laisse et se replace.
     const owner = duel.doubles ? duel.owner(me.team) : this.index;
-    const mine = duel.isReceiving(this.index) && (owner === this.index || me.engagement !== null);
+    const yields = duel.doubles && this.yieldsToPartner(duel);
+    const mine = duel.isReceiving(this.index) && ((owner === this.index && !yields) || me.engagement !== null);
     if (mine) {
       const opponentHit = duel.lastHitter !== null ? duel.players[duel.lastHitter]!.lastHitTick : -Infinity;
       const engagement = me.engagement;
@@ -474,7 +480,8 @@ export class Bot {
       // Le partenaire joue une balle du milieu : « à toi ! ».
       // Une fois par balle.
       const shotTick = duel.lastHitter !== null ? duel.players[duel.lastHitter]!.lastHitTick : null;
-      const call = owner !== null && owner !== this.index && duel.isReceiving(owner) && shotTick !== this.calledFor ? ('tuya' as const) : undefined;
+      const taker = yields ? duel.partnerOf(this.index) : owner;
+      const call = taker !== null && taker !== this.index && duel.isReceiving(taker) && shotTick !== this.calledFor ? ('tuya' as const) : undefined;
       if (call) this.calledFor = shotTick;
       return { ...this.walkTo(duel, home), ...(call ? { call } : {}) };
     }
@@ -488,6 +495,28 @@ export class Bot {
     if (this.atNet && me.lastHit?.kind === 'lob' && opponent.engagement?.kind === 'overhead') this.atNet = false;
     home = vec3(0, 0, me.side * (this.atNet ? NET_DEPTH : HOME_DEPTH));
     return this.walkTo(duel, home);
+  }
+
+  /**
+   * Partenaire humain : la balle dont le deuxième rebond tomberait dans sa moitié est la sienne, même s'il en
+   * est loin. Au milieu, le joueur de gauche peut la prendre. L'humain décide seul ; l'IA ne lui vole rien.
+   */
+  private yieldsToPartner(duel: Duel): boolean {
+    if (!this.options.followPartner || !duel.ball || duel.phase !== 'rally') return false;
+    const key = `${duel.phaseTick}:${duel.hits}:${duel.bounces}:${duel.glassWalls.length}`;
+    if (this.yieldFor?.key === key) return this.yieldFor.yields;
+    const me = duel.players[this.index]!;
+    const partner = duel.players[duel.partnerOf(this.index)!]!;
+    const { end, bounce, points } = predictBall(duel.ball, duel.profile, 5, 8, duel.bounces > 0);
+    const spot = end ?? points[points.length - 1] ?? bounce;
+    let yields = false;
+    if (spot) {
+      // Écart au milieu du terrain, vers la droite de la paire.
+      const offset = spot.x * rightFor(me.side).x;
+      yields = partner.half === 'right' ? offset > HUMAN_MIDDLE_BAND : offset < HUMAN_MIDDLE_BAND;
+    }
+    this.yieldFor = { key, yields };
+    return yields;
   }
 
   /** Commandes pour rejoindre sa position d'attente ; dehors (après une salida de pista), par la porte. */

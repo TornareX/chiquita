@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { AI_LEVELS, Bot, type BotOptions } from '../../src/sim/bot';
 import { SIM_DT } from '../../src/sim/constants';
 import { Duel, teamOf, type DuelShot, type PointResult } from '../../src/sim/duel';
+import { predictBall } from '../../src/sim/predict';
 import { Match } from '../../src/sim/score';
+import { rightFor } from '../../src/sim/shots';
 import { inServiceBox } from '../../src/sim/serve';
 
 /** Stats d'un match en double joué par quatre IA, via les mêmes commandes qu'une manette. */
@@ -166,6 +168,35 @@ describe('2 contre 2 (étape C)', () => {
     for (const [i, server] of s.servers.entries()) expect(teamOf(s.receivers[i]!)).not.toBe(teamOf(server));
     const byGame = s.servers.filter((server, i) => i === 0 || server !== s.servers[i - 1]);
     expect(byGame.slice(0, 4)).toEqual([0, 1, 2, 3]);
+  }, 120_000);
+
+  it("partenaire humain à droite : l'IA lui laisse les balles dont le deuxième rebond tombe à droite", () => {
+    const duel = new Duel(null, 'double');
+    // Le joueur 0 (droite) tient lieu d'humain ; son partenaire IA se cale sur lui.
+    const bots = duel.players.map((_, i) => new Bot(i, 21 + i, i === 2 ? { ...AI_LEVELS.normal, followPartner: true } : AI_LEVELS.normal));
+    const right = rightFor(duel.players[0]!.side).x;
+    let endOffset: number | null = null;
+    let stolen = 0;
+    let aiShots = 0;
+    let humanShots = 0;
+    while (duel.time < 900) {
+      duel.step(bots.map((bot) => bot.commands(duel)));
+      const shot = duel.shot;
+      if (!shot) continue;
+      if (teamOf(shot.player) === 1 && duel.ball) {
+        const { end } = predictBall(duel.ball, duel.profile, 5, 8);
+        endOffset = end ? end.x * right : null;
+      } else if (teamOf(shot.player) === 0 && !shot.serve) {
+        if (shot.player === 2) {
+          aiShots++;
+          if (endOffset !== null && endOffset > 0.7) stolen++;
+        } else humanShots++;
+      }
+    }
+    console.log(`partenaire humain : IA ${aiShots} coups, « humain » ${humanShots}, balles de droite prises par l'IA ${stolen}`);
+    expect(aiShots).toBeGreaterThan(30);
+    expect(humanShots).toBeGreaterThan(30);
+    expect(stolen).toBe(0);
   }, 120_000);
 
   it('le service tombe dans le carré du receveur', () => {

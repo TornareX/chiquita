@@ -13,6 +13,8 @@ export interface Prediction {
   bounceStep: number | null;
   /** Numéro du pas du premier contact avec une vitre après ce rebond (balle qui revient de la vitre). */
   glassStep: number | null;
+  /** Deuxième rebond au sol (au prochain si `bounced`) : là où la balle meurt si personne ne la joue. */
+  end: Vec3 | null;
 }
 
 /**
@@ -29,7 +31,7 @@ export function predictBall(
   bounced = false,
 ): Prediction {
   const copy: Ball = { ...ball };
-  const prediction: Prediction = { points: [], bounce: null, bounceStep: null, glassStep: null };
+  const prediction: Prediction = { points: [], bounce: null, bounceStep: null, glassStep: null, end: null };
   const contacts: Contact[] = [];
   let grounds = bounced ? 1 : 0;
   const steps = Math.round(seconds / SIM_DT);
@@ -40,6 +42,7 @@ export function predictBall(
       if (contact.surface === 'glass' && (prediction.bounce || bounced) && prediction.glassStep === null) prediction.glassStep = i;
       if (contact.surface !== 'ground') continue;
       grounds++;
+      if (grounds === 2) prediction.end = contact.pos;
       if (!prediction.bounce) {
         prediction.bounce = contact.pos;
         prediction.bounceStep = i;
