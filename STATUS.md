@@ -862,7 +862,7 @@ filet ; le décompte). **Pas encore joué à la vraie manette.** Sur le lob tend
 contre sa vitre. Vue de la caméra, la vitre proche est masquée : l'anneau
 semble flotter en l'air.
 
-## Polish visuel V0 + V1 (18/10/2026, non commité)
+## Polish visuel V0 + V1 (18/10/2026, f689e38)
 
 Plan et analyse : `research/rendu/POLISH_VISUEL.md`. Fait : banc d'essai du rendu (`?figer=`, `?perf`,
 `tests/e2e/rendu.spec.ts`, captures dans `screenshots/rendu/`) et rendu soigné par défaut (courbe de tons
@@ -870,15 +870,22 @@ Neutral, lumières recalibrées, reflets d'environnement, repères de jeu à cou
 garde l'ancien. Typecheck OK ; tests unitaires OK (2 dépassements de délai sous charge, verts relancés seuls) ;
 e2e 29/30 en un seul worker (le 30e : fichier de capture verrouillé par Windows). **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
 
-## Polish visuel V2 : ombres portées (18/10/2026, non commité)
+## Polish visuel V2 : ombres portées (18/10/2026, 1d24161)
 
 Le projecteur du terrain porte les ombres des joueurs, raquettes, poteaux et du filet (`?ombres=0` pour les
 couper ; absentes en `?rendu=simple` et en rendu logiciel). 60 i/s sur RTX 4070. Typecheck OK, 537 tests unitaires
 OK, e2e 29/30 en un seul worker (le 30e : capture PNG verrouillée par Windows). **Validé par Xavier en jeu.**
 
-## Polish visuel V3 : tapis bleu façon Premier Padel (18/10/2026, non commité)
+## Polish visuel V3 : tapis bleu façon Premier Padel (18/10/2026, 762e2a5)
 
 Le sol devient une moquette d'un bleu vif uniforme, d'après la surface officielle (Mondo Supercourt X3) et une
 capture TV de Premier Padel : velours plus clair au fond, grain et grains de silice de près, lignes blanc net
 (`?gazon=0` pour comparer). Le premier essai, gazon sablé et usé, a été abandonné. Typecheck OK, 537 tests
 unitaires OK, e2e 30/30 en un seul worker. **Validé par Xavier en jeu.**
+
+## Polish visuel V4 : personnages (18/10/2026)
+
+Ombres toon teintées froides façon TF2, liseré de lumière en haut des silhouettes, contour d'épaisseur constante à
+l'écran (le joueur du fond garde le même trait) ; `?toon=0` pour comparer. Typecheck OK, 537 tests unitaires OK,
+e2e 30/30 en un seul worker. **Validé par Xavier en jeu.** Le code est parti dans le commit f22220f (contre-vitre),
+commité d'un bloc par une autre session.

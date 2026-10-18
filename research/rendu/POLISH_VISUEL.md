@@ -190,7 +190,7 @@ touche `src/sim/` sauf le hit-stop (étape V7).
 Chaque étape : avant/après dans `screenshots/`, mesure du temps par image, puis une partie à la
 manette pour vérifier que la lecture de la balle n'a pas souffert.
 
-## 4 bis. Fait (18/10/2026, non commité)
+## 4 bis. Fait (18/10/2026)
 
 **V0 — banc d'essai.**
 - `?figer=5.2` (mode match) : la simulation s'arrête net à 5,2 s de jeu, le rendu continue. Même graine,
@@ -224,7 +224,7 @@ npx playwright test tests/e2e/rendu.spec.ts
 
 **V1 validé en jeu par Xavier** (comparé à `?rendu=simple`). Suite : V2 (ombres portées), puis V3 (matière du sol).
 
-**V2 — ombres portées** (18/10/2026, non commité ; `enableShadows` / `setShadows` dans `look.ts`) :
+**V2 — ombres portées** (18/10/2026, 1d24161 ; `enableShadows` / `setShadows` dans `look.ts`) :
 - Le projecteur du terrain porte les ombres (le soleil sans l'arène) ; carte 2048, cône limité au terrain,
   `PCFShadowMap` avec un rayon de 3 (`PCFSoftShadowMap` n'existe plus dans three 0.186).
 - Portent : volumes opaques (joueurs sans leur contour, raquettes, poteaux, bande du filet, structure).
@@ -239,7 +239,7 @@ npx playwright test tests/e2e/rendu.spec.ts
 
 **V2 validé en jeu par Xavier** (comparé à `?ombres=0`). Suite : V3 (matière du sol).
 
-**V3 — matière du sol : tapis façon Premier Padel** (18/10/2026, non commité ; `src/render/turf.ts`) :
+**V3 — matière du sol : tapis façon Premier Padel** (18/10/2026, 762e2a5 ; `src/render/turf.ts`) :
 - Référence : la surface officielle de Premier Padel et de la FIP est le **Premier Supercourt X3 de Mondo**,
   trois monofilaments texturés sur sable de silice ([Mondo](https://www.mondoworldwide.com/na/en/sport/padel/)).
   Les fibres texturées tiennent debout avec peu de sable : à la télé, une moquette d'un bleu vif uniforme, un peu
@@ -252,7 +252,7 @@ npx playwright test tests/e2e/rendu.spec.ts
   silice tirés des grains les plus clairs de la texture, donc lissés au loin par les mipmaps, sans scintiller.
 - Piège trouvé : la courbe de tons Neutral désature les couleurs très lumineuses ; un albédo bleu trop clair
   virait au lavande. D'où un albédo plus sombre qu'on ne l'imagine.
-- Mesuré contre une capture TV de Premier Padel (Milan P1, `reference-premier-padel.png`, gardée en local : image de retransmission, pas à nous) : sol proche
+- Mesuré contre une capture TV de Premier Padel (Milan P1, `reference-premier-padel.png`, image de retransmission, pas à nous : à garder hors du dépôt) : sol proche
   (40, 99, 198) contre (6, 94, 190), fond (15, 91, 233) contre (7, 112, 225).
 - Lignes : `MeshStandardMaterial` blanc net (0xf7f8fb), éclairées, qui reçoivent les ombres sans en porter.
 - Lisibilité (en gris) : sol plus sombre qu'en V2 (94 contre 114), donc balle, lignes et joueurs ressortent mieux ;
@@ -261,6 +261,21 @@ npx playwright test tests/e2e/rendu.spec.ts
 - `?gazon=0` garde le sol de V2 ; `comparaison-v3-*.png` : V2 à gauche, V3 à droite.
 
 **V3 validé en jeu par Xavier** (comparé à `?gazon=0`). Suite : V4 (personnages).
+
+**V4 — personnages** (18/10/2026, code dans f22220f ; `src/render/toonLook.ts`) :
+- **Ombres teintées** (ombrage illustré de TF2) : le dégradé toon à trois aplats est remplacé dans le shader ;
+  l'aplat d'ombre tire vers un bleu froid (×0,66 / 0,8 / 1,25), l'aplat du milieu gagne un peu de chaleur
+  (×1,08 / 0,98 / 0,92), la lumière reste blanche.
+- **Liseré de lumière** : terme de Fresnel en aplat net (`smoothstep`), seulement sur les bords tournés vers le
+  haut (les projecteurs), bleu très clair à 0,45. Souligne épaules, cuisses, casquette et cheveux.
+- **Contour d'épaisseur constante à l'écran** : la coque gonflée de 1,8 cm s'élargit avec la distance à la
+  caméra (vertex shader), pour un trait de ~1,6 px à 720 lignes ; jamais plus fin qu'avant (gros plans
+  inchangés). Le joueur du fond garde le même trait que celui de devant. Suit le champ de la caméra (dézoom).
+- Pas fait : écrasement à la réception des sauts (touche à l'animation, à voir avec V7).
+- Coût : nul mesurable (60 i/s, mêmes appels de dessin). `?toon=0` garde les personnages de V3.
+- `comparaison-v4-*.png` (V3 | V4) et `gros-plan-v4-*.png` (joueurs agrandis, V3 | V4).
+
+**V4 validé en jeu par Xavier** (comparé à `?toon=0`). Suite : V5 (salle).
 
 ## 5. Risques
 
