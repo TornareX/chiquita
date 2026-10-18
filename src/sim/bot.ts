@@ -4,7 +4,7 @@ import { SIM_DT } from './constants';
 import { HOME_DEPTH, NET_DEPTH, teamOf, type Duel, type DuelPlayer } from './duel';
 import { ballColor, type BallColor } from './pressure';
 import { Prng } from './prng';
-import { forwardFor, rightFor } from './shots';
+import { forehandFor, forwardFor, rightFor } from './shots';
 import { vec3, type Vec3 } from './vec3';
 import { predictBall } from './predict';
 import { pathDistance, waypoint } from './walkable';
@@ -67,6 +67,11 @@ export interface BotOptions {
    */
   doubles?: { shift: number; middle: number };
   /**
+   * Avec `tactics` : part des coups (hors lob, chiquita et frappe au corps) visés sur le revers de l'adversaire, et
+   * des lobs passés au-dessus de son revers, où il ne peut faire qu'un revers par-dessus la tête.
+   */
+  backhand?: number;
+  /**
    * En double, partenaire humain : il se cale sur sa profondeur (les deux au filet ou les deux au fond) au lieu
    * de décider seul. Réglé par le mode de jeu.
    */
@@ -95,7 +100,7 @@ const DOUBLES_BACK_DEPTH = 8.2;
 const DOUBLES_SPACING_NET = 3.2;
 const DOUBLES_SPACING_BACK = 3.0;
 const DOUBLES_LOBBED_DEPTH = 6.5;
-/** Partenaire humain : bande centrale (m de part et d'autre du milieu du terrain) où le joueur de gauche peut jouer. */
+/** Partenaire humain : bande centrale (m de part et d'autre du milieu du terrain), au joueur dont le coup droit y est. */
 const HUMAN_MIDDLE_BAND = 0.7;
 /**
  * Retour à la position d'attente entre les points : arrivé à moins de `ARRIVED` (m), il s'arrête et ne repart que si sa place
@@ -131,6 +136,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     release: { offset: 0.01, spread: 0.12 },
     overheadRelease: { offset: 0, spread: 0.02 },
     tactics: true,
+    backhand: 0.3,
     overhead: { maxDepth: 7, remate: 0.85, vibora: 0.2, bajada: 0.4 },
     choices: { lob: 0.55, chiquita: 0.2, body: 0.15, cut: 0.5 },
   },
@@ -142,6 +148,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     release: { offset: 0, spread: 0.1 },
     overheadRelease: { offset: 0, spread: 0.01 },
     tactics: true,
+    backhand: 0.5,
     overhead: { maxDepth: 7.4, remate: 0.9, vibora: 0.3, bajada: 0.6 },
     choices: { lob: 0.5, chiquita: 0.25, body: 0.2, cut: 0.8 },
   },
@@ -149,6 +156,8 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
 
 export class Bot {
   private readonly prng: Prng;
+  /** Tirages du coup visé sur le revers : à part, pour ne pas décaler les autres (reproductibles d'une version à l'autre). */
+  private readonly backhandPrng: Prng;
   private pressedFor: number | null = null;
   private kind: ShotKind = 'normal';
   private stick = { forward: 0, right: 0 };
@@ -178,6 +187,7 @@ export class Bot {
     private readonly options: BotOptions = DEFAULT_BOT,
   ) {
     this.prng = new Prng(seed);
+    this.backhandPrng = new Prng(seed + 7919);
   }
 
   /** Décide d'un nouveau coup : type et direction (reproductible). Au service, `duel` est omis. */
@@ -212,7 +222,12 @@ export class Bot {
       // entre les deux adversaires (ils hésitent), ou le plus grand trou.
       const open = Math.abs(opponent.pos.x) > 0.6 ? -Math.sign(opponent.pos.x) : this.prng.next() < 0.5 ? -1 : 1;
       const gap = duel.doubles ? this.doublesGap(duel) : null;
-      const right = gap ?? open * rightFor(me.side).x;
+      // Sur son revers : à un bon mètre de lui, du côté opposé à sa main.
+      const share = this.options.backhand ?? 0;
+      const onBackhand = share > 0 && !body && !chiquita && this.backhandPrng.next() < share;
+      const backhandX = opponent.pos.x - forehandFor(opponent.side, opponent.hand).x * 1.2;
+      const toBackhand = Math.max(-1, Math.min(1, backhandX / (duel.profile.rally.aimWidth * rightFor(me.side).x)));
+      const right = onBackhand ? toBackhand : (gap ?? open * rightFor(me.side).x);
       this.stick = {
         forward: clamp(this.prng.range(0.2, 1) * aim),
         right: clamp(right * this.prng.range(0.6, 1) * aim),
@@ -248,7 +263,7 @@ export class Bot {
     const ball = duel.ball;
     const unknown = { color: 'jaune' as const, volley: false, height: 1 };
     if (!ball) return unknown;
-    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, false, me.height);
+    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, false, me.height, false, me.hand);
     if (!plan) return unknown;
     const speed = Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2);
     const color = ballColor(duel.pressureOf(this.index, 'normal', plan.contact.y, speed, 0, plan.tick));
@@ -266,7 +281,7 @@ export class Bot {
     if (!ball) return;
     const r = duel.profile.rally;
     // Point le plus haut jouable près du filet : de quoi juger si le remate est possible.
-    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, true, me.height, true);
+    const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, true, me.height, true, me.hand);
     const { maxDepth, remate, vibora, bajada } = this.options.overhead;
     // Balle haute (un lob, ou une balle qui ressort haut de la vitre) : elle monte au-dessus des coups normaux.
     const apex = ball.vel.y > 0 ? ball.pos.y + (ball.vel.y * ball.vel.y) / (2 * duel.profile.gravity) : ball.pos.y;
@@ -508,7 +523,8 @@ export class Bot {
 
   /**
    * Partenaire humain : la balle dont le deuxième rebond tomberait dans sa moitié est la sienne, même s'il en
-   * est loin. Au milieu, le joueur de gauche peut la prendre. L'humain décide seul ; l'IA ne lui vole rien.
+   * est loin. Au milieu, celui dont le coup droit est au centre (le droitier de gauche, le gaucher de droite ; les
+   * deux ou aucun : le joueur de gauche), comme `Duel.owner`. L'humain décide seul ; l'IA ne lui vole rien.
    */
   private yieldsToPartner(duel: Duel): boolean {
     if (!this.options.followPartner || !duel.ball || duel.phase !== 'rally') return false;
@@ -522,7 +538,12 @@ export class Bot {
     if (spot) {
       // Écart au milieu du terrain, vers la droite de la paire.
       const offset = spot.x * rightFor(me.side).x;
-      yields = partner.half === 'right' ? offset > HUMAN_MIDDLE_BAND : offset < HUMAN_MIDDLE_BAND;
+      const humanLeft = partner.half === 'left';
+      const [left, right] = humanLeft ? [partner, me] : [me, partner];
+      const middleToLeft = !(right.hand === 'left' && left.hand !== 'right');
+      // Bande du milieu comprise dans la moitié de l'humain s'il a le coup droit au centre.
+      const band = humanLeft === middleToLeft ? HUMAN_MIDDLE_BAND : -HUMAN_MIDDLE_BAND;
+      yields = humanLeft ? offset < band : offset > -band;
     }
     this.yieldFor = { key, yields };
     return yields;

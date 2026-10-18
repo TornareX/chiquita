@@ -79,6 +79,7 @@ describe('retour des entrées', () => {
     error: 0,
     style: null,
     heightOff: 0,
+    wing: 'fore',
     ...over,
   });
 

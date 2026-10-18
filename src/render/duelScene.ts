@@ -365,9 +365,12 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
    */
   const animate = (view: PlayerView, player: DuelPlayer, pos: Vec3, alpha: number, frameTime: number): void => {
     const f = player.side < 0 ? 1 : -1;
+    // Gaucher : le personnage est dessiné en miroir (raquette dans la main gauche) ; ses poses sont celles d'un
+    // droitier dans un repère retourné, où sa gauche passe à droite.
+    const m = player.hand === 'left' ? -1 : 1;
     const scale = player.height / PLAYER_HEIGHT;
     const now = duel.tick + alpha;
-    const localX = (p: Vec3): number => (p.x - pos.x) * f;
+    const localX = (p: Vec3): number => (p.x - pos.x) * f * m;
 
     // Coup préparé : l'armé grandit avec le temps de préparation ; le côté suit la balle attendue.
     const engagement = player.engagement;
@@ -395,7 +398,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     if (Number.isFinite(strikeTick)) {
       const hit = whiffed ? null : player.lastHit;
       const kind = whiffed ? player.lastWhiffKind : hit?.kind;
-      if (hit && !hit.serve && kind !== 'overhead') view.anim.side = swingSide(localX(hit.contact), view.anim.side);
+      // Côté de frappe : celui que la simulation a retenu (coup droit ou revers).
+      if (hit && !hit.serve && kind !== 'overhead') view.anim.side = hit.wing;
       // Le coup joué dit la famille ; un coup dans le vide garde celle de sa préparation (au stick, la commande
       // est toujours celle d'un coup haut : c'est la hauteur de la balle qui décide).
       const high = hit ? kind === 'overhead' : view.anim.high;
@@ -407,7 +411,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
 
     // Course : vitesse et direction dans le repère du filet ; la foulée avance avec la distance parcourue.
     const speed = Math.hypot(player.vel.x, player.vel.z);
-    const heading = Math.atan2(player.vel.x * f, player.vel.z * f);
+    const heading = Math.atan2(player.vel.x * f * m, player.vel.z * f);
     const last = view.anim.last;
     if (last) view.anim.stride += (Math.hypot(pos.x - last.x, pos.z - last.z) / (STRIDE * scale)) * Math.PI * 2;
     view.anim.last = { x: pos.x, z: pos.z };
@@ -449,6 +453,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     }
     // Face au filet ; le repère du joueur a +Z vers le filet et sa droite vers -X.
     view.object.rotation.y = player.side < 0 ? 0 : Math.PI;
+    view.rig.object.scale.x = player.hand === 'left' ? -1 : 1;
     animate(view, player, pos, alpha, frameTime);
 
     // Coup préparé, bouton maintenu : en échange, ou balle lâchée au service.

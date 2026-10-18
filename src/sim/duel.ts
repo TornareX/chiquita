@@ -9,6 +9,7 @@ import { Match, type MatchRules, type PointOutcome, type ServeSide } from './sco
 import { inServiceBox, serveIdealTick, servePositions, serveTarget } from './serve';
 import {
   aimTarget,
+  forehandFor,
   forwardFor,
   bandejaHeight,
   HALF_LENGTH_SAFE,
@@ -19,7 +20,9 @@ import {
   rightFor,
   solveShot,
   type CourtSide,
+  type Hand,
   type ShotTuningKey,
+  type Wing,
 } from './shots';
 import { ballPressure, shotError } from './pressure';
 import { add, addScaled, length, vec3, type Vec3 } from './vec3';
@@ -129,6 +132,8 @@ export interface DuelPlayer {
   lastWhiffLate: boolean;
   /** Taille du joueur (m) : la bandeja et la víbora se frappent légèrement au-dessus de sa tête. */
   height: number;
+  /** Main qui tient la raquette : son côté est celui du coup droit et des coups au-dessus de la tête. */
+  hand: Hand;
   assist: AssistLevel;
   /** Stick gauche pendant la préparation (`PrepMove`) ; les IA restent en `libre`. */
   prepMove: PrepMove;
@@ -160,6 +165,8 @@ export interface DuelShot {
   style: ShotStyle | null;
   /** Bandeja ou víbora : hauteur de frappe par rapport à l'idéal, de -1 (trop basse) à 1 (trop haute) ; sinon 0. */
   heightOff: number;
+  /** Côté de frappe : coup droit ou revers (au-dessus de la tête, revers par-dessus la tête). */
+  wing: Wing;
 }
 
 /** Ce qu'une frappe ajoute aux réglages de base. */
@@ -174,6 +181,8 @@ interface HitExtra {
   prepared?: number;
   /** Bandeja ou víbora : hauteur de frappe par rapport à l'idéal, de -1 (trop basse) à 1 (trop haute). */
   heightOff?: number;
+  /** Coup droit (défaut) ou revers. */
+  wing?: Wing;
 }
 
 /**
@@ -304,26 +313,30 @@ const SERVE_HEIGHT = 0.95;
  * Négatif : la balle n'y est pas encore. `miss` : distance horizontale de ce passage au point idéal (m).
  * Au-dessus de la tête (`height` donné), le point idéal est en l'air à cette hauteur et le passage se
  * lit en trois dimensions : une balle qui tombe presque à la verticale a son moment comme une autre.
+ * `foreMiss` : la balle se joue en coup droit tant qu'elle passe à moins de cette distance de son point idéal
+ * (coups au-dessus de la tête : côté main forte) ; sinon, du côté le plus proche.
  */
 export function contactTiming(
   ball: Ball,
   player: DuelPlayer,
   lateral: number,
   height: number | null = null,
-): { timing: number; miss: number } {
-  const right = rightFor(player.side);
+  foreMiss = 0,
+): { timing: number; miss: number; wing: Wing } {
+  const fore = forehandFor(player.side, player.hand);
   const { x: vx, z: vz } = ball.vel;
   const vy = height === null ? 0 : ball.vel.y;
   // Balle presque verticale : vitesse plancher, le timing reste borné.
   const speed2 = Math.max(vx * vx + vy * vy + vz * vz, 2.25);
-  let best = { timing: Infinity, miss: Infinity };
-  for (const sign of [1, -1]) {
-    const rx = ball.pos.x - (player.pos.x + right.x * lateral * sign);
+  let best: { timing: number; miss: number; wing: Wing } = { timing: Infinity, miss: Infinity, wing: 'fore' };
+  for (const wing of ['fore', 'back'] as const) {
+    const rx = ball.pos.x - (player.pos.x + fore.x * lateral * (wing === 'fore' ? 1 : -1));
     const ry = height === null ? 0 : ball.pos.y - height;
     const rz = ball.pos.z - player.pos.z;
     const timing = (rx * vx + ry * vy + rz * vz) / speed2;
     const miss = Math.sqrt((rx - timing * vx) ** 2 + (rz - timing * vz) ** 2);
-    if (miss < best.miss) best = { timing, miss };
+    if (miss < best.miss) best = { timing, miss, wing };
+    if (wing === 'fore' && miss <= foreMiss) break;
   }
   return best;
 }
@@ -352,6 +365,7 @@ function createDuelPlayer(index: number, format: DuelFormat): DuelPlayer {
     lastWhiffKind: null,
     lastWhiffLate: false,
     height: PLAYER_HEIGHT,
+    hand: 'right',
     assist: 'magnet',
     prepMove: 'libre',
   };
@@ -487,7 +501,8 @@ export class Duel {
   /**
    * Qui doit prendre la balle dans l'équipe `team` qui la reçoit (`TACTIQUE_2V2.md` §3.0 et §3.4) : celui qui
    * s'est engagé le premier ; sinon le propriétaire de la moitié où elle se joue ; au milieu, celui qui arrive
-   * nettement le premier, sinon le joueur de gauche (son coup droit est au centre) ; si celui-là ne peut pas
+   * nettement le premier, sinon celui dont le coup droit est au centre (le droitier de gauche, le gaucher de
+   * droite ; les deux ou aucun : le joueur de gauche) ; si celui-là ne peut pas
    * l'atteindre et son partenaire si, le partenaire (cambio). En simple, le joueur de l'équipe ; `null` hors
    * échange. Les IA partenaires s'en servent pour ne pas se gêner ; un humain reste libre de la prendre.
    */
@@ -515,7 +530,7 @@ export class Duel {
     const side = pa.side;
     const right = rightFor(side).x;
     const planOf = (p: DuelPlayer): Intercept | null =>
-      planIntercept(this.ball!, p.pos, p.side, this.tick, this.profile, 0, this.bounces > 0, false, p.height);
+      planIntercept(this.ball!, p.pos, p.side, this.tick, this.profile, 0, this.bounces > 0, false, p.height, false, p.hand);
     const plans = new Map([
       [a, planOf(pa)],
       [b, planOf(pb)],
@@ -533,7 +548,11 @@ export class Duel {
         return plan ? runTime(pathDistance(this.players[i]!.pos, plan.stand, side), this.profile) : Infinity;
       };
       const [tl, tr] = [time(left), time(rightPlayer)];
-      owner = Math.abs(tl - tr) > MIDDLE_TIE ? (tl < tr ? left : rightPlayer) : left;
+      // Coup droit au centre : le droitier de gauche, le gaucher de droite.
+      const leftFore = this.players[left]!.hand === 'right';
+      const rightFore = this.players[rightPlayer]!.hand === 'left';
+      const middle = rightFore && !leftFore ? rightPlayer : left;
+      owner = Math.abs(tl - tr) > MIDDLE_TIE ? (tl < tr ? left : rightPlayer) : middle;
     }
     const mate = owner === a ? b : a;
     if (!plans.get(owner)?.reachable && plans.get(mate)?.reachable) owner = mate;
@@ -544,7 +563,7 @@ export class Duel {
   servePosition(): Vec3 {
     const player = this.players[this.server]!;
     return vec3(
-      player.pos.x + rightFor(player.side).x * this.profile.rally.standLateral,
+      player.pos.x + forehandFor(player.side, player.hand).x * this.profile.rally.standLateral,
       SERVE_HEIGHT,
       player.pos.z + forwardFor(player.side).z * 0.25,
     );
@@ -787,6 +806,7 @@ export class Duel {
             overhead,
             player.height,
             this.rematePrepared(index),
+            player.hand,
           );
         engagement.plan = plan(engagement.kind === 'overhead');
         // Balle qui ne monte pas assez pour un coup haut (B, ou geste au stick) : préparé comme un coup au sol
@@ -967,7 +987,8 @@ export class Duel {
     // plus tôt que le point prévu par la course assistée (les yeux, pour la bandeja et la víbora).
     const smash = high && this.overheadVariant(index, ball.pos) === 'remate';
     const ideal = !high ? null : smash ? r.overheadIdeal : Math.max(r.overheadLow, engagement.plan?.contact.y ?? bandejaHeight(this.profile, player.height));
-    const { timing, miss } = contactTiming(ball, player, high ? r.overheadLateral : r.standLateral, ideal);
+    const lateral = high ? r.overheadLateral : r.standLateral;
+    const { timing, miss, wing } = contactTiming(ball, player, lateral, ideal, high ? r.hand.overheadForeMiss : 0);
     const heightOk = ball.pos.y >= r.hitLow && ball.pos.y <= (overhead ? r.overheadHigh : r.hitHigh);
     const reach = r.reach * (timing > 0 ? r.lateReach : 1);
     const lateWindow = high ? r.overheadLateWindow : r.lateWindow;
@@ -996,14 +1017,16 @@ export class Duel {
     let error = shotError(pressure, timing, miss, perfect, this.profile);
     if (kind === 'overhead') {
       error *= r.pressure.overheadFactor;
-      const variant = this.overheadVariant(index, ball.pos);
+      // Côté revers : revers par-dessus la tête, une bandeja sans force ; ni remate ni víbora.
+      const backhand = wing === 'back';
+      const variant = backhand ? 'bandeja' : this.overheadVariant(index, ball.pos);
       // Bandeja et víbora : la hauteur fait la frappe parfaite (aux yeux, alignée), pas le moment prévu par la
       // course assistée, qui vise la hauteur du remate près du filet. Au stick, la víbora est préparée comme le
       // smash : elle se juge au moment, comme lui.
       const byHeight = variant === 'bandeja' || (variant === 'vibora' && !engagement.swing);
       // Bandeja et víbora : la hauteur de frappe compte (trop haute, elle rebondit ; trop basse, filet).
       const heightOff = byHeight ? overheadHeightOff(ball.pos.y, this.profile, player.height) : 0;
-      const clean = byHeight ? heightOff === 0 && miss <= r.sweetSpot : perfect;
+      const clean = !backhand && (byHeight ? heightOff === 0 && miss <= r.sweetSpot : perfect);
       // Smash au stick joué loin du filet : il ne sort pas du terrain (pas de por tres), l'adversaire peut contrer.
       const far = variant === 'remate' && Math.abs(ball.pos.z) > r.remateZone;
       let aimed = overheadTarget(variant, player.side, player.stick, clean && !far, this.profile, ball.pos.x, Math.abs(ball.pos.z));
@@ -1011,12 +1034,14 @@ export class Duel {
         const depth = Math.min(HALF_LENGTH_SAFE, Math.abs(aimed.z) + heightOff * r.overheadHighDepth);
         aimed = vec3(aimed.x, aimed.y, -player.side * depth);
       }
+      if (backhand) aimed = vec3(aimed.x, aimed.y, aimed.z + player.side * r.hand.backOverheadShort);
       const target = byHeight ? aimed : lateDrift(aimed, player.side, timing, this.profile);
       this.hit(index, kind, ball.pos, target, clean, timing, volley, false, engagement.manual, {
         overhead: variant,
         pressure,
         error,
         heightOff,
+        wing,
       });
       return;
     }
@@ -1026,6 +1051,9 @@ export class Duel {
     const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile, engagement.swing?.end === 'letGo');
     // La volée coupée demande du temps : pressée, elle rate plus souvent (plus haute, plus longue).
     if (style === 'cut') error = Math.min(1, error * (1 + r.pressure.cutRush * pressure));
+    // Revers frappé (ni lob, ni toucher) : un peu moins sûr que le coup droit.
+    const struck = kind !== 'lob' && style !== 'cut' && style !== 'chiquita' && !outside;
+    if (wing === 'back' && struck) error = Math.min(1, error + r.hand.backhandError);
     const tuning = style === 'cut' || style === 'chiquita' ? style : kind;
     const bonus = (engagement.manual ? r.manualAimBonus : 1) * (volley ? r.volleyWidth : 1) * (style === 'block' ? r.blockWidth : 1);
     let aimed = aimTarget(tuning, player.side, player.stick, perfect, this.profile, bonus);
@@ -1034,7 +1062,7 @@ export class Duel {
     // Coup mal frappé ou sous pression : il part long (vers la vitre adverse, la faute de fond de court).
     else if (!outside && error > 0) aimed = vec3(aimed.x, aimed.y, aimed.z - player.side * error * r.pressure.long);
     const target = lateDrift(aimed, player.side, timing, this.profile);
-    this.hit(index, kind, ball.pos, target, perfect, timing, volley, false, engagement.manual, { outside, pressure, error, style, prepared });
+    this.hit(index, kind, ball.pos, target, perfect, timing, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing });
   }
 
   /**
@@ -1198,12 +1226,14 @@ export class Duel {
   ): void {
     const player = this.players[index]!;
     const r = this.profile.rally;
-    const { overhead = null, outside = false, pressure = 0, error = 0, style = null, prepared = Infinity, heightOff = 0 } = extra;
+    const { overhead = null, outside = false, pressure = 0, error = 0, style = null, prepared = Infinity, heightOff = 0, wing = 'fore' } = extra;
     const tuning: ShotTuningKey = overhead ?? (style === 'cut' || style === 'chiquita' ? style : kind === 'overhead' ? 'bandeja' : kind);
     const touch = style === 'cut' || style === 'chiquita';
     const base = kind === 'lob' || overhead || touch ? 1 : volley ? r.volleySpeed : this.touchedGlass ? r.glassSpeed : 1;
     // Préparation : sans temps pour armer, on ne fait que bloquer ; armé assez tôt, le coup part plein.
-    const speedFactor = base * (1 - r.pressure.speedLoss * error) * (touch || kind === 'lob' ? 1 : preparation(prepared, this.profile));
+    // Revers : moins fort que le coup droit ; par-dessus la tête, bien moins.
+    const weak = overhead ? r.hand.backOverheadSpeed : touch || kind === 'lob' || outside ? 1 : r.hand.backhandSpeed;
+    const speedFactor = base * (wing === 'back' ? weak : 1) * (1 - r.pressure.speedLoss * error) * (touch || kind === 'lob' ? 1 : preparation(prepared, this.profile));
     // Au padel, la volée se joue coupée : la balle reste basse, même après la vitre.
     const spin = volley && kind === 'normal' && !touch ? r.volleySpin : null;
     const spinScale = 1 - Math.max(0, heightOff) * r.overheadHighSpin;
@@ -1247,6 +1277,7 @@ export class Duel {
       error,
       style,
       heightOff,
+      wing,
     };
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignController, isHuman, keyboardOf, padOf, sanitize, type DuelSettings } from '../../src/ui/duelSettings';
+import { assignController, isHuman, keyboardOf, loadSettings, padOf, sanitize, type DuelSettings } from '../../src/ui/duelSettings';
 
 describe('composition des équipes', () => {
   it('une manette ou un clavier ne joue qu’une place : l’ancienne passe à l’IA normale', () => {
@@ -29,5 +29,10 @@ describe('composition des équipes', () => {
     expect(keyboardOf('manette1')).toBeNull();
     expect(isHuman('clavier1')).toBe(true);
     expect(isHuman('fort')).toBe(false);
+  });
+
+  it('droitier ou gaucher par place : enregistré, et `?gaucher=` dans l’URL', () => {
+    expect(sanitize({ hands: ['left', 'droite', 'right', 'left'] }).hands).toEqual(['left', 'right', 'right', 'left']);
+    expect(loadSettings(new URLSearchParams('gaucher=2,3')).hands).toEqual(['right', 'left', 'left', 'right']);
   });
 });

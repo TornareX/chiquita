@@ -784,3 +784,31 @@ forcément la place n° N (Bleu 1, à droite), et le clavier ne servait que Bleu
 - Vérifié : 2 tests de simulation (humain à gauche : l'IA de droite lui laisse les balles de gauche et du milieu,
   il sert), 4 tests des réglages, un test navigateur (`tests/e2e/places.spec.ts` : une manette virtuelle donnée à
   Bleu 2 dans le menu allume sa place et frappe à gauche en double). **Pas encore joué à la vraie manette.**
+
+## Gameplay : main forte, gaucher ou droitier (18/10/2026, étape 2 de `CHANTIERS_PLAN.md`, non commitée)
+
+Choisi par Xavier : niveau 2, la main change le jeu. Avant, la simulation était ambidextre : coup droit et revers
+n'existaient qu'à l'affichage, et le smash se frappait des deux côtés.
+
+- **Réglage** : Réglages → Équipes, « Main » sur chaque carte (humain ou IA) ; `?gaucher=1,3` (places à partir de 1).
+- **Côté de frappe connu à l'impact** (`DuelShot.wing`) : coup droit du côté de la main, revers de l'autre.
+  Revers frappé (pas le lob, la volée coupée ni la chiquita) : vitesse ×0,9 et erreur +0,08 (il part un peu long).
+- **Au-dessus de la tête, côté main forte** : la balle se joue en coup droit tant qu'elle passe à moins de 0,75 m du
+  point idéal de ce côté (~40 cm côté revers en se penchant). Plus loin : **revers par-dessus la tête**, une bandeja
+  jamais parfaite, ×0,75 en vitesse et visée 1,5 m plus court ; ni remate ni víbora (46 km/h mesurés, contre 125
+  pour le remate du bon côté).
+- **Placement assisté et IA** : coup droit s'il a le temps et qu'il ne coûte pas plus d'1 m de course de plus ;
+  au-dessus de la tête, toujours côté main forte s'il a le temps.
+- **Règles qui supposaient un droitier** : la balle du milieu revient à celui dont le coup droit est au centre (le
+  droitier de gauche, le gaucher de droite ; les deux ou aucun : le joueur de gauche), pour l'attribution entre
+  partenaires et pour l'IA qui laisse les balles à son partenaire humain ; balle tenue côté main au service.
+- **IA** : normale et forte visent le revers de l'adversaire sur 30 et 50 % des coups (hors lob court, chiquita et
+  frappe au corps), lobs compris. Tirage à part : les autres tirages de l'IA ne changent pas.
+- **Affichage** : gaucher dessiné en miroir (raquette et balle dans la main gauche) ; le geste suit le côté de frappe
+  retenu par la simulation.
+
+Mesuré, IA normale contre IA normale : revers ~40 % des coups, revers par-dessus la tête quasi jamais (l'IA a le
+temps de se placer) ; avec un gaucher en face, 31-40 sur 71 points (39-31 avec deux droitiers). Les remates passent
+de 20 % à 36 % des coups gagnants (pros 35-43 %) : sous un lob, le joueur se place du côté de son smash. 501 tests OK
+(dont `tests/sim/hand.test.ts`). **Pas encore joué à la manette** ; à juger : le revers par-dessus la tête est-il
+trop puni pour un humain en placement manuel ?

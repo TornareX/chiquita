@@ -1,6 +1,6 @@
 # Chantiers gameplay : places, main forte, rotation, contre-vitre — plan
 
-> Statut (18/10/2026) : plan validé avec Xavier ; étape 1 faite (voir `STATUS.md`), pas encore jouée à la manette. Ordre : 1 → 2 → 3, l'étape 4 est
+> Statut (18/10/2026) : plan validé avec Xavier ; étapes 1 et 2 faites (voir `STATUS.md`) ; l'étape 2 n'est pas encore jouée à la manette. Ordre : 1 → 2 → 3, l'étape 4 est
 > indépendante. Chaque étape est vérifiée au joueur automatique avant d'être annoncée jouable.
 
 ## Constats de départ (code au commit a2c4af5)

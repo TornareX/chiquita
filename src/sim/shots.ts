@@ -22,6 +22,18 @@ export function rightFor(side: CourtSide): Vec3 {
   return vec3(side, 0, 0);
 }
 
+/** Main qui tient la raquette : le coup droit se joue de ce côté du joueur, et les coups au-dessus de la tête aussi. */
+export type Hand = 'right' | 'left';
+export const HANDS: readonly Hand[] = ['right', 'left'];
+
+/** Côté de frappe : coup droit (côté de la main) ou revers. */
+export type Wing = 'fore' | 'back';
+
+/** Direction du coup droit d'un joueur du camp `side` qui fait face au filet : sa droite, ou sa gauche s'il est gaucher. */
+export function forehandFor(side: CourtSide, hand: Hand): Vec3 {
+  return vec3(hand === 'right' ? side : -side, 0, 0);
+}
+
 /** Réglages d'un coup : un bouton (sauf B, qui se décline) ou une variante du coup au-dessus de la tête. */
 export type ShotTuningKey = Exclude<ShotKind, 'overhead'> | OverheadKind | 'cut' | 'chiquita';
 

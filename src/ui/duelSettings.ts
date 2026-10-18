@@ -4,6 +4,7 @@ import { PAD_FAMILY_NAMES, PAD_STYLES, type PadStyle } from '../input/padStyle';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { ASSIST_LEVELS, PREP_MOVES, type AssistLevel, type PrepMove } from '../sim/duel';
 import { DEFAULT_RULES } from '../sim/score';
+import { HANDS, type Hand } from '../sim/shots';
 
 /** Retour des entrées : masqué, discret (match) ou détaillé (tests). */
 export type InputDisplayMode = 'off' | 'compact' | 'full';
@@ -67,6 +68,8 @@ export interface DuelSettings {
    */
   players: [Controller, Controller, Controller, Controller];
   assists: [AssistLevel, AssistLevel, AssistLevel, AssistLevel];
+  /** Main de chaque place : droitier ou gaucher (humain ou IA). */
+  hands: [Hand, Hand, Hand, Hand];
   /** Pression des balles (vertes, jaunes, rouges) : 0 = sans, 1 = normale, 1,5 = forte. */
   pressure: number;
   /** Stick gauche pendant la préparation, pour les joueurs humains (`PrepMove`). */
@@ -90,6 +93,7 @@ export const DEFAULT_SETTINGS: DuelSettings = {
   // Comme Xavier aime jouer : placement manuel, immobile pendant la préparation (le stick gauche vise). Les IA
   // gardent l'aimant (voir `src/modes/duel.ts`).
   assists: ['off', 'off', 'off', 'off'],
+  hands: ['right', 'right', 'right', 'right'],
   pressure: 1,
   prepMove: 'bloque',
   sound: true,
@@ -134,6 +138,11 @@ const ASSIST_LABELS: Record<AssistLevel, string> = {
   off: 'Placement manuel',
 };
 
+const HAND_LABELS: Record<Hand, string> = {
+  right: 'Droitier',
+  left: 'Gaucher',
+};
+
 const PREP_MOVE_LABELS: Record<PrepMove, string> = {
   libre: 'Libre (le stick déplace)',
   ralenti: 'Ralenti (petits pas, vise)',
@@ -169,6 +178,9 @@ export function sanitize(raw: unknown): DuelSettings {
       if (i < 4 && ASSIST_LEVELS.includes(a)) s.assists[i] = a;
     });
   }
+  r.hands?.forEach((h, i) => {
+    if (i < 4 && HANDS.includes(h)) s.hands[i] = h;
+  });
   if (typeof r.pressure === 'number' && r.pressure >= 0 && r.pressure <= 2) s.pressure = r.pressure;
   if (current && PREP_MOVES.includes(r.prepMove as PrepMove)) s.prepMove = r.prepMove as PrepMove;
   if (typeof r.sound === 'boolean') s.sound = r.sound;
@@ -221,6 +233,12 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
     if (i < 4 && ASSIST_LEVELS.includes(a as AssistLevel)) s.assists[i] = a as AssistLevel;
   });
   if (assists?.length === 1 && ASSIST_LEVELS.includes(assists[0] as AssistLevel)) s.assists.fill(assists[0] as AssistLevel);
+  // `?gaucher=1,3` : places (à partir de 1) jouées par un gaucher, les autres droitières ; `?gaucher=0` : aucun.
+  const lefties = params.get('gaucher');
+  if (lefties !== null) {
+    const listed = lefties.split(',').map(Number);
+    s.hands = s.hands.map((_, i) => (listed.includes(i + 1) ? 'left' : 'right')) as DuelSettings['hands'];
+  }
   const pressure = Number(params.get('pression'));
   if (params.has('pression') && Number.isFinite(pressure) && pressure >= 0) s.pressure = pressure;
   if (params.get('far') === 'own') s.farOwnView = true;
@@ -366,8 +384,16 @@ export function createSettingsMenu(
     const assistText = document.createElement('span');
     assistText.textContent = 'Course';
     assistRow.append(assistText, assistControl);
-    card.append(title, who, assistRow);
-    return { card, title, who, assistControl, assistRow };
+    const handControl = select(HANDS, (h) => HAND_LABELS[h], settings.hands[i], (h) => {
+      settings.hands[i] = h;
+      changed();
+    });
+    const handRow = document.createElement('label');
+    const handText = document.createElement('span');
+    handText.textContent = 'Main';
+    handRow.append(handText, handControl);
+    card.append(title, who, handRow, assistRow);
+    return { card, title, who, handControl, assistControl, assistRow };
   });
 
   /**
@@ -387,7 +413,7 @@ export function createSettingsMenu(
   /** Manettes branchées, dans l'ordre : leurs numéros dans les choix, et la liste sous le terrain. */
   const refreshCards = (): void => {
     const pads = connectedGamepads();
-    cards.forEach(({ who, assistControl, assistRow }, i) => {
+    cards.forEach(({ who, handControl, assistControl, assistRow }, i) => {
       for (const option of who.options) {
         const controller = option.value as Controller;
         const pad = padOf(controller);
@@ -395,6 +421,7 @@ export function createSettingsMenu(
       }
       who.value = settings.players[i]!;
       assistControl.value = settings.assists[i]!;
+      handControl.value = settings.hands[i]!;
       assistRow.hidden = !isHuman(settings.players[i]!);
     });
     padList.textContent = pads.length

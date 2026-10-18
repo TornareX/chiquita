@@ -228,6 +228,8 @@ export interface RallyTuning {
   overheadIdeal: number;
   /** La course assistée place la balle à cette distance sur le côté du joueur, au-dessus de la tête (m). */
   overheadLateral: number;
+  /** Main forte : le revers est moins fort que le coup droit, et les coups au-dessus de la tête se jouent côté main. */
+  hand: HandTuning;
   /** Stick à fond au-delà de ce seuil (0..1), vers l'avant : remate ; sur le côté : víbora ; sinon bandeja. */
   overheadStick: number;
   /** Le remate ne se joue qu'à moins de cette distance du filet, sur une balle au moins à `remateLow` (m) ; sinon, bandeja. */
@@ -416,6 +418,24 @@ export interface PhysicsProfile {
   slicedBounce: number;
 }
 
+/** Coup droit et revers (`CHANTIERS_PLAN.md`, étape 2). */
+export interface HandTuning {
+  /** Revers au sol ou de volée (hors lob, volée coupée et chiquita) : vitesse multipliée par ce facteur. */
+  backhandSpeed: number;
+  /** Revers : erreur ajoutée au coup (0..1), il part un peu plus long. */
+  backhandError: number;
+  /**
+   * Au-dessus de la tête, la balle se joue côté main forte tant qu'elle passe à moins de cette distance du point
+   * idéal de ce côté (m) ; plus loin, de l'autre côté : revers par-dessus la tête.
+   */
+  overheadForeMiss: number;
+  /** Revers par-dessus la tête : jamais de remate ni de víbora ; vitesse multipliée, et visé plus court (m). */
+  backOverheadSpeed: number;
+  backOverheadShort: number;
+  /** Course assistée et IA : coup droit plutôt que revers s'il ne coûte pas plus que ce surplus de course (m). */
+  forehandBias: number;
+}
+
 export const REALISTIC: PhysicsProfile = {
   // Tout le ressenti du déplacement est [à calibrer] en jouant.
   player: {
@@ -517,6 +537,14 @@ export const REALISTIC: PhysicsProfile = {
     overheadHigh: 3.0,
     overheadIdeal: 2.55,
     overheadLateral: 0.35,
+    hand: {
+      backhandSpeed: 0.9, // [à calibrer en jouant]
+      backhandError: 0.08, // [à calibrer en jouant]
+      overheadForeMiss: 0.75, // une balle jusqu'à ~40 cm côté revers se joue encore en coup droit [à calibrer]
+      backOverheadSpeed: 0.75, // [à calibrer en jouant]
+      backOverheadShort: 1.5, // [à calibrer en jouant]
+      forehandBias: 1, // [à calibrer en jouant]
+    },
     overheadStick: 0.5,
     remateZone: 5, // un lob tombé avant la ligne de service (6,95 m) passe à 2,55 m vers 4,9 m du filet : remate
     remateLow: 2.2,

@@ -2,7 +2,7 @@ import { createBall, integrateFlight, type Ball } from './ball';
 import { HALF_LENGTH, HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
 import { predictBall } from './predict';
 import type { PhysicsProfile } from './profile';
-import { bandejaHeight, rightFor, type CourtSide } from './shots';
+import { bandejaHeight, forehandFor, type CourtSide, type Hand } from './shots';
 import { addScaled, vec3, type Vec3 } from './vec3';
 import { clampWalkable, outsideCourt, pathDistance } from './walkable';
 
@@ -73,13 +73,15 @@ export function planIntercept(
   playerHeight = PLAYER_HEIGHT,
   /** Coup haut préparé pour un remate (stick vers l'avant à l'appui) : près du filet, on la vise plus haut. */
   smash = false,
+  /** Main du joueur : il se place pour la jouer en coup droit quand il a le temps, et au-dessus de la tête, toujours. */
+  hand: Hand = 'right',
 ): Intercept | null {
   const r = profile.rally;
   const radius = profile.player.radius;
   const { points, bounce, bounceStep, glassStep } = predictBall(ball, profile, 5, 1, bounced);
   const bouncesHere = bounced || (bounce !== null && bounce.z * side > 0);
   const nearNet = Math.abs(playerPos.z) < r.volleyZone;
-  const right = rightFor(side);
+  const fore = forehandFor(side, hand);
   const low = overhead ? r.overheadLow : r.hitLow;
   const high = overhead ? r.overheadHigh : r.hitHigh;
   const lateral = overhead ? r.overheadLateral : r.standLateral;
@@ -106,15 +108,22 @@ export function planIntercept(
     const room = HALF_LENGTH - Math.abs(p.z);
     if (!volley && !outside && glassStep !== null && room < (afterGlass ? r.glassGap : r.glassRoom)) continue;
 
-    // Coup droit ou revers : le côté qui demande le moins de course. Balle dans le terrain : on y reste.
+    // Coup droit, s'il a le temps d'y aller et qu'il ne coûte pas plus de `forehandBias` m de course de plus que le
+    // revers ; au-dessus de la tête, toujours côté main forte s'il a le temps. Sinon, le côté le plus proche.
+    // Balle dans le terrain : on y reste.
     const clamp = outside ? clampWalkable : clampToHalf;
-    const forehand = clamp(addScaled(p, right, -lateral), side, radius);
-    const backhand = clamp(addScaled(p, right, lateral), side, radius);
+    const forehand = clamp(addScaled(p, fore, -lateral), side, radius);
+    const backhand = clamp(addScaled(p, fore, lateral), side, radius);
     const distanceTo = (s: Vec3): number => pathDistance(playerPos, s, side);
-    const stand = distanceTo(forehand) <= distanceTo(backhand) ? forehand : backhand;
-    if (flatDistance(stand, p) > r.reach * 0.95) continue;
-
     const time = step * SIM_DT;
+    const [toFore, toBack] = [distanceTo(forehand), distanceTo(backhand)];
+    const foreInTime = runTime(toFore, profile) + r.arriveMargin <= time;
+    const preferFore = foreInTime && (overhead || toFore <= toBack + r.hand.forehandBias);
+    // Contre une vitre, le côté choisi peut être hors de portée une fois ramené dans le terrain : l'autre côté alors.
+    const sides = preferFore || toFore <= toBack ? [forehand, backhand] : [backhand, forehand];
+    const stand = sides.find((s) => flatDistance(s, p) <= r.reach * 0.95);
+    if (!stand) continue;
+
     const late = runTime(distanceTo(stand), profile) + r.arriveMargin - time;
     const intercept: Intercept = {
       tick: tick + step,

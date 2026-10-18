@@ -54,6 +54,7 @@ function muteable<T extends object>(sounds: T, audible: () => boolean): T {
  * - `?ai=facile|normal|fort` : l'IA joue Rouge (ou les joueurs donnés par `?bot=1|2|both|none`, ou `?bot=2,3,4`) ;
  * - `?sets=2`, `?games=4`, `?gold=1` (punto de oro), `?free=1` (échange libre sans score) ;
  * - `?pression=0` (sans), `0.5`, `1.5` ; `?far=own` ; `?assist=full|partial|off|magnet` ou `?assist=full,off`.
+ * - `?gaucher=1,3` : places jouées par un gaucher (à partir de 1), les autres droitières.
  */
 export function startDuel(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
@@ -103,6 +104,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       player.assist = !human && s.assists[i] === 'off' ? 'magnet' : s.assists[i]!;
       // Les IA gardent le stick libre : le réglage ne change que le ressenti des humains.
       player.prepMove = human ? s.prepMove : 'libre';
+      player.hand = s.hands[i]!;
     });
     duel.profile.rally.pressure.scale = s.pressure;
   };
