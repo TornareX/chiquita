@@ -75,8 +75,9 @@ export interface Engagement {
 }
 
 /**
- * Seuil des coups au-dessus de la tête au stick droit : les épaules (par défaut), les yeux ou le dessus de la
- * tête. Au-dessus, bandeja, víbora, smash ou feinte ; en dessous, volée ou coup au sol.
+ * Seuil des coups au-dessus de la tête au stick droit : les yeux (par défaut), les épaules ou le dessus de la
+ * tête. Au-dessus, bandeja, víbora, smash ou feinte ; en dessous, volée (haute entre les épaules et les yeux) ou
+ * coup au sol. Aux yeux, la défense remise à plat se volleye et le coup haut reste pour le lob, comme chez les pros.
  * `lob` (à l'essai) : coups hauts aux épaules, mais seulement sur une balle qui vient d'un lob ; toute autre
  * balle se joue de volée ou au sol, aux boutons comme au stick, IA comprise.
  */
@@ -364,7 +365,7 @@ export class Duel {
   /** Joueurs : 2 en simple, 4 en double. Le joueur `i` est dans l'équipe `i % 2` (`teamOf`). */
   players: [DuelPlayer, DuelPlayer, ...DuelPlayer[]] = [] as unknown as [DuelPlayer, DuelPlayer];
   /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`). */
-  highFloor: HighFloor = 'epaules';
+  highFloor: HighFloor = 'yeux';
   ball: Ball | null = null;
   prevBallPos: Vec3 | null = null;
   readonly contacts: Contact[] = [];
@@ -1040,11 +1041,14 @@ export class Duel {
     return ballPressure({ prep: (tick - opponent.lastHitTick) * SIM_DT, height, speed: felt, running, doubleGlass, kind }, this.profile);
   }
 
-  /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`), pour un joueur de cette taille (m). */
+  /**
+   * Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`), pour un joueur de cette taille (m).
+   * `yeux` : le bas de la bande idéale de la bandeja, pour qu'une bandeja prise à hauteur des yeux reste un coup haut.
+   */
   swingFloor(playerHeight: number): number {
     if (!this.overheadAllowed()) return Infinity;
     if (this.highFloor === 'tete') return playerHeight;
-    if (this.highFloor === 'yeux') return bandejaHeight(this.profile, playerHeight);
+    if (this.highFloor === 'yeux') return bandejaHeight(this.profile, playerHeight) - this.profile.rally.overheadBand;
     return this.profile.rally.overheadLow * (playerHeight / PLAYER_HEIGHT);
   }
 

@@ -227,6 +227,21 @@ describe('au-dessus de la tête', () => {
     expect(stickShotOf(head)).toBe('voleeCoupee');
   });
 
+  it('seuil par défaut aux yeux : la défense remise à plat, entre épaules et yeux, se joue de volée', () => {
+    expect(new Duel(null).highFloor).toBe('yeux');
+    // Coup droit de défense frappé du fond sous un peu de pression : il arrive au volleyeur vers 1,5 m.
+    const defence = (duel: Duel): void =>
+      duel.playSituation(1, [vec3(0, 0, -2.8), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.5, 8.5), target: vec3(0.8, 0.03, -8.8), error: 0.4 });
+    const shoulders = rally(defence, { prepared: true, end: 'straight' }, 'epaules')!;
+    expect(shoulders.contact.y).toBeGreaterThan(ARCADE.rally.overheadLow);
+    expect(shoulders.overhead).not.toBeNull();
+    const eyes = rally(defence, { prepared: true, end: 'straight' }, new Duel(null).highFloor)!;
+    expect(eyes.volley).toBe(true);
+    expect(eyes.overhead).toBeNull();
+    // Un lob, lui, reste un coup haut.
+    expect(rally(lobOn(vec3(0.3, 0, -3.5)), { prepared: false }, 'yeux')?.overhead).toBe('bandeja');
+  });
+
   it('seuil « lob » : coup haut seulement sur un lob ; la même balle flottante haute se joue de volée', () => {
     const floaty = (duel: Duel): void =>
       duel.playSituation(1, [vec3(0, 0, -2.5), vec3(0, 0, 8.5)], { kind: 'slice', contact: vec3(0, 1, 8.5), target: vec3(0.8, 0.03, -5), error: 0.5 });
@@ -250,7 +265,7 @@ describe('leçons au stick', () => {
     const gesture = lesson.stick!.swing;
     const g: Gesture = gesture.prepared ? { prepared: true, end: gesture.end ?? 'straight' } : { prepared: false };
     const setup = (duel: Duel): void => lesson.start(duel, 0);
-    const impact = impactTick(setup, g.prepared, 'epaules');
+    const impact = impactTick(setup, g.prepared, new Duel(null).highFloor);
     const duel = new Duel(null);
     setup(duel);
     const watcher = new AttemptWatcher(duel);

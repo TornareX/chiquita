@@ -710,3 +710,25 @@ tests navigateur (duel, double, stick, tutoriel, manette) OK. **À juger à la m
   assistée) ; le tutoriel garde aussi la course assistée (ses leçons sont faites pour). Des réglages déjà enregistrés
   dans le navigateur restent prioritaires. `tests/e2e/duel.spec.ts` passe `?assist=magnet&prepa=libre` : ses
   manettes virtuelles ne se placent pas.
+
+## Gameplay : seuil des coups hauts aux yeux par défaut (18/10/2026, non commité)
+
+Retour de Xavier : au filet, le stick déclenchait surtout des bandejas et des víboras alors que l'adversaire ne lobait
+pas ; chez les pros, le coup haut vient surtout après un lob. 482 tests OK (dont un de plus dans
+`tests/input/swingStick.test.ts`), typecheck OK, tests navigateur (stick, duel, double, tutoriel, manette) OK.
+**À juger à la manette.**
+
+- **Mesuré** (IA normale et forte en double, 8 parties, hauteur de la balle quand elle arrive à 2,8 m du filet, là où
+  se tient le volleyeur) : les coups droits de défense frappés du fond passent à 1,32 m en médiane (poitrine,
+  réaliste) ; **36 % dépassent les épaules** (1,45 m, l'ancien seuil), surtout ceux frappés sous pression ; les
+  coupés de fond flottent plus haut (1,7 m en médiane). Au stick, tout ce qui dépasse le seuil devient un coup haut :
+  d'où les bandejas en série. Les IA, elles, ne jouent un coup haut qu'au-dessus des coups normaux : 11 bandejas pour
+  1 100 volées.
+- **Ce qui ne marchait pas** : baisser le passage au-dessus du filet (coup droit 0,45 → 0,3 m, ou sous pression
+  0,35 → 0,2 m) ou faire viser l'IA moins profond ne change presque rien (médiane 1,32 → 1,29 m) : une balle à
+  ~20 m/s du fond doit monter pour passer. Réglages laissés tels quels.
+- **Changement** : seuil `yeux` par défaut (`Duel.highFloor`, `?coupshauts=`), placé au bas de la bande idéale de la
+  bandeja (yeux − `overheadBand`, 1,56 m pour 1,80 m) : à exactement la hauteur des yeux, la bandeja idéale tombait
+  sous le seuil au moindre retard et partait dans le vide (leçon bandeja du tutoriel). Entre les épaules et ce seuil,
+  c'est une volée haute. Coups droits de défense au-dessus du seuil : 36 % → 22 % ; les lobs restent tous des coups
+  hauts. `?coupshauts=epaules` remet l'ancien seuil. Aux boutons (B), rien ne change.
