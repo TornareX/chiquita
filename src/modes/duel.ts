@@ -1,4 +1,4 @@
-import { createAnnouncer, scoreCall } from '../audio/announcer';
+import { createAnnouncer } from '../audio/announcer';
 import { shotPower, SqueakDetector, stepCrowdReactions, VOICES } from '../audio/recipes';
 import { CrowdMood } from '../render/arena';
 import { createSounds } from '../audio/sounds';
@@ -166,11 +166,6 @@ export function startDuel(canvas: HTMLCanvasElement): void {
         const shouter = winners.reduce((a, b) => (duel.players[b]!.lastHitTick > duel.players[a]!.lastHitTick ? b : a));
         setTimeout(() => announcer.shout('¡Vamos!', VOICES[shouter % VOICES.length]!), 150);
       }
-    }
-    if (duel.result && duel.match && settings.sound) {
-      // L'arbitre annonce le score une fois le point retombé.
-      const call = scoreCall(duel.match, duel.lastOutcome);
-      if (call) setTimeout(() => announcer.score(call), 1000);
     }
     if (duel.shot) {
       const { shot } = duel;

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { scoreCall } from '../../src/audio/announcer';
 import { gruntRecipe, shotPower, squeakRecipe, SqueakDetector, VOICES } from '../../src/audio/recipes';
 import { SIM_DT } from '../../src/sim/constants';
-import { Match } from '../../src/sim/score';
 import { vec3, type Vec3 } from '../../src/sim/vec3';
 
 describe('crissements de semelles', () => {
@@ -48,29 +46,5 @@ describe('souffle à la frappe', () => {
     expect(gruntRecipe(vec3(0, 1, -8), 0.2, VOICES[0]!)).toBeNull();
     const pitches = VOICES.map((v) => JSON.stringify(gruntRecipe(vec3(0, 1, -8), 1, v)!.layers));
     expect(new Set(pitches).size).toBe(VOICES.length);
-  });
-});
-
-describe('annonce du score par l’arbitre', () => {
-  const after = (points: (0 | 1)[], goldenPoint = false) => {
-    const match = new Match({ setsToWin: 1, gamesPerSet: 6, goldenPoint });
-    let outcome = null;
-    for (const p of points) outcome = match.awardPoint(p);
-    return scoreCall(match, outcome);
-  };
-
-  it('le score du serveur d’abord, en espagnol', () => {
-    expect(after([0])).toBe('Quince nada');
-    expect(after([1])).toBe('Nada quince');
-    expect(after([0, 1])).toBe('Quince iguales');
-    expect(after([0, 0, 1])).toBe('Treinta quince');
-    expect(after([0, 0, 0, 1, 1, 1])).toBe('Iguales');
-    expect(after([0, 0, 0, 1, 1, 1, 0])).toBe('Ventaja');
-  });
-
-  it('punto de oro, jeu, set', () => {
-    expect(after([0, 0, 0, 1, 1, 1], true)).toBe('Punto de oro');
-    expect(after([0, 0, 0, 0])).toBe('Juego');
-    expect(after(Array.from({ length: 24 }, () => 0 as const))).toBe('Juego, set y partido');
   });
 });

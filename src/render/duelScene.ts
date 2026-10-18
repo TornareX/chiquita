@@ -33,6 +33,8 @@ export const PARTNER_COLORS = [0x8fc3ff, 0xff9ea8] as const;
 /** Durée d'affichage d'une annonce entre partenaires (s), et son texte. */
 const CALL_TIME = 1;
 const CALL_TEXT: Record<CallKind, string> = { mia: '¡Mía!', tuya: '¡Tuya!' };
+/** Bulles « ¡Mía! / ¡Tuya! » masquées pour l'instant (trop grosses, elles gênaient : retour de Xavier) ; `?bulles=1` les remet. */
+const SHOW_CALLS = new URLSearchParams(location.search).get('bulles') === '1';
 
 /**
  * Caméra de retransmission télé, derrière le joueur du camp Z négatif (GAME_DESIGN.md §8) : téléobjectif
@@ -429,7 +431,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     const pos = lerp(player.prevPos, player.pos, alpha);
     view.object.position.set(pos.x, 0, pos.z);
     // Annonce entre partenaires, au-dessus de la tête pendant un court instant.
-    const call = player.call && (duel.tick - player.call.tick) * SIM_DT < CALL_TIME ? player.call.kind : null;
+    const call = SHOW_CALLS && player.call && (duel.tick - player.call.tick) * SIM_DT < CALL_TIME ? player.call.kind : null;
     view.bubble.visible = call !== null;
     if (call) {
       if (view.bubbleKind !== call) {

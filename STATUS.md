@@ -672,3 +672,15 @@ inchangé. **Pas encore écouté à la manette** : niveaux mesurés hors ligne s
   et 0,03 en pleine clameur.
 - `stepCrowdReactions` (recettes) : réactions du public au dernier pas, partagées par le son et la foule (E6).
 - Pas fait : pas de course, glissade, son de la porte, musique de menu (il n'y a pas encore de menu d'accueil).
+
+### Retour de Xavier sur E3, E6, E7 (18/10/2026)
+
+Arène : « très bien », rien à changer. 476 tests OK, typecheck OK, tests navigateur des effets, du double et des sons OK.
+
+- **Éclat de frappe plus discret** (« trop gros et agressif ») : sur un coup normal, seulement un petit anneau fin
+  (taille 0,14 au lieu de 0,30, 0,14 s, intensité moitié), sans étoile ni étincelles ; l'étoile et quelques
+  étincelles plus fines restent pour la frappe parfaite (dorée, plus petite qu'avant) et le smash. Les autres effets
+  (vitre, sol, grillage, por tres) ne changent pas.
+- **Voix de l'arbitre retirée** (annonce du score) ; le « ¡Vamos! » du gagnant d'un grand point reste (`?voix=0`).
+- **Bulles « ¡Mía! / ¡Tuya! » masquées** pour l'instant (trop grosses, elles gênaient) ; `?bulles=1` les remet.
+  Les annonces existent toujours dans la simulation et l'IA s'en sert.

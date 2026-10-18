@@ -1,40 +1,12 @@
-import type { PointOutcome, Match } from '../sim/score';
 import type { Voice } from './recipes';
 
 /**
- * Arbitre et joueurs qui parlent (étape E7) : annonce du score en espagnol, comme sur le circuit, et « ¡Vamos! » du
- * gagnant d'un grand point. Synthèse vocale du navigateur (voix espagnole si elle existe) : gratuite, mais d'une
- * qualité qui dépend du système. `?voix=0` la coupe.
+ * Joueurs qui parlent (étape E7) : « ¡Vamos! » du gagnant d'un grand point. Synthèse vocale du navigateur (voix
+ * espagnole si elle existe) : gratuite, mais d'une qualité qui dépend du système. `?voix=0` la coupe. L'annonce du
+ * score par l'arbitre a été retirée à la demande de Xavier.
  */
-
-const SPANISH = ['nada', 'quince', 'treinta', 'cuarenta'] as const;
-
-/**
- * Annonce de l'arbitre après un point, le score du serveur d'abord : « Quince nada », « Treinta iguales », « Iguales »,
- * « Ventaja », « Punto de oro », « Juego », « Juego y set », « Juego, set y partido ». En jeu décisif : « Tres dos ».
- */
-export function scoreCall(match: Match, outcome: PointOutcome | null): string | null {
-  if (outcome?.match) return 'Juego, set y partido';
-  if (outcome?.set) return 'Juego y set';
-  if (outcome?.game) return 'Juego';
-  const server = match.server;
-  const mine = match.points[server];
-  const theirs = match.points[server === 0 ? 1 : 0];
-  if (match.tiebreak) return `${number(mine)} ${number(theirs)}`;
-  if (match.decidingPoint) return 'Punto de oro';
-  if (mine >= 3 && theirs >= 3) return mine === theirs ? 'Iguales' : 'Ventaja';
-  if (mine === theirs) return `${SPANISH[mine]!} iguales`.replace(/^./, (c) => c.toUpperCase());
-  return `${SPANISH[mine]!} ${SPANISH[theirs]!}`.replace(/^./, (c) => c.toUpperCase());
-}
-
-const NUMBERS = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce'];
-function number(n: number): string {
-  return NUMBERS[n] ?? String(n);
-}
 
 export interface Announcer {
-  /** Annonce de l'arbitre, voix posée. */
-  score(text: string): void;
   /** Cri d'un joueur. */
   shout(text: string, voice: Voice): void;
 }
@@ -61,9 +33,6 @@ export function createAnnouncer(): Announcer {
     synth.speak(utterance);
   };
   return {
-    score(text): void {
-      say(text, 0.95, 1.0, 0.8, false);
-    },
     shout(text, voice): void {
       // Le cri passe devant l'annonce en attente.
       say(text, voice.speech, 1.25, 1, true);

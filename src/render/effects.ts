@@ -106,7 +106,11 @@ export const EFFECT_COLORS = {
   surround: 0x9aa1aa,
 } as const;
 
-/** Allure de l'éclat de frappe : doré et plus gros si parfaite, plus marqué sur un smash, un peu plus grand si la balle part vite. */
+/**
+ * Allure de l'éclat de frappe : doré et plus gros si parfaite, plus marqué sur un smash, un peu plus grand si la balle
+ * part vite. Discret (retour de Xavier : trop gros et agressif) : un petit anneau bref sur un coup normal, l'étoile et
+ * les étincelles seulement sur une frappe parfaite ou un smash.
+ */
 export function impactLook(shot: { perfect: boolean; overhead: OverheadKind | null; speed: number }): {
   life: number;
   size: number;
@@ -117,11 +121,11 @@ export function impactLook(shot: { perfect: boolean; overhead: OverheadKind | nu
   const smash = shot.overhead === 'remate';
   const fast = 0.85 + 0.3 * clamp01(shot.speed / 30);
   return {
-    life: (shot.perfect ? 0.3 : 0.2) + (smash ? 0.08 : 0),
-    size: (shot.perfect ? 0.5 : 0.3) * (smash ? 1.4 : 1) * fast,
+    life: (shot.perfect ? 0.22 : 0.14) + (smash ? 0.05 : 0),
+    size: (shot.perfect ? 0.26 : 0.14) * (smash ? 1.3 : 1) * fast,
     color: shot.perfect ? EFFECT_COLORS.perfect : EFFECT_COLORS.normal,
-    strength: shot.perfect ? 1 : smash ? 0.85 : 0.6,
-    sparks: (shot.perfect ? 10 : 4) + (smash ? 6 : 0),
+    strength: shot.perfect ? 0.7 : smash ? 0.55 : 0.3,
+    sparks: (shot.perfect ? 5 : 0) + (smash ? 3 : 0),
   };
 }
 
@@ -240,7 +244,7 @@ export class Effects {
   impact(at: { x: number; y: number; z: number }, shot: { perfect: boolean; overhead: OverheadKind | null; speed: number }): void {
     const look = impactLook(shot);
     const e = this.spawn('impact', at.x, at.y, at.z, look.life, look.size, look.color, look.strength);
-    e.star = true;
+    e.star = shot.perfect || shot.overhead === 'remate';
     for (let i = 0; i < look.sparks; i++) {
       // Étincelles projetées dans toutes les directions, plus vite sur une frappe forte.
       const theta = this.random() * Math.PI * 2;
@@ -249,7 +253,7 @@ export class Effects {
       const speed = (1.5 + 2.5 * this.random()) * (0.6 + look.strength);
       this.particle(at.x, at.y, at.z, Math.cos(theta) * flat * speed, up * speed, Math.sin(theta) * flat * speed, {
         life: 0.18 + 0.14 * this.random(),
-        size: 0.035 + 0.03 * look.strength,
+        size: 0.025 + 0.02 * look.strength,
         color: look.color,
         gravity: 6,
         drag: 4,
