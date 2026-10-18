@@ -73,6 +73,19 @@ export const SITUATIONS: readonly Situation[] = [
     start: opening(at(0, -3.5), at(0, 8.6), { kind: 'lob', contact: vec3(0.3, 0.9, 8.6), target: vec3(0.5, 0.03, -5) }),
   },
   {
+    id: 'lob-qui-passe',
+    name: 'Lob qui passe : contre-vitre',
+    hint: 'Rouge te lobe, tendu, au-dessus de toi au filet : cours vers ta vitre. Stick droit en avant pour préparer la contre-vitre, ramène-le vers toi quand elle arrive : elle repasse le filet. Aux boutons : {normal}, stick gauche vers ta vitre.',
+    // Lob tendu (1,7 s de vol, sommet ~3,4 m) : il passe juste hors de portée du smash de Bleu au filet et rebondit à 7,5 m.
+    start: opening(at(0, -3.5), at(0.3, 3), { kind: 'lob', contact: vec3(0.3, 1, 3), target: vec3(0.6, 0.03, -7.5), flightTime: 1.7 }),
+  },
+  {
+    id: 'balle-qui-meurt',
+    name: 'Balle qui meurt dans ta vitre',
+    hint: 'Rouge frappe fort et bas au fond : la balle va mourir dans ta vitre. Stick droit en avant, puis vers toi quand elle arrive : contre-vitre. Ou attends qu’elle ressorte, basse.',
+    start: opening(at(0.6, -8), at(0.3, 3), { kind: 'normal', contact: vec3(0.3, 1, 3), target: vec3(0.6, 0.03, -8.8), error: 0.6 }),
+  },
+  {
     id: 'smash-a-defendre',
     name: 'Défendre un smash',
     hint: 'Rouge remate près du filet : rattrape-le, au besoin en sortant par la porte.',

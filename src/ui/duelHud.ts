@@ -61,6 +61,7 @@ const STICK_HELP = [
   'Puis tout droit : coup normal · en arc : lob · lâché : chiquita',
   'De volée : préparé = volée coupée · coup sec vers l’avant sans préparer = volée bloquée',
   'Au-dessus de la tête : tout droit = smash · en arc = víbora · lâché = feinte · coup sec = bandeja',
+  'Balle qui file vers ta vitre (repère sur la vitre) : stick droit en avant, puis vers toi = contre-vitre',
   'Service : tire le stick vers toi pour lâcher la balle, ramène-le tout droit au sommet du rebond',
   'Assistance : bouton Affichage · Réglages : Start',
 ];
@@ -72,6 +73,7 @@ const HELP = [
   '{slice} de volée sur une balle flottante : volée coupée qui meurt · {slice} stick vers soi : chiquita · appuie tôt pour armer, sinon tu bloques',
   '{overhead} balle haute : bandeja · stick sur le côté : víbora · stick en avant près du filet : remate',
   'Remate parfait près du filet : il peut sortir du terrain (por tres) ; sors par la porte pour la rattraper',
+  'Balle passée qui file vers ta vitre (repère sur la vitre) : {normal} stick vers ta vitre = contre-vitre',
   'Service : maintiens pour lâcher la balle, relâche au sommet du rebond',
   'Stick : se placer, puis viser au moment de l’impact (haut = profond)',
   'Clavier : ZQSD + J K L, I (bleu) ; flèches + 1 2 3 4 du pavé, ou M , ; : en AZERTY (rouge)',
@@ -91,6 +93,8 @@ const OVERHEADS: Record<OverheadKind, string> = {
  * coups marquants : en pleine volée-volée, un nom par frappe ferait défiler du texte au milieu du jeu.
  */
 function shotLabel(shot: DuelShot, detailed: boolean): string | null {
+  // La contre-vitre est toujours marquante : un sauvetage.
+  if (shot.counterWall) return shot.perfect ? 'contre-vitre parfaite !' : 'contre-vitre !';
   if (!detailed && !shot.perfect && !shot.outside) return null;
   if (shot.outside) return 'salida de pista !';
   if (shot.overhead) return OVERHEADS[shot.overhead] + (shot.perfect ? ' parfaite !' : '');

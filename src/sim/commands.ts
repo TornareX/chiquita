@@ -54,7 +54,7 @@ export interface ArcadeCommands {
    * Coup joué au stick droit : préparé (stick tiré vers soi) ou non (coup sec), et la fin du geste, connue au
    * relâcher. La simulation choisit alors le coup selon la balle (`Duel.swingShot`).
    */
-  swing?: { prepared: boolean; end?: SwingEnd };
+  swing?: { prepared: boolean; end?: SwingEnd; wall?: boolean };
   /** En double : annonce au partenaire (« ¡Mía! », « ¡Tuya! »), affichée au-dessus du joueur. */
   call?: 'mia' | 'tuya';
 }

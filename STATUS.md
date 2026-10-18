@@ -812,3 +812,50 @@ temps de se placer) ; avec un gaucher en face, 31-40 sur 71 points (39-31 avec d
 de 20 % à 36 % des coups gagnants (pros 35-43 %) : sous un lob, le joueur se place du côté de son smash. 501 tests OK
 (dont `tests/sim/hand.test.ts`). **Pas encore joué à la manette** ; à juger : le revers par-dessus la tête est-il
 trop puni pour un humain en placement manuel ?
+
+## Gameplay : contre-vitre (18/10/2026, étape 4 de `CHANTIERS_PLAN.md`)
+
+Coup de sauvetage : après son rebond, la balle file vers la vitre du fond du joueur, près de lui. On la frappe contre
+sa propre vitre pour qu'elle repasse le filet (la règle le permettait déjà, il manquait le coup).
+
+- **Situation** (`Duel.counterWall`) : c'est à lui de jouer, la balle a rebondi dans son camp et file vers sa vitre, à
+  moins de 3,5 m d'elle, entre 1,2 m devant lui (il court vers sa vitre plus vite qu'elle) et 0,2 s après le point
+  idéal (20 cm derrière lui, ou juste devant la vitre s'il y est collé), à moins de 1,8 m, entre 10 cm et 2,4 m de haut.
+- **Geste au stick droit** (proposé par Xavier) : quand la contre-vitre est possible, ou qu'il court vers sa vitre vers
+  une balle qui va rebondir derrière lui (`Duel.counterWallReady`), le geste s'inverse, comme le personnage tourné
+  vers sa vitre : stick droit **en avant** = préparer, **ramené vers soi** (ou lâché) = frapper. Ailleurs, en avant
+  depuis le repos reste le coup sec. Préparée, il peut encore courir vers la balle (même en préparation bloquée).
+- **Autre commande** (boutons, ou geste normal) : stick gauche tiré vers sa vitre au relâcher. En préparation bloquée
+  ou ralentie, le stick gauche tiré vers sa vitre sur une balle qui va rebondir derrière lui veut dire « je la laisse
+  passer » : ni smash ni volée, le coup se prépare au sol (avant, il préparait un smash sur le lob).
+- **La raquette attend la balle** : demandée (relâcher), la contre-vitre part quand la balle arrive au point idéal (au
+  plus 0,6 s), et il s'arrête. Au geste de contre-vitre, elle est retenue même si la balle est encore loin (il attend
+  contre sa vitre la balle qui a rebondi). Le relâcher fait la qualité : parfaite s'il tombe au passage de la balle, erreur pleine
+  à 0,35 s d'avance. Le stick gauche à droite ou à gauche oriente la balle chez l'adversaire.
+- **Le coup** (`solveCounterWall`) : contre la vitre (sous le grillage, 1,4 à 2,8 m), ~4 m au-dessus du filet, chute à
+  4,5 m du filet (6 m en frappe parfaite). Lente et haute : attaquable. Calculée comme un miroir, puis corrigée par
+  des vols simulés avec la vraie physique. Erreur (timing, balle loin de son point de frappe sur le côté, pression ;
+  balle basse moins gênante, comme au coupé) : jusqu'à 35 % de vitesse en moins, elle retombe chez soi ou au filet.
+  Sa propre vitre ne compte plus comme une vitre jouée par l'adversaire.
+- **Guide du stick droit** en contre-vitre : « Contre-vitre possible : stick en avant pour préparer », puis « ramène le
+  stick vers toi pour frapper », sans les fins du geste normal.
+- **Affichage** : anneau sur la vitre là où la balle va la toucher (couleur du joueur, blanc quand c'est jouable) ;
+  le personnage fait demi-tour vers sa vitre quand il la prépare ou la joue. Guide du stick droit : « Contre-vitre
+  possible : stick en avant pour préparer », puis « ramène le stick vers toi ». HUD : « contre-vitre ! ». Aide à jour.
+- **IA** : envie de contre-vitre facile 0,1, normale 0,25, forte 0,35. Surtout quand la balle est hors d'atteinte
+  après la vitre (×2,5), rarement sinon (×0,1), sur une balle bien placée. Tirages à part. Quand elle ne la choisit
+  pas, elle ne tire pas le stick vers sa vitre pendant que la contre-vitre est jouable.
+- **Labo** : situations « Lob qui passe : contre-vitre » (Bleu au filet ; lob tendu demandé par Xavier : 1,7 s de vol,
+  sommet ~3,4 m, juste hors de portée de son smash, rebond à 7,5 m ; option `flightTime` des ouvertures du labo) et
+  « Balle qui meurt dans ta vitre » (frappe basse et forte au fond : contre-vitre plus dure). Demandé par Xavier : chaque situation
+  part après un décompte de 2 s, joueurs en place, jeu à l'arrêt.
+
+Mesuré (IA contre IA) : de temps en temps (IA forte : 11 sur 52 points), 70 à 100 % repassent le filet ; coups par
+point et part des remates inchangés au bruit près. Au labo, Rouge reprend souvent la contre-vitre d'un smash. 524 tests
+OK (dont `tests/sim/counterWall.test.ts`, 18 tests : le geste en avant puis vers soi en courant vers sa vitre, et le
+coup de stick stick gauche tiré, dans les deux situations), typecheck OK. Tests navigateur OK, dont
+`tests/e2e/counterWall.spec.ts` (manette Xbox virtuelle : les deux gestes, 3 contre-vitres sur 3 qui repassent le
+filet ; le décompte). **Pas encore joué à la vraie manette.** Sur le lob tendu, au geste : frappée au rebond, erreur
+0,3 (elle repasse) ; à l'arrivée de la balle, ~0,6 s après, parfaite. Le guide du stick droit cache Bleu quand il est
+contre sa vitre. Vue de la caméra, la vitre proche est masquée : l'anneau
+semble flotter en l'air.

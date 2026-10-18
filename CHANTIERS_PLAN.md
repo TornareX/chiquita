@@ -1,6 +1,8 @@
 # Chantiers gameplay : places, main forte, rotation, contre-vitre — plan
 
-> Statut (18/10/2026) : plan validé avec Xavier ; étapes 1 et 2 faites (voir `STATUS.md`) ; l'étape 2 n'est pas encore jouée à la manette. Ordre : 1 → 2 → 3, l'étape 4 est
+> Statut (18/10/2026) : plan validé avec Xavier ; étapes 1 et 2 faites (voir `STATUS.md`) ; l'étape 2 n'est pas encore jouée à la manette.
+> L'étape 3 a été essayée puis abandonnée par Xavier (18/10) : code retiré. Étape 4 faite (18/10, voir `STATUS.md`),
+> vérifiée au joueur automatique, pas encore jouée à la manette. Ordre : 1 → 2 → 3, l'étape 4 est
 > indépendante. Chaque étape est vérifiée au joueur automatique avant d'être annoncée jouable.
 
 ## Constats de départ (code au commit a2c4af5)
@@ -72,6 +74,12 @@ avec un gaucher) ; IA contre IA avec deux droitiers puis avec un gaucher, avant/
 gagnants, remates) ; le joueur automatique.
 
 ## Étape 3 : tourner autour de la balle (double vitre)
+
+> Abandonnée (18/10/2026). Essai non commité : pas de pivot automatique de 1,25 m en préparation, corps tourné vers la
+> balle derrière soi. À la manette, Xavier n'a pas vu le personnage tourner et juge que ça ne marchera pas. Constats de
+> l'essai, si on y revient : le pivot demandait de préparer au moins ~0,6 s avant l'impact alors que la balle touche la
+> 2ᵉ vitre ~0,8 s avant ; après le pas, la balle arrive à côté du joueur, donc le corps reste face au filet sans une
+> rotation dédiée.
 
 Dépend de l'étape 2 : c'est parce que le coup droit vaut mieux qu'on tourne autour de la balle.
 

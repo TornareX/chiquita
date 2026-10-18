@@ -106,7 +106,7 @@ Notation : **Normal** = bouton du bas, **Au-dessus** = bouton de droite, **Coup�
 | 20 | Salida de pista | Stick vers la porte | L'adversaire a fait sortir la balle | Courir vers la porte près du filet, pousser contre le mur pour glisser dehors, la renvoyer (part en lob) | 1 balle rattrapée dehors | Oui |
 | 21 | Défendre un smash | Normal / Lob | Remate adverse | Rester au fond, attendre la vitre ; s'il sort par trois, salida | 3 smashs défendus | Oui |
 | 22 | Double vitre | Normal | Balle qui touche fond puis côté (ou l'inverse) | Lire le 2e rebond, se placer là où elle ressort | 2 balles jouées après double vitre | Oui (physique) |
-| 23 | Contrapared | — | Dernier recours | Renvoyer contre sa propre vitre | — | **Non** : leçon à ajouter quand le coup existe |
+| 23 | Contrapared | — | Dernier recours | Renvoyer contre sa propre vitre | — | **Non** : le coup existe (`CHANTIERS_PLAN.md`, étape 4), leçon à écrire ; situation « Lob qui passe » du labo |
 | 24 | Feinte / annulation | — | — | — | — | **Non** (RB prévu au §4, pas codé) |
 | 25 | Jeu à deux (appels, couverture) | — | 2 contre 2 | — | — | **Non** (étape C) |
 

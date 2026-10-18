@@ -20,6 +20,19 @@ import { createLaboPanel } from '../ui/laboPanel';
 
 /** Pause entre la fin d'un point et la reprise de la situation (s). */
 const REPLAY_DELAY = 1;
+/** Décompte avant que la situation parte : les joueurs sont en place, le jeu attend (s). */
+const COUNTDOWN = 2;
+
+/** Grand chiffre du décompte, au centre de l'écran. */
+function createCountdown(): HTMLDivElement {
+  const div = document.createElement('div');
+  div.id = 'countdown';
+  div.style.cssText =
+    'position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font:800 96px system-ui,sans-serif;color:#fff;' +
+    'text-shadow:0 4px 18px rgba(0,0,0,.6);pointer-events:none;display:none;z-index:5';
+  document.body.append(div);
+  return div;
+}
 
 /**
  * Labo de sensations (`?mode=labo`) : une situation de match rejouée en boucle, identique, pendant
@@ -54,11 +67,16 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   const names: Record<AiLevel, string> = { facile: 'IA facile', normal: 'IA normale', fort: 'IA forte' };
   const sources: [string, string] = ['Clavier', names[level]];
 
-  /** Remet la situation au départ, avec une IA neuve : même situation, même ouverture. */
+  /** Fin du décompte (horloge des images, ms) : jusque-là, la situation est en place mais le jeu attend. */
+  let countdownUntil = 0;
+  const countdown = createCountdown();
+
+  /** Remet la situation au départ, avec une IA neuve : même situation, même ouverture, après le décompte. */
   const replay = (): void => {
     if (!situation) return;
     bot = new Bot(1, 2, AI_LEVELS[level]);
     situation.start(duel);
+    countdownUntil = performance.now() + COUNTDOWN * 1000;
   };
   const panel = createLaboPanel(stored, level, {
     chooseSituation(next) {
@@ -92,6 +110,8 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   const sample = (): [ArcadeCommands, ArcadeCommands] => {
     const pad = connectedGamepads()[0];
     sources[0] = pad ? 'Manette 1' : 'Clavier';
+    // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).
+    if (swings) swings[0].wallReady = duel.counterWallReady(0);
     const state = mergePads(pad ? readGamepad(pad, swings?.[0], SIM_DT) : IDLE_PAD, keyboard.read(0));
     states[0] = state;
     buttons[0] = pad ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) } : { kind: 'keyboard', player: 0, layout: keyboardLayout };
@@ -126,7 +146,10 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   const frame = (now: number): void => {
     const frameTime = (now - last) / 1000;
     last = now;
-    if (now >= hitstopUntil) alpha = loop.advance(frameTime);
+    const waiting = now < countdownUntil;
+    countdown.style.display = waiting ? '' : 'none';
+    if (waiting) countdown.textContent = String(Math.ceil((countdownUntil - now) / 1000));
+    if (now >= hitstopUntil && !waiting) alpha = loop.advance(frameTime);
     view.render(alpha, frameTime, now < hitstopUntil);
     hud.update(duel, sources, buttons, true);
     panel.update(won, played, buttons[0]);

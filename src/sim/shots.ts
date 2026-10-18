@@ -1,6 +1,7 @@
 import { createBall, integrateFlight } from './ball';
+import { stepBall, type Contact } from './collisions';
 import type { ArcadeCommands, OverheadKind, ShotKind } from './commands';
-import { BALL_RADIUS, HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
+import { BALL_RADIUS, HALF_LENGTH, HALF_WIDTH, NET_HEIGHT_POSTS, PLAYER_HEIGHT, SIM_DT } from './constants';
 import { netHeightAt } from './court';
 import type { PhysicsProfile, ShotTypeTuning } from './profile';
 import { addScaled, cross, length, normalize, scale, sub, vec3, type Vec3 } from './vec3';
@@ -289,5 +290,71 @@ export function solveShot(
     // Effet ou traînée font plonger la balle dans le filet : on la fait voler plus longtemps.
     if (atNet === null || atNet >= netTop + 0.08 || attempt >= 4) return { vel, spin, flightTime };
     flightTime *= 1.15;
+  }
+}
+
+/** Vol complet d'une contre-vitre, collisions comprises : premier rebond au sol, et hauteur au passage du filet. */
+function flyCounterWall(
+  contact: Vec3,
+  vel: Vec3,
+  seconds: number,
+  profile: PhysicsProfile,
+): { landing: Vec3 | null; time: number; netHeight: number | null; glass: boolean; mesh: boolean } {
+  const ball = createBall(contact, vel);
+  const contacts: Contact[] = [];
+  let netHeight: number | null = null;
+  let glass = false;
+  for (let i = 1; i * SIM_DT <= seconds; i++) {
+    const before = ball.pos;
+    contacts.length = 0;
+    stepBall(ball, SIM_DT, profile, contacts);
+    if (netHeight === null && Math.sign(before.z) !== Math.sign(ball.pos.z)) {
+      const f = before.z / (before.z - ball.pos.z);
+      netHeight = before.y + (ball.pos.y - before.y) * f;
+    }
+    for (const c of contacts) {
+      if (c.surface === 'glass') glass = true;
+      if (c.surface === 'ground' || c.surface === 'net' || c.surface === 'out' || c.surface === 'mesh') {
+        return { landing: c.surface === 'ground' ? c.pos : null, time: i * SIM_DT, netHeight, glass, mesh: c.surface !== 'ground' && c.surface !== 'net' };
+      }
+    }
+  }
+  return { landing: null, time: seconds, netHeight, glass, mesh: false };
+}
+
+/**
+ * Contre-vitre : la balle part vers la vitre du fond du camp `side`, y rebondit, repasse le filet et retombe sur
+ * `target`, chez l'adversaire. Départ calculé comme si la vitre était un miroir (avec sa restitution), puis corrigé
+ * par quelques vols simulés avec la vraie physique, vitre comprise. Pas d'effet : une balle lente et haute.
+ */
+export function solveCounterWall(contact: Vec3, target: Vec3, side: CourtSide, profile: PhysicsProfile): SolvedShot {
+  const t = profile.rally.counterWall;
+  const g = profile.gravity;
+  const e = profile.glass.restitution;
+  const glassZ = side * (HALF_LENGTH - BALL_RADIUS);
+  const before = Math.abs(glassZ - contact.z);
+  // Distance parcourue en longueur, dépliée à la vitre : jusqu'à elle, puis d'elle au point de chute.
+  const unfolded = (z: number): number => before + Math.abs(glassZ - z);
+  const goal = unfolded(target.z);
+  const travelled = (flight: { landing: Vec3 | null; glass: boolean }): number =>
+    flight.glass ? unfolded(flight.landing!.z) : Math.abs(flight.landing!.z - contact.z);
+  let flightTime = t.flightTime;
+  for (let attempt = 0; ; attempt++) {
+    let along = (before + Math.abs(glassZ - target.z) / e) / flightTime;
+    let vx = (target.x - contact.x) / flightTime;
+    let vy = (target.y - contact.y + (g * flightTime * flightTime) / 2) / flightTime;
+    let flight = flyCounterWall(contact, vec3(vx, vy, side * along), flightTime * 2, profile);
+    for (let i = 0; i < 8 && flight.landing; i++) {
+      const toGlass = before / along;
+      along = Math.max(1, along + (goal - travelled(flight)) / (toGlass + e * Math.max(0.3, flightTime - toGlass)));
+      vx += (target.x - flight.landing.x) / flightTime;
+      vy += (g * (flightTime - flight.time)) / 2;
+      flight = flyCounterWall(contact, vec3(vx, vy, side * along), flightTime * 2, profile);
+    }
+    const netTop = NET_HEIGHT_POSTS + BALL_RADIUS;
+    const clears = flight.netHeight !== null && flight.netHeight >= netTop + t.clearance;
+    if ((clears && !flight.mesh) || attempt >= 6) return { vel: vec3(vx, vy, side * along), spin: vec3(0, 0, 0), flightTime: flight.time };
+    // Au-dessus de la vitre, dans le grillage : plus tendu. Trop bas au filet : plus haut, plus lent.
+    flightTime *= flight.mesh ? 0.85 : 1.15;
   }
 }

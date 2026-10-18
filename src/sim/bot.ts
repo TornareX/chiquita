@@ -76,6 +76,12 @@ export interface BotOptions {
    * de décider seul. Réglé par le mode de jeu.
    */
   followPartner?: boolean;
+  /**
+   * Contre-vitre (`CHANTIERS_PLAN.md`, étape 4) : envie de renvoyer contre sa vitre la balle qui l'a passé. Hors
+   * d'atteinte après la vitre, il la tente avec 2,5 fois cette probabilité ; jouable après la vitre, avec 0,1 fois
+   * (il l'attend). Seulement sur une balle dans son axe. Sans lui, jamais.
+   */
+  counterWall?: number;
 }
 
 export const DEFAULT_BOT: BotOptions = {
@@ -127,6 +133,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     overheadRelease: { offset: 0, spread: 0.04 },
     overhead: { maxDepth: 6.4, remate: 0.3, vibora: 0, bajada: 0.1 },
     choices: { lob: 0.6, chiquita: 0.05, body: 0.05, cut: 0.15 },
+    counterWall: 0.1,
   },
   normal: {
     ...DEFAULT_BOT,
@@ -139,6 +146,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     backhand: 0.3,
     overhead: { maxDepth: 7, remate: 0.85, vibora: 0.2, bajada: 0.4 },
     choices: { lob: 0.55, chiquita: 0.2, body: 0.15, cut: 0.5 },
+    counterWall: 0.25,
   },
   fort: {
     ...DEFAULT_BOT,
@@ -151,6 +159,7 @@ export const AI_LEVELS: Record<AiLevel, BotOptions> = {
     backhand: 0.5,
     overhead: { maxDepth: 7.4, remate: 0.9, vibora: 0.3, bajada: 0.6 },
     choices: { lob: 0.5, chiquita: 0.25, body: 0.2, cut: 0.8 },
+    counterWall: 0.35,
   },
 };
 
@@ -180,6 +189,9 @@ export class Bot {
   private yieldFor: { key: string; yields: boolean } | null = null;
   /** Entre les points, arrivé à sa position d'attente : il y reste tant qu'elle ne s'éloigne pas de plus de `DRIFT`. */
   private settled = false;
+  /** Contre-vitre : tirages à part, et décision prise pour la balle en cours (clé : frappe adverse). */
+  private readonly counterPrng: Prng;
+  private counter: { key: number; go: boolean; right: number } | null = null;
 
   constructor(
     private readonly index: number,
@@ -188,6 +200,45 @@ export class Bot {
   ) {
     this.prng = new Prng(seed);
     this.backhandPrng = new Prng(seed + 7919);
+    this.counterPrng = new Prng(seed + 104729);
+  }
+
+  /**
+   * Contre-vitre : la balle l'a passé et file vers sa vitre. Il décide une fois par balle s'il la joue contre la vitre
+   * (toujours ou presque si elle est hors d'atteinte après la vitre) ; si oui, stick tiré vers sa vitre (et un peu de
+   * côté), il relâche quand elle passe au point idéal derrière lui, avec son erreur de timing. `null` : il joue
+   * normalement.
+   */
+  private counterWallCommands(duel: Duel): ArcadeCommands | null {
+    const share = this.options.counterWall ?? 0;
+    const me = duel.players[this.index]!;
+    const chance = share > 0 && me.engagement ? duel.counterWall(this.index) : null;
+    if (!chance) return null;
+    const key = duel.lastHitter !== null ? duel.players[duel.lastHitter]!.lastHitTick : -1;
+    if (this.counter?.key !== key) {
+      // Jouable après la vitre : il l'attend presque toujours. Sinon, c'est son sauvetage. Jamais sur une balle mal
+      // placée (trop loin de son point de frappe, sur le côté) : elle partirait dans son camp.
+      const reachable = me.engagement?.plan?.reachable ?? false;
+      const r = duel.profile.rally;
+      const centred = Math.abs(Math.abs(chance.lateral) - r.standLateral) <= r.counterWall.sweetSpot;
+      const go = centred && this.counterPrng.next() < (reachable ? share * 0.1 : Math.min(1, share * 2.5));
+      const right = this.counterPrng.range(-1, 1) * this.options.aim;
+      this.counter = { key, go, right };
+    }
+    if (!this.counter.go) return null;
+    const stick = { forward: -1, right: this.counter.right };
+    const holding = me.heldShot !== null && chance.timing < this.releaseOffset;
+    return { stick, shot: holding ? me.heldShot : null };
+  }
+
+  /**
+   * Contre-vitre non choisie : le stick ne se tire pas vers sa vitre (il viserait court, ou courrait vers la vitre),
+   * sinon la balle partirait contre elle et il s'arrêterait.
+   */
+  private noCounterWall(duel: Duel, commands: ArcadeCommands): ArcadeCommands {
+    const limit = -duel.profile.rally.counterWall.stick + 0.05;
+    if (commands.stick.forward >= limit || !duel.counterWall(this.index)?.playable) return commands;
+    return { ...commands, stick: { ...commands.stick, forward: limit } };
   }
 
   /** Décide d'un nouveau coup : type et direction (reproductible). Au service, `duel` est omis. */
@@ -472,6 +523,8 @@ export class Bot {
     if (mine) {
       const opponentHit = duel.lastHitter !== null ? duel.players[duel.lastHitter]!.lastHitTick : -Infinity;
       const engagement = me.engagement;
+      const counter = this.counterWallCommands(duel);
+      if (counter) return counter;
       if (engagement) {
         const plan = engagement.plan;
         // Visée seulement dans la fenêtre d'avant l'impact : plus tôt, elle couperait l'assistance partielle.
@@ -483,9 +536,9 @@ export class Bot {
           plan !== null &&
           (this.options.manualPlacement || (me.assist === 'magnet' && distance > duel.profile.rally.magnetRadius));
         // Il lit la trajectoire comme un humain et court vers le point d'impact.
-        if (runs) return { stick: this.runTo(duel, plan.stand), shot: this.holding(duel) };
+        if (runs) return this.noCounterWall(duel, { stick: this.runTo(duel, plan.stand), shot: this.holding(duel) });
         const stick = engagement.kind === 'overhead' ? this.overheadStick : plan?.volley ? this.volleyStick : this.stick;
-        return { stick: aiming ? stick : { forward: 0, right: 0 }, shot: this.holding(duel) };
+        return this.noCounterWall(duel, { stick: aiming ? stick : { forward: 0, right: 0 }, shot: this.holding(duel) });
       }
       if (duel.tick - opponentHit >= this.options.reaction / SIM_DT) {
         if (this.pressedFor === null || this.pressedFor < opponentHit) this.chooseShot(duel);

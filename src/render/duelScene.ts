@@ -95,7 +95,18 @@ interface PlayerView {
   object: THREE.Group;
   /** Personnage cartoon et son état d'animation, propre au rendu. */
   rig: CharacterRig;
-  anim: { yaw: number; speed: number; stride: number; side: 'fore' | 'back'; high: boolean; highFamily: SwingFamily; volley: boolean; last: { x: number; z: number } | null };
+  anim: {
+    yaw: number;
+    speed: number;
+    stride: number;
+    side: 'fore' | 'back';
+    high: boolean;
+    highFamily: SwingFamily;
+    volley: boolean;
+    last: { x: number; z: number } | null;
+    /** Demi-tour vers sa vitre du fond (contre-vitre), de 0 (face au filet) à 1. */
+    turn: number;
+  };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
    * où il atteint la taille du joueur. C'est le repère pour relâcher (GAME_DESIGN.md §4).
@@ -152,6 +163,9 @@ function drawBubble(sprite: THREE.Sprite, text: string, color: number): void {
 
 /** L'anneau commence à se resserrer ce temps avant l'impact (s). */
 const RING_LEAD = 0.6;
+/** Vitesse du demi-tour vers la vitre (1/s), et durée de la contre-vitre jouée avant de se retourner (s). */
+const WALL_TURN = 14;
+const WALL_STRIKE = 0.45;
 
 function createPlayerView(color: number, index: number, height: number): PlayerView {
   const object = new THREE.Group();
@@ -176,7 +190,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null };
+  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null, turn: 0 };
   return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
@@ -314,6 +328,13 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   const bounceMarker = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), bounceMaterial);
   bounceMarker.rotation.x = -Math.PI / 2;
   scene.add(bounceMarker);
+  // Contre-vitre : repère sur la vitre du fond, là où la balle va la toucher. Discret tant que la balle n'est pas à
+  // portée, plein quand le coup est jouable.
+  const wallMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const wallMarker = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 32), wallMaterial);
+  wallMarker.renderOrder = 12;
+  wallMarker.visible = false;
+  scene.add(wallMarker);
   // Zone cible du tutoriel : rectangle translucide au sol.
   const targetZone = new THREE.Mesh(
     new THREE.PlaneGeometry(1, 1),
@@ -364,7 +385,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
    * relâcher), frappe (l'image d'impact tombe sur le pas du contact, `lastHitTick`), course et attente.
    */
   const animate = (view: PlayerView, player: DuelPlayer, pos: Vec3, alpha: number, frameTime: number): void => {
-    const f = player.side < 0 ? 1 : -1;
+    // Tourné vers sa vitre (contre-vitre) : le repère du joueur fait demi-tour.
+    const f = (player.side < 0 ? 1 : -1) * (view.anim.turn > 0.5 ? -1 : 1);
     // Gaucher : le personnage est dessiné en miroir (raquette dans la main gauche) ; ses poses sont celles d'un
     // droitier dans un repère retourné, où sa gauche passe à droite.
     const m = player.hand === 'left' ? -1 : 1;
@@ -380,9 +402,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     if (toss && toss.releaseTick === null) {
       prep = { family: 'serve', seconds: (now - duel.phaseTick) * SIM_DT };
     } else if (engagement && engagement.releaseTick === null) {
-      const target = engagement.plan?.contact ?? duel.ball?.pos ?? null;
+      const target = (view.anim.turn > 0.5 ? null : engagement.plan?.contact) ?? duel.ball?.pos ?? null;
       if (target) view.anim.side = swingSide(localX(target), view.anim.side);
-      view.anim.high = plansHighShot(duel, player, engagement);
+      // Tourné vers sa vitre : une contre-vitre, coup au sol.
+      view.anim.high = view.anim.turn <= 0.5 && plansHighShot(duel, player, engagement);
       view.anim.volley = engagement.plan?.volley ?? false;
       // Coup haut : la variante ne se décide qu'au relâcher ; on prépare la bandeja/víbora (même armé que le smash),
       // sauf le smash annoncé aux boutons (stick de déplacement vers l'avant à l'appui).
@@ -451,8 +474,18 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       view.bubble.scale.set(scale * 2.67, scale, 1);
       view.bubble.position.set(pos.x, 2.15 + scale * 0.5, pos.z);
     }
+    // Contre-vitre : il se tourne vers sa vitre quand il la prépare (stick tiré vers elle) et pendant qu'il la joue.
+    const chance = duel.counterWall(index);
+    const wallStrike = player.lastHit?.counterWall === true && (duel.tick - player.lastHitTick) * SIM_DT < WALL_STRIKE;
+    const prepared = player.engagement;
+    const aimsWall =
+      prepared !== null &&
+      (prepared.letPass === true ||
+        prepared.counterWall !== undefined ||
+        (chance !== null && player.stick.forward <= -duel.profile.rally.counterWall.stick));
+    view.anim.turn += ((wallStrike || aimsWall ? 1 : 0) - view.anim.turn) * (1 - Math.exp(-WALL_TURN * frameTime));
     // Face au filet ; le repère du joueur a +Z vers le filet et sa droite vers -X.
-    view.object.rotation.y = player.side < 0 ? 0 : Math.PI;
+    view.object.rotation.y = (player.side < 0 ? 0 : Math.PI) + view.anim.turn * Math.PI;
     view.rig.object.scale.x = player.hand === 'left' ? -1 : 1;
     animate(view, player, pos, alpha, frameTime);
 
@@ -535,6 +568,19 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       if (simBall && prevBallPos) pos = lerp(prevBallPos, simBall.pos, alpha);
       else if (duel.phase === 'serve') pos = duel.servePosition();
       ball.update(pos, simBall && prevBallPos ? simBall.vel : null, camera);
+
+      wallMarker.visible = false;
+      for (const [i, player] of duel.players.entries()) {
+        const chance = duel.counterWall(i);
+        const t = duel.profile.rally.counterWall;
+        if (!chance || chance.timing > t.late || chance.distance > t.reach + 1.5) continue;
+        wallMarker.visible = true;
+        wallMarker.position.set(chance.glass.x, Math.max(0.35, chance.glass.y), player.side * (HALF_LENGTH - 0.03));
+        wallMaterial.color.set(chance.playable ? 0xffffff : players[i]!.color);
+        wallMaterial.opacity = chance.playable ? 0.95 : 0.5;
+        wallMarker.scale.setScalar(chance.playable ? 1.25 : 1);
+        break;
+      }
 
       bounceMarker.visible = false;
       if (simBall && duel.phase === 'rally') {

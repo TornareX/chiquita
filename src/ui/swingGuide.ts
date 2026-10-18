@@ -55,6 +55,7 @@ const pts = (...points: [number, number][]): string => points.map(([x, y]) => `$
 interface Parts {
   root: HTMLDivElement;
   title: HTMLDivElement;
+  hint: HTMLDivElement;
   flick: HTMLDivElement;
   strokes: Record<SwingEnd, SVGElement[]>;
   labels: Record<SwingEnd, SVGTextElement[]>;
@@ -109,12 +110,13 @@ function build(): Parts {
   flick.style.cssText = 'font-size:11px;color:#c9d3db';
   root.append(title, drawing, hint, flick);
   document.body.append(root);
-  return { root, title, flick, strokes, labels, trail, dot };
+  return { root, title, hint, flick, strokes, labels, trail, dot };
 }
 
 export function createSwingGuide(): SwingGuide {
   let parts: Parts | null = null;
-  let named: SwingContext | null = null;
+  /** Noms affichés : ceux d'un contexte, ou ceux de la contre-vitre. */
+  let named: SwingContext | 'vitre' | null = null;
   let seen = 0;
   let resultUntil = 0;
 
@@ -138,8 +140,9 @@ export function createSwingGuide(): SwingGuide {
         resultUntil = now + RESULT_TIME;
       }
       const active = swing.phase === 'armed' || swing.phase === 'swing';
+      const wall = swing.phase === 'wallArmed' || (swing.phase === 'idle' && swing.wallReady);
       const showResult = !active && now < resultUntil && swing.last !== null;
-      if (!visible || (!active && !showResult)) {
+      if (!visible || (!active && !wall && !showResult)) {
         if (parts) parts.root.style.display = 'none';
         return;
       }
@@ -148,19 +151,28 @@ export function createSwingGuide(): SwingGuide {
       p.root.style.display = 'flex';
       p.root.style.left = `${left}px`;
       p.root.style.bottom = `${bottom}px`;
-      // Les noms des coups suivent la balle à jouer.
-      if (named !== context) {
-        named = context;
+      // Les noms des coups suivent la balle à jouer ; contre-vitre : geste inversé, sans fins à choisir.
+      const naming = wall ? 'vitre' : context;
+      if (named !== naming) {
+        named = naming;
         const shots = SWING_SHOTS[context];
-        for (const key of ['straight', 'arc', 'letGo'] as const) for (const l of p.labels[key]) l.textContent = shots[key];
-        p.flick.textContent = `sans préparer, coup sec ↑ : ${shots.flick}`;
+        for (const key of ['straight', 'arc', 'letGo'] as const) for (const l of p.labels[key]) l.textContent = wall ? '' : shots[key];
+        p.hint.textContent = wall ? 'en avant : préparer · vers toi ou lâché : frapper' : 'préparer : stick tiré vers toi';
+        p.flick.textContent = wall ? 'contre la vitre, elle repasse le filet' : `sans préparer, coup sec ↑ : ${shots.flick}`;
       }
       let text: string;
       if (showResult) {
         const last = swing.last!;
-        light(last.prepared ? last.end : null);
-        const name = last.prepared ? SWING_SHOTS[context][last.end] : SWING_SHOTS[context].flick;
+        light(last.prepared && !last.wall ? last.end : null);
+        const name = last.wall ? 'contre-vitre' : last.prepared ? SWING_SHOTS[context][last.end] : SWING_SHOTS[context].flick;
         text = `<span style="color:${LIT}">${escapeHtml(result ?? name)}</span>`;
+      } else if (wall) {
+        // Contre-vitre : tourné vers sa vitre, le geste s'inverse.
+        light(null);
+        text =
+          swing.phase === 'wallArmed'
+            ? `<span style="color:${LIT}">Contre-vitre : ramène le stick vers toi pour frapper</span>`
+            : 'Contre-vitre possible : stick en avant pour préparer';
       } else if (swing.phase === 'swing' && swing.sideSeen) {
         light('arc');
         text = `${escapeHtml(SWING_SHOTS[context].arc)}… finis le geste`;

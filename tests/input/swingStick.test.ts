@@ -346,3 +346,29 @@ describe('chemin complet de la manette', () => {
     }
   });
 });
+
+describe('geste de contre-vitre au stick droit (tourné vers sa vitre)', () => {
+  /** Stick poussé vers l'avant `arm` pas, puis le chemin ; contre-vitre proposée par le jeu tout du long. */
+  function wall(path: Point[], arm = 20, ready = true): SwingOutput[] {
+    const swing = new SwingStick();
+    swing.wallReady = ready;
+    const points: Point[] = [...Array.from({ length: arm }, () => [0, 1] as Point), ...path];
+    return points.map(([right, up]) => swing.update(right, up, SIM_DT));
+  }
+
+  it('poussé vers l’avant : préparation de la contre-vitre ; ramené vers soi : la frappe', () => {
+    const out = wall([[0, 0.2], [0, -0.9]]);
+    expect(out[0]).toEqual({ shot: 'overhead', swing: { prepared: true, wall: true } });
+    expect(release(out)).toEqual({ shot: null, swing: { prepared: true, end: 'straight', wall: true } });
+  });
+
+  it('poussé vers l’avant puis lâché : la frappe part aussi', () => {
+    const out = wall(Array.from({ length: Math.ceil(SWING.dwell / SIM_DT) + 1 }, () => [0, 0] as Point));
+    expect(release(out)?.swing).toEqual({ prepared: true, end: 'letGo', wall: true });
+  });
+
+  it('sans contre-vitre proposée : vers l’avant depuis le repos reste le coup sec', () => {
+    const out = wall([], 1, false);
+    expect(out[0]).toEqual({ shot: 'overhead', swing: { prepared: false, end: 'straight' } });
+  });
+});

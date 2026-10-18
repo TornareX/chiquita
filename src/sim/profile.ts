@@ -305,6 +305,8 @@ export interface RallyTuning {
   cutLow: number;
   /** Chiquita (X stick vers soi, après rebond) : lente et basse, aux pieds du joueur au filet. */
   chiquita: ShotTypeTuning;
+  /** Contre-vitre (contrapared) : la balle qui a passé le joueur se renvoie contre sa propre vitre du fond. */
+  counterWall: CounterWallTuning;
   /**
    * Préparation (de l'appui à la frappe) : sous `blockPrep` s, le coup est bloqué (vitesse × `blockSpeed`,
    * plage latérale × `blockWidth`) ; la vitesse est pleine à `fullPrep` s. Pas une jauge : au-delà, rien de plus.
@@ -370,6 +372,56 @@ export interface PressureTuning {
   cutRush: number;
   /** Au-dessus de la tête, l'erreur est multipliée par ce facteur (balle haute = balle d'attaque). */
   overheadFactor: number;
+}
+
+/**
+ * Contre-vitre (`CHANTIERS_PLAN.md`, étape 4) : après son rebond, la balle a passé le joueur et file vers sa vitre du
+ * fond. Coup normal, stick tiré vers sa vitre : il la frappe contre elle, elle repasse le filet. Distances en m,
+ * durées en s. Tout est [à calibrer en jouant].
+ */
+export interface CounterWallTuning {
+  /** Stick tiré vers sa vitre au-delà de ce seuil (0..1). */
+  stick: number;
+  /**
+   * Point idéal : la balle à cette distance derrière le joueur ; la raquette l'y attend. Disponible dès qu'elle est à
+   * `ahead` m devant lui (il court vers sa vitre plus vite qu'elle), jusqu'à `late` s après le point idéal.
+   */
+  ideal: number;
+  ahead: number;
+  late: number;
+  /**
+   * Contre-vitre demandée (relâcher, stick tiré vers sa vitre) : la raquette attend la balle au point idéal au plus
+   * tant (s). Relâchée plus de `perfectBefore` avant le passage au point idéal, elle est en avance : l'erreur de
+   * timing est pleine à `earlySpan` s d'avance.
+   */
+  wait: number;
+  earlySpan: number;
+  /**
+   * Distance horizontale maximale entre le joueur et la balle ; écart latéral au point de frappe (sur le côté, à
+   * `standLateral`) d'une frappe parfaite.
+   */
+  reach: number;
+  sweetSpot: number;
+  /** Hauteurs de balle jouables. */
+  low: number;
+  high: number;
+  /** Plus près de la vitre que `glassRoom`, la balle n'a plus la place d'être frappée contre elle ; plus loin que `maxRoom`, elle n'y arrive pas. */
+  glassRoom: number;
+  maxRoom: number;
+  /** Balle qui s'éloigne vers la vitre plus vite que ça (m/s). */
+  minSpeed: number;
+  /** Point de chute visé, en distance au filet chez l'adversaire : coup normal, frappe parfaite. */
+  depth: number;
+  depthPerfect: number;
+  /** Écart latéral de la cible au stick à fond : coup normal, frappe parfaite. */
+  width: number;
+  widthPerfect: number;
+  /** Temps de vol du contact au point de chute : lent et haut. */
+  flightTime: number;
+  /** Passage minimal au-dessus du filet. */
+  clearance: number;
+  /** Erreur maximale : vitesse horizontale réduite de cette fraction (la balle retombe chez soi ou dans le filet). */
+  speedLoss: number;
 }
 
 /** Service à la cuillère, en diagonale. Distances en m ; profondeurs comptées depuis le filet. */
@@ -708,6 +760,28 @@ export const REALISTIC: PhysicsProfile = {
       depthNeutral: 3.5,
       depthLong: 4.5,
       spin: -0.5,
+    },
+    counterWall: {
+      stick: 0.5,
+      ideal: 0.2,
+      ahead: 1.2,
+      late: 0.2,
+      wait: 0.6,
+      earlySpan: 0.35,
+      reach: 1.8,
+      sweetSpot: 0.6,
+      low: 0.1, // la balle qui meurt basse contre la vitre : c'est elle qu'on sauve
+      high: 2.4,
+      glassRoom: 0.2,
+      maxRoom: 3.5, // au-delà, la balle file dans le grillage au-dessus de la vitre ou retombe dans le filet
+      minSpeed: 1,
+      depth: 4.5,
+      depthPerfect: 6,
+      width: 1.8,
+      widthPerfect: 2.8,
+      flightTime: 2.2,
+      clearance: 0.6,
+      speedLoss: 0.35,
     },
     blockPrep: 0.3,
     fullPrep: 0.6,

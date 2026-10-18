@@ -147,6 +147,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       if (padIndex !== null && !pad) sources[index] += ' (pas branchée)';
       const swing = padIndex === null ? null : (swings?.[padIndex] ?? null);
       playerSwings[index] = swing;
+      // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).
+      if (swing) swing.wallReady = duel.counterWallReady(index);
       const state: PadState = pad ? readGamepad(pad, swing ?? undefined, SIM_DT) : keys === null ? IDLE_PAD : keyboard.read(keys);
       states[index] = state;
       buttons[index] = pad

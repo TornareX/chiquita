@@ -2,7 +2,7 @@ import { flatDistance, planIntercept, runTime, ticksToHeight, type Intercept } f
 import { createBall, type Ball } from './ball';
 import { stepBall, type Contact } from './collisions';
 import { NEUTRAL_ARCADE, type ArcadeCommands, type OverheadKind, type ShotKind, type SwingEnd } from './commands';
-import { HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
+import { BALL_RADIUS, HALF_LENGTH, HALF_WIDTH, PLAYER_HEIGHT, SIM_DT } from './constants';
 import type { WallId } from './court';
 import { ARCADE, type PhysicsProfile } from './profile';
 import { Match, type MatchRules, type PointOutcome, type ServeSide } from './score';
@@ -18,14 +18,17 @@ import {
   overheadKind,
   overheadTarget,
   rightFor,
+  solveCounterWall,
   solveShot,
   type CourtSide,
+  type SolvedShot,
   type Hand,
   type ShotTuningKey,
   type Wing,
 } from './shots';
+import { predictBall } from './predict';
 import { ballPressure, shotError } from './pressure';
-import { add, addScaled, length, vec3, type Vec3 } from './vec3';
+import { add, addScaled, length, scale, vec3, type Vec3 } from './vec3';
 import { DOOR_MID, inCourt, moveWithin, outsideCourt, pathDistance, waypoint } from './walkable';
 
 /**
@@ -76,8 +79,22 @@ export interface Engagement {
   manual: boolean;
   /** Stick au moment de l'appui : seul un changement après l'appui compte comme reprise en main. */
   pressStick: ArcadeCommands['stick'];
-  /** Coup joué au stick droit (`ArcadeCommands.swing`) : préparation, et fin du geste une fois connue. */
-  swing?: { prepared: boolean; end?: SwingEnd };
+  /**
+   * Coup joué au stick droit (`ArcadeCommands.swing`) : préparation, et fin du geste une fois connue ; `wall` :
+   * contre-vitre (stick poussé vers l'avant pour préparer, ramené vers sa vitre pour frapper).
+   */
+  swing?: { prepared: boolean; end?: SwingEnd; wall?: boolean };
+  /**
+   * Il la laisse passer pour une contre-vitre : stick tiré vers sa vitre pendant la préparation (quand le stick ne
+   * déplace pas le joueur), sur une balle qui va rebondir derrière lui. Ni volée ni coup haut : le coup se prépare
+   * au sol, après le rebond.
+   */
+  letPass?: boolean;
+  /**
+   * Contre-vitre demandée au relâcher (stick tiré vers sa vitre, balle à portée) : la raquette attend la balle au
+   * point idéal. `timing` : relâcher par rapport à son passage au point idéal (s), négatif = en avance.
+   */
+  counterWall?: { timing: number | null };
 }
 
 /**
@@ -167,6 +184,25 @@ export interface DuelShot {
   heightOff: number;
   /** Côté de frappe : coup droit ou revers (au-dessus de la tête, revers par-dessus la tête). */
   wing: Wing;
+  /** Contre-vitre : frappée contre sa propre vitre du fond. */
+  counterWall?: boolean;
+}
+
+/**
+ * Contre-vitre possible pour un joueur (`Duel.counterWall`) : après son rebond, la balle l'a passé et file vers sa
+ * vitre du fond.
+ */
+export interface CounterWallChance {
+  /** Temps écoulé depuis le passage de la balle au point idéal, derrière le joueur (s) : négatif = pas encore. */
+  timing: number;
+  /** Distance horizontale entre le joueur et la balle (m). */
+  distance: number;
+  /** Écart latéral de la balle à l'axe qui mène le joueur à sa vitre (m). */
+  lateral: number;
+  /** Où la balle toucherait la vitre si personne ne la jouait. */
+  glass: Vec3;
+  /** Jouable : à portée, entre `ahead` m devant le joueur et `late` s après le point idéal. */
+  playable: boolean;
 }
 
 /** Ce qu'une frappe ajoute aux réglages de base. */
@@ -183,6 +219,10 @@ interface HitExtra {
   heightOff?: number;
   /** Coup droit (défaut) ou revers. */
   wing?: Wing;
+  /** Trajectoire déjà calculée (contre-vitre, lob imposé du labo), à la place de celle tirée de la cible. */
+  solved?: SolvedShot;
+  /** Contre-vitre. */
+  counterWall?: boolean;
 }
 
 /**
@@ -432,6 +472,8 @@ export class Duel {
    * Attribution de la balle dans chaque équipe (`owner`), recalculée tous les `OWNER_TICKS` pas, ou plus tôt si la
    * balle a été frappée, a rebondi ou touché une vitre depuis.
    */
+  /** Rebond prévu de la balle en vol, pour `passesBehind` : recalculé à chaque frappe. */
+  private bounceCache: { hits: number; bounce: Vec3 | null } | null = null;
   private readonly ownerCache: ({ tick: number; key: string; owner: number } | null)[] = [null, null];
 
   /**
@@ -641,8 +683,13 @@ export class Duel {
   playSituation(
     hitter: number,
     positions: readonly Vec3[],
-    /** `error` : coup raté exprès (balle plus haute et plus lente, comme une défense sous pression). */
-    opening: { kind: ShotKind; contact: Vec3; target: Vec3; perfect?: boolean; overhead?: OverheadKind; error?: number } | 'serve',
+    /**
+     * `error` : coup raté exprès (balle plus haute et plus lente, comme une défense sous pression). `flightTime` : temps
+     * de vol imposé à un lob (s), pour un lob plus tendu ou plus haut que ceux du jeu.
+     */
+    opening:
+      | { kind: ShotKind; contact: Vec3; target: Vec3; perfect?: boolean; overhead?: OverheadKind; error?: number; flightTime?: number }
+      | 'serve',
   ): void {
     this.startServe(hitter);
     for (const [i, pos] of positions.entries()) {
@@ -652,7 +699,7 @@ export class Duel {
       player.lastHit = null;
     }
     if (opening === 'serve') return;
-    const { kind, contact, target, perfect = false, overhead, error = 0 } = opening;
+    const { kind, contact, target, perfect = false, overhead, error = 0, flightTime } = opening;
     this.phase = 'rally';
     this.phaseTick = this.tick;
     this.hits = 1;
@@ -660,7 +707,13 @@ export class Duel {
     this.prevBallPos = contact;
     // Une volée si le frappeur est près du filet : l'IA en déduit qu'elle y reste.
     const volley = Math.abs(positions[hitter]!.z) < this.profile.rally.volleyZone;
-    this.hit(hitter, kind, contact, target, perfect, 0, volley, false, false, overhead ? { overhead, error } : { error });
+    let solved: SolvedShot | undefined;
+    if (flightTime !== undefined && kind === 'lob') {
+      const profile = structuredClone(this.profile);
+      profile.rally.lob = { ...profile.rally.lob, flightTime, flightTimePerfect: flightTime, flightTimeShort: flightTime };
+      solved = solveShot('lob', contact, target, perfect, profile);
+    }
+    this.hit(hitter, kind, contact, target, perfect, 0, volley, false, false, { ...(overhead ? { overhead } : {}), error, ...(solved ? { solved } : {}) });
   }
 
   private startServe(server: number, newPoint = true): void {
@@ -780,6 +833,16 @@ export class Duel {
     const engagement = player.engagement;
     // Fin du geste au stick droit : connue au relâcher.
     if (engagement?.swing && cmd.swing?.end) engagement.swing.end = cmd.swing.end;
+    // Stick tiré vers sa vitre pendant la préparation, sur une balle qui va le passer : il la laisse passer. Seulement
+    // si le stick ne le déplace pas (préparation bloquée ou ralentie) : en libre, il courrait vers sa vitre.
+    if (engagement && engagement.releaseTick === null && this.isReceiving(index)) {
+      const aims = PREP_MOVE[player.prepMove] < 1 && player.prepMove !== 'tard';
+      const letPass = (engagement.swing?.wall === true || (aims && cmd.stick.forward <= -r.counterWall.stick)) && this.passesBehind(index);
+      if (letPass !== (engagement.letPass ?? false)) {
+        engagement.letPass = letPass;
+        engagement.plan = null;
+      }
+    }
     const magnet = player.assist === 'magnet';
     if (engagement && this.isReceiving(index) && this.ball) {
       const plan = engagement.plan;
@@ -808,11 +871,13 @@ export class Duel {
             this.rematePrepared(index),
             player.hand,
           );
-        engagement.plan = plan(engagement.kind === 'overhead');
+        engagement.plan = plan(engagement.kind === 'overhead' && !engagement.letPass);
         // Balle qui ne monte pas assez pour un coup haut (B, ou geste au stick) : préparé comme un coup au sol
         // ou une volée.
         const belowFloor = (engagement.plan?.contact.y ?? 0) < this.overheadFloor(engagement, player.height);
-        if (engagement.swing && engagement.plan?.reachable && !belowFloor) {
+        if (engagement.letPass) {
+          // Laissée passer : le point prévu reste au sol, après le rebond.
+        } else if (engagement.swing && engagement.plan?.reachable && !belowFloor) {
           // Au stick, le coup se choisit selon la balle : on prend la première balle jouable. Au-dessus de la
           // tête si elle y passe d'abord (un lob) ; sinon au sol ou de volée, plutôt que d'attendre qu'elle
           // remonte en sortant de la vitre.
@@ -845,15 +910,23 @@ export class Duel {
     // prévu, le stick ne fait plus que de petits pas (ou rien) et sert à viser.
     // En placement manuel, pas de course assistée : ralenti = petits pas au stick, bloqué = immobile.
     const preparing = engagement !== null && engagement.releaseTick === null;
-    let prepScale = preparing ? PREP_MOVE[player.prepMove] : 1;
+    // Contre-vitre préparée au stick droit : il court encore vers la balle (il s'arrête à la frappe).
+    let prepScale = preparing && !engagement.swing?.wall ? PREP_MOVE[player.prepMove] : 1;
     // Placement manuel, bloqué au dernier moment : libre tant que l'impact prévu (le point le plus proche du joueur)
     // n'est pas imminent.
     if (preparing && engagement.manual && player.prepMove === 'tard') {
       const plan = this.isReceiving(index) ? engagement.plan : null;
       if (!plan || (plan.tick - this.tick) * SIM_DT > r.prepLock) prepScale = 1;
     }
-    // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
-    if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
+    // Contre-vitre jouable (la balle l'a passé, à portée), stick tiré vers sa vitre : le joueur s'arrête, le stick vise.
+    // Sinon, tirer le stick vers sa vitre le ferait courir avec la balle, qui ne serait jamais derrière lui.
+    const counterWall =
+      engagement !== null &&
+      (engagement.counterWall !== undefined || (cmd.stick.forward <= -r.counterWall.stick && this.counterWall(index)?.playable === true));
+    if (counterWall) {
+      desired = vec3(0, 0, 0);
+    } else if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
+      // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
       // Vitesse qui permet encore de s'arrêter pile sur le point ; pour sortir ou rentrer, par la porte.
       const speed = Math.min(t.maxSpeed, Math.sqrt(2 * t.deceleration * gap));
       const next = target ? waypoint(player.pos, target, player.side) : null;
@@ -974,8 +1047,28 @@ export class Duel {
     const ball = this.ball;
     if (!engagement || engagement.releaseTick === null || !ball || !this.isReceiving(index)) return;
     const r = this.profile.rally;
+    // Balle qui file vers sa vitre, à portée, stick tiré vers elle : contre-vitre. La raquette attend la balle au
+    // point idéal ; le relâcher fait la qualité du coup.
+    const chance = this.counterWall(index);
+    // Geste de contre-vitre au stick droit : retenu même si la balle est encore loin (elle arrive vers lui).
+    const wallGesture = engagement.swing?.wall === true;
+    const wantsWall = wallGesture || player.stick.forward <= -r.counterWall.stick;
+    const elapsed = (this.tick - engagement.releaseTick) * SIM_DT;
+    if (!engagement.counterWall && wantsWall && (chance?.playable || (wallGesture && this.counterWallReady(index)))) {
+      engagement.counterWall = { timing: null };
+    }
+    if (engagement.counterWall) {
+      // Relâcher par rapport au passage de la balle au point idéal, connu dès qu'elle est en vue.
+      if (engagement.counterWall.timing === null && chance) engagement.counterWall.timing = chance.timing - elapsed;
+      const timing = engagement.counterWall.timing;
+      if (chance?.playable && chance.timing >= 0 && timing !== null) return this.counterWallHit(index, chance, timing);
+      const gone = chance ? chance.timing > r.counterWall.late : !this.passesBehind(index);
+      if (gone || elapsed >= r.counterWall.wait) this.whiff(index);
+      return;
+    }
     // Au-dessus de la tête : la balle se prend haute, à la hauteur prévue par la course assistée.
-    const overhead = engagement.kind === 'overhead';
+    // Laissée passer (contre-vitre) : ni coup haut, ni volée.
+    const overhead = engagement.kind === 'overhead' && !engagement.letPass;
     const plannedHigh = overhead && (engagement.plan?.contact.y ?? 0) >= this.overheadFloor(engagement, player.height);
     // Balle haute relâchée en retard : descendue sous la zone du coup haut, le joueur fait quand même son
     // geste (trop bas : filet), tant qu'elle n'est pas tombée sous les épaules.
@@ -997,6 +1090,7 @@ export class Duel {
       !(ball.out && this.bounces === 0) &&
       // Le service doit rebondir avant d'être renvoyé.
       !(this.hits === 1 && this.bounces === 0) &&
+      !(engagement.letPass && this.bounces === 0) &&
       ball.pos.z * player.side > 0 &&
       heightOk &&
       flatDistance(ball.pos, player.pos) <= reach &&
@@ -1063,6 +1157,117 @@ export class Duel {
     else if (!outside && error > 0) aimed = vec3(aimed.x, aimed.y, aimed.z - player.side * error * r.pressure.long);
     const target = lateDrift(aimed, player.side, timing, this.profile);
     this.hit(index, kind, ball.pos, target, perfect, timing, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing });
+  }
+
+  /**
+   * Le geste de contre-vitre au stick droit est proposé au joueur `index` : la contre-vitre est possible, ou il court
+   * vers sa vitre vers une balle qui va rebondir derrière lui (ou qui y file déjà), ou il attend contre sa vitre la
+   * balle qui a rebondi et arrive vers lui. Ailleurs, pousser le stick droit
+   * vers l'avant depuis le repos reste le coup sec.
+   */
+  counterWallReady(index: number): boolean {
+    if (this.phase !== 'rally' || !this.isReceiving(index)) return false;
+    if (this.counterWall(index)) return true;
+    if (!this.passesBehind(index)) return false;
+    const player = this.players[index]!;
+    // Il court vers sa vitre, ou il l'attend entre elle et la balle qui a rebondi.
+    const waiting = this.bounces > 0 && this.ball !== null && (player.pos.z - this.ball.pos.z) * player.side > 0;
+    return waiting || player.vel.z * player.side > 1;
+  }
+
+  /**
+   * La balle va passer le joueur `index` : elle rebondit (ou a rebondi) dans son camp derrière lui, ou, déjà
+   * rebondie, elle file vers sa vitre. Le rebond prévu est calculé une fois par frappe.
+   */
+  passesBehind(index: number): boolean {
+    const ball = this.ball;
+    if (!ball || ball.out) return false;
+    const player = this.players[index]!;
+    const side = player.side;
+    if (this.bounces > 0) return ball.vel.z * side > 0;
+    if (this.bounceCache?.hits !== this.hits) {
+      this.bounceCache = { hits: this.hits, bounce: predictBall(ball, this.profile, 4, 64).bounce };
+    }
+    const bounce = this.bounceCache.bounce;
+    return bounce !== null && bounce.z * side > 0 && (bounce.z - player.pos.z) * side > 0.3;
+  }
+
+  /**
+   * Contre-vitre possible pour le joueur `index` (`CHANTIERS_PLAN.md`, étape 4) : c'est à lui de jouer, la balle a
+   * rebondi dans son camp et file vers sa vitre du fond, près de lui (au plus `counterWall.ahead` m devant lui, s'il
+   * court vers sa vitre plus vite qu'elle). `null` sinon. Le point idéal est derrière lui, à `counterWall.ideal` m,
+   * ou juste devant la vitre s'il en est tout près.
+   */
+  counterWall(index: number): CounterWallChance | null {
+    const ball = this.ball;
+    if (!ball || ball.out || this.bounces !== 1 || !this.isReceiving(index)) return null;
+    const player = this.players[index]!;
+    const t = this.profile.rally.counterWall;
+    const side = player.side;
+    const away = ball.vel.z * side;
+    const behind = (ball.pos.z - player.pos.z) * side;
+    const room = HALF_LENGTH - Math.abs(ball.pos.z);
+    if (ball.pos.z * side <= 0 || away < t.minSpeed || behind < -t.ahead || room > t.maxRoom) return null;
+    const toGlass = room / away;
+    const glass = vec3(
+      ball.pos.x + ball.vel.x * toGlass,
+      Math.max(BALL_RADIUS, ball.pos.y + ball.vel.y * toGlass - (this.profile.gravity * toGlass * toGlass) / 2),
+      side * HALF_LENGTH,
+    );
+    // Point idéal derrière lui, mais jamais collé à la vitre : contre elle, il frappe la balle qui arrive à sa hauteur.
+    const idealDepth = Math.min(Math.abs(player.pos.z) + t.ideal, HALF_LENGTH - t.glassRoom - 0.05);
+    const timing = (Math.abs(ball.pos.z) - idealDepth) / away;
+    const distance = flatDistance(ball.pos, player.pos);
+    const lateral = ball.pos.x - player.pos.x;
+    const playable =
+      timing <= t.late &&
+      distance <= t.reach &&
+      ball.pos.y >= t.low &&
+      ball.pos.y <= t.high &&
+      room >= t.glassRoom;
+    return { timing, distance, lateral, glass, playable };
+  }
+
+  /**
+   * Contre-vitre : la balle part contre la vitre du fond du joueur et repasse le filet, lente et haute, souvent
+   * courte. Stick à droite ou à gauche : elle va de ce côté chez l'adversaire. Mal frappée (timing, balle loin de
+   * l'axe, pression), elle manque de vitesse : elle retombe chez soi ou dans le filet.
+   */
+  private counterWallHit(index: number, chance: CounterWallChance, released: number): void {
+    const player = this.players[index]!;
+    const engagement = player.engagement!;
+    const ball = this.ball!;
+    const r = this.profile.rally;
+    const t = r.counterWall;
+    // Coup poussé, comme le coupé : la balle basse gêne moins qu'un coup frappé.
+    const pressure = this.pressureOf(index, 'slice', ball.pos.y, Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2), length(player.vel));
+    const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure;
+    // Comme les autres coups, la balle se frappe sur le côté, à `standLateral`.
+    const miss = Math.abs(Math.abs(chance.lateral) - r.standLateral);
+    // Relâcher par rapport au passage de la balle au point idéal (en retard : elle est frappée là où elle est).
+    const timing = released;
+    const perfect = timing >= -r.perfectBefore * shrink && timing <= r.perfectAfter * shrink && miss <= t.sweetSpot;
+    // En avance : erreur pleine à `earlySpan` s d'avance, au lieu de `perfectBefore` + `earlySpan` des autres coups.
+    const early = -timing - r.perfectBefore;
+    const judged = early > 0 ? -(r.perfectBefore + (early * r.pressure.earlySpan) / (t.earlySpan - r.perfectBefore)) : timing;
+    const error = shotError(pressure, judged, miss, perfect, this.profile);
+    const width = perfect ? t.widthPerfect : t.width;
+    const limit = HALF_WIDTH - 0.6;
+    const x = Math.max(-limit, Math.min(limit, Math.max(-1, Math.min(1, player.stick.right)) * width * rightFor(player.side).x));
+    const target = vec3(x, BALL_RADIUS, -player.side * (perfect ? t.depthPerfect : t.depth));
+    const solved = solveCounterWall(ball.pos, target, player.side, this.profile);
+    // Moins de vitesse, dans toutes les directions : plus courte et plus basse, pas plus haute sur la vitre.
+    solved.vel = scale(solved.vel, 1 - error * t.speedLoss);
+    // Tourné vers sa vitre, le coup droit est de l'autre côté.
+    const fore = forehandFor(player.side, player.hand).x;
+    const wing: Wing = chance.lateral * fore <= 0 ? 'fore' : 'back';
+    this.hit(index, 'normal', ball.pos, target, perfect, timing, false, false, engagement.manual, {
+      pressure,
+      error,
+      wing,
+      solved,
+      counterWall: true,
+    });
   }
 
   /**
@@ -1226,7 +1431,7 @@ export class Duel {
   ): void {
     const player = this.players[index]!;
     const r = this.profile.rally;
-    const { overhead = null, outside = false, pressure = 0, error = 0, style = null, prepared = Infinity, heightOff = 0, wing = 'fore' } = extra;
+    const { overhead = null, outside = false, pressure = 0, error = 0, style = null, prepared = Infinity, heightOff = 0, wing = 'fore', solved: given } = extra;
     const tuning: ShotTuningKey = overhead ?? (style === 'cut' || style === 'chiquita' ? style : kind === 'overhead' ? 'bandeja' : kind);
     const touch = style === 'cut' || style === 'chiquita';
     const base = kind === 'lob' || overhead || touch ? 1 : volley ? r.volleySpeed : this.touchedGlass ? r.glassSpeed : 1;
@@ -1237,12 +1442,12 @@ export class Duel {
     // Au padel, la volée se joue coupée : la balle reste basse, même après la vitre.
     const spin = volley && kind === 'normal' && !touch ? r.volleySpin : null;
     const spinScale = 1 - Math.max(0, heightOff) * r.overheadHighSpin;
-    const solved = solveShot(tuning, contact, target, perfect, this.profile, speedFactor, error * r.pressure.clearance, spin, spinScale);
+    const solved = given ?? solveShot(tuning, contact, target, perfect, this.profile, speedFactor, error * r.pressure.clearance, spin, spinScale);
     const ball = this.ball!;
     // Prise trop basse : la balle part plus à plat, vers le filet. Coup haut sous la hauteur des yeux, ou
     // balle ramassée aux pieds et mal frappée.
     const p = r.pressure;
-    const scooped = !overhead && kind !== 'lob' && contact.y < p.netLow ? Math.max(0, (error - 0.5) / 0.5) * p.netDip : 0;
+    const scooped = !extra.counterWall && !overhead && kind !== 'lob' && contact.y < p.netLow ? Math.max(0, (error - 0.5) / 0.5) * p.netDip : 0;
     const dip = Math.max(0, -heightOff) * r.overheadLowDip + scooped;
     ball.vel = dip > 0 ? vec3(solved.vel.x, solved.vel.y - dip, solved.vel.z) : solved.vel;
     ball.spin = solved.spin;
@@ -1278,6 +1483,7 @@ export class Duel {
       style,
       heightOff,
       wing,
+      ...(extra.counterWall ? { counterWall: true } : {}),
     };
   }
 
@@ -1334,10 +1540,12 @@ export class Duel {
         case 'tape':
           break;
         case 'glass':
+          // Sa propre vitre est permise (contre-vitre) ; elle ne compte pas comme une vitre jouée par l'adversaire.
+          if (hitterHalf) break;
           this.touchedGlass = true;
           if (contact.wall && !this.glassWalls.includes(contact.wall)) this.glassWalls.push(contact.wall);
-          // Sa propre vitre est permise ; celle d'en face seulement après le rebond.
-          if (!hitterHalf && this.bounces === 0) return this.endPoint(receiver, 'opponent-wall');
+          // Celle d'en face seulement après le rebond.
+          if (this.bounces === 0) return this.endPoint(receiver, 'opponent-wall');
           break;
         case 'mesh':
           if (this.bounces === 0) return this.endPoint(receiver, hitterHalf ? 'own-mesh' : 'opponent-wall');

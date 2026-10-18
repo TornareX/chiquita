@@ -11,18 +11,20 @@ export type { SwingEnd };
  *   - ramené vers l'avant **en arc**, par un côté : lob ; au-dessus de la tête, víbora ;
  *   - **lâché** (le stick revient au centre et y reste) : chiquita ; au-dessus de la tête, feinte de smash ;
  * - **sans préparation** : un coup sec vers l'avant depuis le centre, quand on n'a pas le temps : coup moins
- *   fort et moins précis ; de volée, volée bloquée ; au-dessus de la tête, bandeja.
+ *   fort et moins précis ; de volée, volée bloquée ; au-dessus de la tête, bandeja ;
+ * - **contre-vitre**, quand le jeu la propose (`wallReady`) : tourné vers sa vitre, le geste est inversé. Stick
+ *   poussé vers l'avant : préparation ; ramené vers soi (vers sa vitre), ou lâché : frappe contre la vitre.
  *
  * Pour la simulation, le geste parle le langage des boutons : un coup maintenu pendant la préparation,
  * relâché à la fin du geste (ce qui déclenche la frappe), avec la préparation et la fin du geste en plus.
  */
-export type SwingPhase = 'idle' | 'armed' | 'swing' | 'done';
+export type SwingPhase = 'idle' | 'armed' | 'swing' | 'done' | 'wallArmed';
 
 export interface SwingOutput {
   /** Coup maintenu tant que le geste dure ; `null` une fois relâché. */
   shot: ShotKind | null;
-  /** Préparation, et fin du geste une fois connue (au relâcher). */
-  swing?: { prepared: boolean; end?: SwingEnd };
+  /** Préparation, et fin du geste une fois connue (au relâcher) ; `wall` : contre-vitre. */
+  swing?: { prepared: boolean; end?: SwingEnd; wall?: boolean };
 }
 
 /** Réglages du geste, le long de l'axe vers soi / vers l'avant. [à calibrer en jouant] */
@@ -67,19 +69,21 @@ export class SwingStick {
   /** Le geste en cours (ou le dernier) a été préparé. */
   prepared = false;
   /** Dernier geste fini, et ses points (repère écran, `up` vers le haut) pour l'affichage. */
-  last: { prepared: boolean; end: SwingEnd } | null = null;
+  last: { prepared: boolean; end: SwingEnd; wall?: boolean } | null = null;
   readonly trail: { right: number; up: number }[] = [];
   /** Le geste en cours est passé par un côté : il finira en arc. */
   sideSeen = false;
   /** Nombre de gestes finis : change à chaque coup joué au stick. */
   count = 0;
+  /** Contre-vitre proposée par le jeu à ce pas : pousser vers l'avant depuis le repos la prépare. */
+  wallReady = false;
   private centerTime = 0;
   private swingTime = 0;
 
   /** Un pas : position du stick droit (après zone morte), durée du pas (s). */
   update(right: number, up: number, dt: number): SwingOutput {
     const magnitude = Math.hypot(right, up);
-    if (this.phase === 'armed' || this.phase === 'swing') {
+    if (this.phase === 'armed' || this.phase === 'swing' || this.phase === 'wallArmed') {
       this.trail.push({ right, up });
       if (this.trail.length > 90) this.trail.shift();
     }
@@ -89,6 +93,14 @@ export class SwingStick {
         if (magnitude < SWING.center) this.phase = 'idle';
         return { shot: null };
       case 'idle':
+        if (this.wallReady && up >= SWING.arm) {
+          this.phase = 'wallArmed';
+          this.prepared = true;
+          this.centerTime = 0;
+          this.trail.length = 0;
+          this.trail.push({ right, up });
+          return { shot: HELD, swing: { prepared: true, wall: true } };
+        }
         if (up <= -SWING.arm) {
           this.phase = 'armed';
           this.prepared = true;
@@ -114,7 +126,21 @@ export class SwingStick {
         return this.swingStep(right, up, magnitude, dt);
       case 'swing':
         return this.swingStep(right, up, magnitude, dt);
+      case 'wallArmed':
+        // Ramené vers soi (vers sa vitre) : frappe. Lâché au centre : frappe aussi.
+        if (up <= -SWING.front) return this.releaseWall('straight');
+        if (magnitude < SWING.center) {
+          this.centerTime += dt;
+          if (this.centerTime >= SWING.dwell) return this.releaseWall('letGo');
+        } else this.centerTime = 0;
+        return { shot: HELD, swing: { prepared: true, wall: true } };
     }
+  }
+
+  private releaseWall(end: SwingEnd): SwingOutput {
+    this.finishGesture(end);
+    this.last = { prepared: true, end, wall: true };
+    return { shot: null, swing: { prepared: true, end, wall: true } };
   }
 
   private held(): SwingOutput {
