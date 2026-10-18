@@ -210,6 +210,11 @@ export interface RallyTuning {
    * la course assistée (placement manuel) ; dans cette fenêtre, le stick ne fait que viser.
    */
   aimWindow: number;
+  /**
+   * Placement manuel, stick gauche bloqué pendant la préparation : le joueur ne s'immobilise (le stick vise)
+   * qu'à moins de `prepLock` s de l'impact prévu ; avant, il se place au stick.
+   */
+  prepLock: number;
   /** Écart du stick par rapport à sa position à l'appui qui compte comme « toucher » (0..1). */
   manualThreshold: number;
   /** Récompense du placement manuel : plage latérale de visée multipliée par ce facteur. */
@@ -505,6 +510,7 @@ export const REALISTIC: PhysicsProfile = {
     volleySpin: -0.25,
     glassSpeed: 0.85,
     aimWindow: 0.3,
+    prepLock: 0.3, // comme la fenêtre de visée [à calibrer en jouant]
     manualThreshold: 0.35,
     manualAimBonus: 1.25,
     overheadLow: 1.45, // vers les épaules : la bandeja se prend à hauteur des yeux

@@ -750,3 +750,16 @@ non plus. Il veut pouvoir la claquer, por cuatro. 485 tests OK, typecheck OK. **
   (2,2 m). Sur les balles flottantes testées, il sort por cuatro ; le lob court smashé plus loin ne change pas.
 - **Effet sur l'IA** (IA normale, simple) : 6,0 coups/point (6,4 avant), coups hauts 24 % des gagnants (30 %), lobs
   qui passent 42 % (35 %), sorties 21 (17). Seuils de `overhead.test.ts` et `glass.test.ts` recalés.
+
+## Gameplay : préparation bloquée seulement au dernier moment (18/10/2026)
+
+Retour de Xavier : au filet, face à une chiquita, il la ratait souvent quand il préparait. **À juger à la manette.**
+
+- **Mesuré** (simulation : joueur au filet en placement manuel, qui prépare dès 0,2 s puis va vers la balle ; 12
+  chiquitas au centre, sur les côtés, courtes et longues) : bloqué dès l'appui, 5 ratées sur 12 ; ralenti 1 à 3 ;
+  libre 0. Figé pendant ~1 s, il ne pouvait pas faire le pas vers une balle qui plonge sur le côté ou devant lui.
+- **Changement** : en placement manuel, `bloque` laisse se placer au stick et n'immobilise (le stick vise) que dans
+  les `prepLock` (0,3 s) dernières secondes avant l'impact. Le point d'impact prévu suit le joueur (le plus proche
+  de lui, recalculé tous les 12 pas, comme l'aimant) au lieu du premier point jouable, souvent collé au filet.
+  Résultat : 1 ratée sur 12, due au relâcher trop tardif du joueur simulé, pas au blocage. 486 tests OK (dont 2
+  nouveaux dans `tests/sim/prepMove.test.ts`).

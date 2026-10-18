@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NEUTRAL_ARCADE, type ArcadeCommands } from '../../src/sim/commands';
 import { SIM_DT } from '../../src/sim/constants';
 import { Duel, type PrepMove } from '../../src/sim/duel';
+import { aimTarget, forwardFor, rightFor, solveShot } from '../../src/sim/shots';
 import { vec3 } from '../../src/sim/vec3';
 import { AI_LEVELS, Bot } from '../../src/sim/bot';
 
@@ -70,7 +71,7 @@ describe('stick gauche pendant la préparation', () => {
     expect(play('bloque', { forward: 0, right: 1 }, 3.5).shot).toBeTruthy();
   });
 
-  it('placement manuel : bloqué immobilise pendant la préparation, ralenti laisse de petits pas, libre court', () => {
+  it('placement manuel : bloqué laisse se placer, puis immobilise juste avant l’impact ; ralenti laisse de petits pas, libre court', () => {
     const moved = (mode: PrepMove): number => {
       const duel = new Duel(null);
       duel.players[0].assist = 'off';
@@ -82,10 +83,52 @@ describe('stick gauche pendant la préparation', () => {
       const end = duel.players[0].pos;
       return Math.hypot(end.x - start.x, end.z - start.z);
     };
-    expect(moved('bloque')).toBeLessThan(0.01);
+    // L'impact est encore loin : bloqué se place comme libre.
+    expect(moved('bloque')).toBeGreaterThan(2);
     expect(moved('ralenti')).toBeGreaterThan(0.3);
     expect(moved('ralenti')).toBeLessThan(1);
     expect(moved('libre')).toBeGreaterThan(2);
+
+    // Dans les `prepLock` dernières secondes avant l'impact prévu, bloqué ne bouge plus : le stick vise.
+    const duel = new Duel(null);
+    duel.players[0].assist = 'off';
+    duel.players[0].prepMove = 'bloque';
+    duel.playSituation(1, [vec3(0, 0, -8.5), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.9, 8.5), target: vec3(0.9, 0.03, -6.8) });
+    const remaining = (): number => {
+      const plan = duel.players[0].engagement?.plan;
+      return plan ? (plan.tick - duel.tick) * SIM_DT : Infinity;
+    };
+    const lock = duel.profile.rally.prepLock;
+    while (remaining() > lock - 0.02) duel.step([{ ...NEUTRAL_ARCADE, shot: 'normal' }, NEUTRAL_ARCADE]);
+    const lockedAt = { ...duel.players[0].pos };
+    while (remaining() > 0) duel.step([{ ...NEUTRAL_ARCADE, stick: { forward: 0, right: 1 }, shot: 'normal' }, NEUTRAL_ARCADE]);
+    expect(Math.hypot(duel.players[0].pos.x - lockedAt.x, duel.players[0].pos.z - lockedAt.z)).toBeLessThan(0.01);
+  });
+
+  it('placement manuel, bloqué : préparé tôt au filet, on fait encore le pas vers une chiquita sur le côté', () => {
+    const duel = new Duel(null);
+    duel.players[0].assist = 'off';
+    duel.players[0].prepMove = 'bloque';
+    const from = vec3(0.3, 0.6, 8.3);
+    duel.playSituation(1, [vec3(0.4, 0, -3.2), vec3(0.3, 0, 8.5)], { kind: 'normal', contact: from, target: vec3(0, 0.03, -5) });
+    const chiquita = solveShot('chiquita', from, aimTarget('chiquita', 1, { forward: 0, right: -1 }, false, duel.profile), false, duel.profile);
+    duel.ball!.vel = chiquita.vel;
+    duel.ball!.spin = chiquita.spin;
+    const me = duel.players[0];
+    let released = false;
+    let hit = false;
+    for (let i = 0; i < 3 / SIM_DT && duel.phase === 'rally' && !hit; i++) {
+      // Prépare dès 0,2 s, et va vers le point prévu (le plus proche de lui), puis relâche au moment prévu.
+      const plan = me.engagement?.plan;
+      const axis = (delta: number): number => (Math.abs(delta) < 0.08 ? 0 : Math.max(-1, Math.min(1, delta * 3)));
+      const right = plan ? axis((plan.stand.x - me.pos.x) * rightFor(me.side).x) : 0;
+      const forward = plan ? axis((plan.stand.z - me.pos.z) * forwardFor(me.side).z) : 0;
+      if (plan && plan.tick - duel.tick <= 2) released = true;
+      const press = i * SIM_DT >= 0.2 && !released;
+      duel.step([{ ...NEUTRAL_ARCADE, stick: { forward, right }, shot: press ? 'slice' : null }, NEUTRAL_ARCADE]);
+      hit = duel.shot?.player === 0;
+    }
+    expect(hit).toBe(true);
   });
 
   it('les IA ne sont pas concernées : le défaut reste libre', () => {

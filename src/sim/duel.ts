@@ -44,14 +44,15 @@ export type AssistLevel = 'magnet' | 'full' | 'partial' | 'off';
  *   petits pas d'ajustement (`PREP_MOVE.ralenti` de la vitesse) et sert surtout à viser ;
  * - `bloque` : comme Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser.
  * En placement manuel (`assist` `off`), il n'y a pas de course assistée : `ralenti` laisse de petits pas au stick,
- * `bloque` immobilise le joueur jusqu'au relâcher.
+ * `bloque` laisse le joueur se placer au stick et ne l'immobilise (le stick vise) que dans les `prepLock` dernières
+ * secondes avant l'impact : bloqué dès l'appui, il ratait les chiquitas qui demandent un pas de côté ou en avant.
  */
 export type PrepMove = 'libre' | 'ralenti' | 'bloque';
 export const PREP_MOVES: readonly PrepMove[] = ['libre', 'ralenti', 'bloque'];
 /** Part de la vitesse donnée par le stick pendant la préparation. */
 export const PREP_MOVE: Record<PrepMove, number> = { libre: 1, ralenti: 0.25, bloque: 0 };
 export const ASSIST_LEVELS: readonly AssistLevel[] = ['magnet', 'full', 'partial', 'off'];
-/** En mode aimant, le point d'impact est recalculé tous les ce nombre de pas, d'après la position du joueur. */
+/** En mode aimant et en placement manuel, le point d'impact est recalculé tous les ce nombre de pas, d'après la position du joueur. */
 const REPLAN_TICKS = 12;
 
 /**
@@ -761,11 +762,13 @@ export class Duel {
     const magnet = player.assist === 'magnet';
     if (engagement && this.isReceiving(index) && this.ball) {
       const plan = engagement.plan;
-      // Aimant : tant que l'impact n'est pas imminent, le point choisi suit le joueur qui court.
-      // Point hors d'atteinte (lob par-dessus un joueur au filet) : recalculé en chemin, tous modes.
+      // Aimant et placement manuel : tant que l'impact n'est pas imminent, le point choisi suit le joueur qui court
+      // (le plus proche de lui, pas le premier où la balle se joue). Point hors d'atteinte (lob par-dessus un joueur
+      // au filet) : recalculé en chemin, tous modes.
+      const follows = magnet || engagement.manual;
       const replan =
         plan !== null &&
-        (magnet || !plan.reachable) &&
+        (follows || !plan.reachable) &&
         engagement.releaseTick === null &&
         (plan.tick - this.tick) * SIM_DT > r.aimWindow &&
         (this.tick - engagement.pressTick) % REPLAN_TICKS === 0;
@@ -777,7 +780,7 @@ export class Duel {
             player.side,
             this.tick,
             this.profile,
-            magnet ? r.magnetNear : 0,
+            follows ? r.magnetNear : 0,
             this.bounces > 0,
             overhead,
             player.height,
@@ -820,7 +823,12 @@ export class Duel {
     // prévu, le stick ne fait plus que de petits pas (ou rien) et sert à viser.
     // En placement manuel, pas de course assistée : ralenti = petits pas au stick, bloqué = immobile.
     const preparing = engagement !== null && engagement.releaseTick === null;
-    const prepScale = preparing ? PREP_MOVE[player.prepMove] : 1;
+    let prepScale = preparing ? PREP_MOVE[player.prepMove] : 1;
+    // Placement manuel, bloqué : libre tant que l'impact prévu (le point le plus proche du joueur) n'est pas imminent.
+    if (preparing && engagement.manual && player.prepMove === 'bloque') {
+      const plan = this.isReceiving(index) ? engagement.plan : null;
+      if (!plan || (plan.tick - this.tick) * SIM_DT > r.prepLock) prepScale = 1;
+    }
     // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
     if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
       // Vitesse qui permet encore de s'arrêter pile sur le point ; pour sortir ou rentrer, par la porte.
