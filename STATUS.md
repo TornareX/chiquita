@@ -763,3 +763,7 @@ Retour de Xavier : au filet, face à une chiquita, il la ratait souvent quand il
   de lui, recalculé tous les 12 pas, comme l'aimant) au lieu du premier point jouable, souvent collé au filet.
   Résultat : 1 ratée sur 12, due au relâcher trop tardif du joueur simulé, pas au blocage. 486 tests OK (dont 2
   nouveaux dans `tests/sim/prepMove.test.ts`).
+
+Retour de Xavier après essai : moins facile, viser tôt au stick gauche le déplace. `bloque` redevient immobile dès
+l'appui (défaut) ; le blocage tardif devient une option à part, `tard` (« Bloqué au dernier moment », `?prepa=tard`).
+Le point d'impact qui suit le joueur en placement manuel reste.

@@ -42,15 +42,17 @@ export type AssistLevel = 'magnet' | 'full' | 'partial' | 'off';
  *   `magnetRadius` du point d'impact) ;
  * - `ralenti` : la course assistée mène le joueur au point d'impact dès qu'il est prévu, le stick n'ajoute que de
  *   petits pas d'ajustement (`PREP_MOVE.ralenti` de la vitesse) et sert surtout à viser ;
- * - `bloque` : comme Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser.
+ * - `bloque` : comme Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser ;
+ * - `tard` : comme `bloque` avec la course assistée.
  * En placement manuel (`assist` `off`), il n'y a pas de course assistée : `ralenti` laisse de petits pas au stick,
- * `bloque` laisse le joueur se placer au stick et ne l'immobilise (le stick vise) que dans les `prepLock` dernières
- * secondes avant l'impact : bloqué dès l'appui, il ratait les chiquitas qui demandent un pas de côté ou en avant.
+ * `bloque` immobilise le joueur jusqu'au relâcher, `tard` le laisse se placer au stick et ne l'immobilise (le stick
+ * vise) que dans les `prepLock` dernières secondes avant l'impact. `tard` aide sur les chiquitas, qui demandent un
+ * pas de côté ou en avant, mais viser tôt au stick déplace le joueur : Xavier préfère `bloque` (18/10).
  */
-export type PrepMove = 'libre' | 'ralenti' | 'bloque';
-export const PREP_MOVES: readonly PrepMove[] = ['libre', 'ralenti', 'bloque'];
+export type PrepMove = 'libre' | 'ralenti' | 'bloque' | 'tard';
+export const PREP_MOVES: readonly PrepMove[] = ['libre', 'ralenti', 'bloque', 'tard'];
 /** Part de la vitesse donnée par le stick pendant la préparation. */
-export const PREP_MOVE: Record<PrepMove, number> = { libre: 1, ralenti: 0.25, bloque: 0 };
+export const PREP_MOVE: Record<PrepMove, number> = { libre: 1, ralenti: 0.25, bloque: 0, tard: 0 };
 export const ASSIST_LEVELS: readonly AssistLevel[] = ['magnet', 'full', 'partial', 'off'];
 /** En mode aimant et en placement manuel, le point d'impact est recalculé tous les ce nombre de pas, d'après la position du joueur. */
 const REPLAN_TICKS = 12;
@@ -824,8 +826,9 @@ export class Duel {
     // En placement manuel, pas de course assistée : ralenti = petits pas au stick, bloqué = immobile.
     const preparing = engagement !== null && engagement.releaseTick === null;
     let prepScale = preparing ? PREP_MOVE[player.prepMove] : 1;
-    // Placement manuel, bloqué : libre tant que l'impact prévu (le point le plus proche du joueur) n'est pas imminent.
-    if (preparing && engagement.manual && player.prepMove === 'bloque') {
+    // Placement manuel, bloqué au dernier moment : libre tant que l'impact prévu (le point le plus proche du joueur)
+    // n'est pas imminent.
+    if (preparing && engagement.manual && player.prepMove === 'tard') {
       const plan = this.isReceiving(index) ? engagement.plan : null;
       if (!plan || (plan.tick - this.tick) * SIM_DT > r.prepLock) prepScale = 1;
     }

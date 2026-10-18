@@ -211,7 +211,7 @@ export interface RallyTuning {
    */
   aimWindow: number;
   /**
-   * Placement manuel, stick gauche bloqué pendant la préparation : le joueur ne s'immobilise (le stick vise)
+   * Placement manuel, stick gauche bloqué au dernier moment (`tard`) : le joueur ne s'immobilise (le stick vise)
    * qu'à moins de `prepLock` s de l'impact prévu ; avant, il se place au stick.
    */
   prepLock: number;

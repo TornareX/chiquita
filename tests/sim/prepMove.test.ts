@@ -71,7 +71,7 @@ describe('stick gauche pendant la préparation', () => {
     expect(play('bloque', { forward: 0, right: 1 }, 3.5).shot).toBeTruthy();
   });
 
-  it('placement manuel : bloqué laisse se placer, puis immobilise juste avant l’impact ; ralenti laisse de petits pas, libre court', () => {
+  it('placement manuel : bloqué immobilise, au dernier moment laisse se placer, ralenti laisse de petits pas, libre court', () => {
     const moved = (mode: PrepMove): number => {
       const duel = new Duel(null);
       duel.players[0].assist = 'off';
@@ -83,16 +83,17 @@ describe('stick gauche pendant la préparation', () => {
       const end = duel.players[0].pos;
       return Math.hypot(end.x - start.x, end.z - start.z);
     };
-    // L'impact est encore loin : bloqué se place comme libre.
-    expect(moved('bloque')).toBeGreaterThan(2);
+    expect(moved('bloque')).toBeLessThan(0.01);
+    // L'impact est encore loin : bloqué au dernier moment se place comme libre.
+    expect(moved('tard')).toBeGreaterThan(2);
     expect(moved('ralenti')).toBeGreaterThan(0.3);
     expect(moved('ralenti')).toBeLessThan(1);
     expect(moved('libre')).toBeGreaterThan(2);
 
-    // Dans les `prepLock` dernières secondes avant l'impact prévu, bloqué ne bouge plus : le stick vise.
+    // Dans les `prepLock` dernières secondes avant l'impact prévu, il ne bouge plus : le stick vise.
     const duel = new Duel(null);
     duel.players[0].assist = 'off';
-    duel.players[0].prepMove = 'bloque';
+    duel.players[0].prepMove = 'tard';
     duel.playSituation(1, [vec3(0, 0, -8.5), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.9, 8.5), target: vec3(0.9, 0.03, -6.8) });
     const remaining = (): number => {
       const plan = duel.players[0].engagement?.plan;
@@ -105,10 +106,10 @@ describe('stick gauche pendant la préparation', () => {
     expect(Math.hypot(duel.players[0].pos.x - lockedAt.x, duel.players[0].pos.z - lockedAt.z)).toBeLessThan(0.01);
   });
 
-  it('placement manuel, bloqué : préparé tôt au filet, on fait encore le pas vers une chiquita sur le côté', () => {
+  it('placement manuel, bloqué au dernier moment : préparé tôt au filet, on fait encore le pas vers une chiquita sur le côté', () => {
     const duel = new Duel(null);
     duel.players[0].assist = 'off';
-    duel.players[0].prepMove = 'bloque';
+    duel.players[0].prepMove = 'tard';
     const from = vec3(0.3, 0.6, 8.3);
     duel.playSituation(1, [vec3(0.4, 0, -3.2), vec3(0.3, 0, 8.5)], { kind: 'normal', contact: from, target: vec3(0, 0.03, -5) });
     const chiquita = solveShot('chiquita', from, aimTarget('chiquita', 1, { forward: 0, right: -1 }, false, duel.profile), false, duel.profile);
