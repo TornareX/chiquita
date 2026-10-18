@@ -705,3 +705,8 @@ tests navigateur (duel, double, stick, tutoriel, manette) OK. **À juger à la m
   bloquait pas). Le choix s'applique tout de suite, en pleine partie, pour comparer.
 - Recherche sur VT4 / Top Spin 4 : rien de net en ligne. Le manuel de VT4 dit que le stick règle la direction après
   l'appui ; une critique de Top Spin 4 reproche au stick gauche de faire à la fois le déplacement et la visée.
+- **Nouveaux défauts** (choix de Xavier après essai) : **placement manuel** et **préparation bloquée** pour les
+  joueurs humains. Une IA réglée en placement manuel garde l'aimant (elle ne sait pas se placer sans course
+  assistée) ; le tutoriel garde aussi la course assistée (ses leçons sont faites pour). Des réglages déjà enregistrés
+  dans le navigateur restent prioritaires. `tests/e2e/duel.spec.ts` passe `?assist=magnet&prepa=libre` : ses
+  manettes virtuelles ne se placent pas.

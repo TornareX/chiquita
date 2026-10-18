@@ -90,7 +90,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       return new Bot(i, i + 1, { ...AI_LEVELS[c], followPartner });
     });
     duel.players.forEach((player, i) => {
-      player.assist = s.assists[i]!;
+      // Une IA ne sait pas se placer seule sans course assistée : en placement manuel, elle garde l'aimant.
+      player.assist = s.players[i] !== 'humain' && s.assists[i] === 'off' ? 'magnet' : s.assists[i]!;
       // Les IA gardent le stick libre : le réglage ne change que le ressenti des humains.
       player.prepMove = s.players[i] === 'humain' ? s.prepMove : 'libre';
     });

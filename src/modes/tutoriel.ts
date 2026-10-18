@@ -66,7 +66,8 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   const feel = loadFeel();
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   duel.profile.rally.pressure.scale = settings.pressure;
-  duel.players[0].assist = settings.assists[0];
+  // Les leçons apprennent les coups : la course assistée place le joueur, même s'il joue en placement manuel en match.
+  duel.players[0].assist = settings.assists[0] === 'off' ? 'magnet' : settings.assists[0];
   duel.players[0].prepMove = settings.prepMove;
 
   const view = createDuelView(canvas, duel);

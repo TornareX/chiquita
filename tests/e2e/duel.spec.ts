@@ -8,7 +8,8 @@ import { expect, test } from '@playwright/test';
 test('deux manettes tiennent un échange de 10 coups', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/?boutons=1');
+  // Les manettes virtuelles ne se placent pas : course assistée, stick libre.
+  await page.goto('/?boutons=1&assist=magnet&prepa=libre');
   await page.waitForFunction(() => window.__duel !== undefined);
   await page.evaluate(() => {
     const { duel, Bot } = window.__duel!;

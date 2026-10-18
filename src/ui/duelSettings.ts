@@ -38,9 +38,11 @@ export interface DuelSettings {
 export const DEFAULT_SETTINGS: DuelSettings = {
   // En double, les partenaires sont des IA tant qu'on ne choisit pas d'autres manettes.
   players: ['humain', 'humain', 'normal', 'normal'],
-  assists: ['magnet', 'magnet', 'magnet', 'magnet'],
+  // Comme Xavier aime jouer : placement manuel, immobile pendant la préparation (le stick gauche vise). Les IA
+  // gardent l'aimant (voir `src/modes/duel.ts`).
+  assists: ['off', 'off', 'off', 'off'],
   pressure: 1,
-  prepMove: 'ralenti',
+  prepMove: 'bloque',
   sound: true,
   farOwnView: false,
   padStyle: 'auto',
