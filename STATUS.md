@@ -867,3 +867,9 @@ Plan et analyse : `research/rendu/POLISH_VISUEL.md`. Fait : banc d'essai du rend
 Neutral, lumières recalibrées, reflets d'environnement, repères de jeu à couleur exacte) ; `?rendu=simple`
 garde l'ancien. Typecheck OK ; tests unitaires OK (2 dépassements de délai sous charge, verts relancés seuls) ;
 e2e 29/30 en un seul worker (le 30e : fichier de capture verrouillé par Windows). **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
+
+## Polish visuel V2 : ombres portées (18/10/2026, non commité)
+
+Le projecteur du terrain porte les ombres des joueurs, raquettes, poteaux et du filet (`?ombres=0` pour les
+couper ; absentes en `?rendu=simple` et en rendu logiciel). 60 i/s sur RTX 4070. Typecheck OK, 537 tests unitaires
+OK, e2e 29/30 en un seul worker (le 30e : capture PNG verrouillée par Windows). **Validé par Xavier en jeu.**

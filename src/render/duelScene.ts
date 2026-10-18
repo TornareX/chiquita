@@ -9,7 +9,7 @@ import { createEffectsView, effectsEnabled } from './effectsView';
 import { arenaEnabled, createArena } from './arena';
 import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig } from './character';
-import { applyLook, exactColor, renderLook } from './look';
+import { applyLook, enableShadows, exactColor, renderLook, setShadows } from './look';
 import { loadModel, modelsEnabled } from './models';
 import type { RenderInfo } from '../ui/perfMeter';
 import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
@@ -35,6 +35,11 @@ const SUN_COLOR = 0xfff6ec;
 const SUN_INTENSITY = 1.1;
 const SPOT_COLOR = 0xfff6ea;
 const SPOT_INTENSITY = 3.0;
+
+/** Avec les ombres portées : parts de lumière (facteurs) du projecteur, du soleil et de l'ambiance. [à calibrer] */
+const SHADOW_LIGHT_SHIFT = { spot: 1.35, sun: 0.45, hemi: 0.85 };
+/** Opacité du disque sous les pieds quand les ombres portées sont actives. [à calibrer] */
+const CONTACT_SHADOW_OPACITY = 0.18;
 
 /** Anneau de timing : couleur de la balle à venir (`pressure.ts`). */
 const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23f, rouge: 0xff4436 };
@@ -106,6 +111,8 @@ function clipNearWall(court: THREE.Object3D): void {
 
 interface PlayerView {
   object: THREE.Group;
+  /** Disque sombre sous les pieds ; avec les ombres portées, il ne reste qu'un léger contact. */
+  contactShadow: THREE.MeshBasicMaterial;
   /** Personnage cartoon et son état d'animation, propre au rendu. */
   rig: CharacterRig;
   anim: {
@@ -183,10 +190,8 @@ const WALL_STRIKE = 0.45;
 function createPlayerView(color: number, index: number, height: number): PlayerView {
   const object = new THREE.Group();
   const rig = createCharacter(CHARACTERS[index % CHARACTERS.length]!, color, height);
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.36, 24),
-    exactColor(new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false })),
-  );
+  const contactShadow = exactColor(new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.36, 24), contactShadow);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.006;
 
@@ -204,7 +209,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
   const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null, turn: 0 };
-  return { object, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
+  return { object, contactShadow, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
 }
 
 /** Agrandissement à appliquer à un objet de diamètre `size` à cette position pour le voir à `BALL_MIN_SCREEN`. */
@@ -300,6 +305,8 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   scene.background = new THREE.Color(arena ? 0x07090d : 0x1b2733);
   // Le haut des tribunes se perd dans la pénombre ; le terrain (à moins de 42 m de la caméra) n'est pas touché.
   if (arena) scene.fog = new THREE.Fog(0x07090d, 46, 95);
+  /** Lumière qui porte les ombres : le projecteur du terrain, ou le soleil sans l'arène. */
+  let shadowLight: THREE.SpotLight | THREE.DirectionalLight | null = null;
   if (arena) {
     scene.add(arena.object);
     if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__arena = arena;
@@ -309,17 +316,28 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     spot.position.set(0, 20, 0);
     spot.target.position.set(0, 0, 0);
     scene.add(spot, spot.target);
+    shadowLight = spot;
   }
   // Ciel et sol de l'ambiance : en rendu soigné, côté éclairé chaud et côté ombre froid (ombrage de Gooch, comme
   // Team Fortress 2), au lieu d'ombres grises.
-  scene.add(soigne ? new THREE.HemisphereLight(SKY_COLOR, GROUND_COLOR, HEMI_INTENSITY) : new THREE.HemisphereLight(0xffffff, 0x3a4450, 2.2));
+  const hemisphere = soigne ? new THREE.HemisphereLight(SKY_COLOR, GROUND_COLOR, HEMI_INTENSITY) : new THREE.HemisphereLight(0xffffff, 0x3a4450, 2.2);
+  scene.add(hemisphere);
   const sun = new THREE.DirectionalLight(soigne ? SUN_COLOR : 0xffffff, soigne ? SUN_INTENSITY : 1.2);
   sun.position.set(6, 12, -4);
   scene.add(sun);
+  const shadows = enableShadows(renderer, shadowLight ?? sun, look);
+  // Une ombre n'assombrit que la lumière qui la porte : le projecteur prend une part de celle du soleil et de
+  // l'ambiance, sinon les ombres restent pâles.
+  if (shadows && shadowLight) {
+    shadowLight.intensity = SPOT_INTENSITY * SHADOW_LIGHT_SHIFT.spot;
+    sun.intensity = SUN_INTENSITY * SHADOW_LIGHT_SHIFT.sun;
+    hemisphere.intensity = HEMI_INTENSITY * SHADOW_LIGHT_SHIFT.hemi;
+  }
 
   const court = createCourt();
   scene.add(court.object);
   clipNearWall(court.object);
+  if (shadows) setShadows(court.object, true);
   const ball = createBallView();
   scene.add(ball.object);
   // Effets de balle et de vitre (étape E3), coupés par `?effets=0`.
@@ -332,6 +350,11 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     while (players.length < duel.players.length) {
       const i = players.length;
       const view = createPlayerView(i < 2 ? TEAM_COLORS[i]! : PARTNER_COLORS[i - 2]!, i, duel.players[i]!.height);
+      // Ombre portée : le disque sous les pieds s'efface, il ne reste qu'un léger contact.
+      if (shadows) {
+        setShadows(view.rig.object, false);
+        view.contactShadow.opacity = CONTACT_SHADOW_OPACITY;
+      }
       scene.add(view.object, view.standMarker, view.bubble);
       players.push(view);
     }
@@ -369,6 +392,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       if (courtModel) {
         court.setModel(courtModel, false);
         clipNearWall(court.object);
+        if (shadows) setShadows(court.object, true);
       }
       if (ballModel) ball.setModel(ballModel);
       canvas.dataset.models = courtModel && ballModel ? 'loaded' : 'partial';

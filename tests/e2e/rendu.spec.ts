@@ -19,8 +19,9 @@ const env = (globalThis as { process?: { env: Record<string, string | undefined>
 const VARIANTS: [string, string][] = env.RENDU_LABEL ? [[env.RENDU_LABEL, env.RENDU_QUERY ? `&${env.RENDU_QUERY}` : '']] : [['simple', '&rendu=simple'], ['soigne', '']];
 const DIR = 'screenshots/rendu';
 /** `RENDU_SCENE=jeu` : une seule scène, pour régler vite. */
-// `RENDU_GPU=1` : Chromium sur la vraie carte graphique (sinon rendu logiciel, temps par image sans valeur).
-if (env.RENDU_GPU) test.use({ launchOptions: { args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] } });
+// Chromium sur la vraie carte graphique : en rendu logiciel, ombres et reflets sont coupés (`look.ts`) et le temps
+// par image ne vaut rien. `RENDU_LOGICIEL=1` pour voir ce rendu de secours. Sans carte, Chromium y retombe seul.
+if (!env.RENDU_LOGICIEL) test.use({ launchOptions: { args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] } });
 const SCENES = ALL_SCENES.filter((scene) => !env.RENDU_SCENE || scene.name === env.RENDU_SCENE);
 
 async function frozenScene(page: Page, query: string): Promise<void> {

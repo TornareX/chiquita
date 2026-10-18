@@ -199,8 +199,8 @@ manette pour vérifier que la lecture de la balle n'a pas souffert.
   soigné, en couleur et en niveaux de gris, dans `screenshots/rendu/` ; planches `comparaison-*.png`
   (en haut simple | soigné, en bas les mêmes en gris). `jeu-avant*.png` : le rendu d'avant tout changement.
 - Mesure : `window.__perf` en debug, `?perf` l'affiche à l'écran (i/s, ms, appels de dessin, triangles).
-  `RENDU_GPU=1` lance le Chromium des tests sur la vraie carte graphique ; sans, il rend en logiciel et
-  ses temps ne valent que pour comparer entre eux. `RENDU_LABEL`, `RENDU_QUERY`, `RENDU_SCENE` pour régler vite.
+  Le banc lance Chromium sur la vraie carte graphique ; `RENDU_LOGICIEL=1` force le rendu logiciel (sans
+  ombres ni reflets, voir plus bas). `RENDU_LABEL`, `RENDU_QUERY`, `RENDU_SCENE` pour régler vite.
 
 ```bash
 npx playwright test tests/e2e/rendu.spec.ts
@@ -223,6 +223,21 @@ npx playwright test tests/e2e/rendu.spec.ts
 - Le hit-stop existe déjà (40 ms sur frappe parfaite, `modes/duel.ts`) : V7 n'a qu'à le régler.
 
 **V1 validé en jeu par Xavier** (comparé à `?rendu=simple`). Suite : V2 (ombres portées), puis V3 (matière du sol).
+
+**V2 — ombres portées** (18/10/2026, non commité ; `enableShadows` / `setShadows` dans `look.ts`) :
+- Le projecteur du terrain porte les ombres (le soleil sans l'arène) ; carte 2048, cône limité au terrain,
+  `PCFShadowMap` avec un rayon de 3 (`PCFSoftShadowMap` n'existe plus dans three 0.186).
+- Portent : volumes opaques (joueurs sans leur contour, raquettes, poteaux, bande du filet, structure).
+  Ne portent pas : vitres, grillage, toile du filet, balle (son disque reste l'aide de jeu).
+- Une ombre n'assombrit que la lumière qui la porte : avec les ombres, le projecteur passe à ×1,35, le soleil
+  à ×0,45 et l'ambiance à ×0,85, sinon elles restaient pâles. Le disque sous les pieds descend à 0,18.
+- Coupées en `?rendu=simple`, en rendu logiciel et par `?ombres=0`.
+- Coût : RTX 4070, 60 i/s tenus ; +48 appels de dessin (passe d'ombre) en simple, +95 en double. Pas mesuré
+  sur une petite carte graphique.
+- Constat : net en double et de près (`comparaison-v2-*.png` : V1 à gauche, V2 à droite) ; discret dans la
+  vue de jeu, parce que le projecteur est presque vertical et que l'ombre tombe sous le joueur.
+
+**V2 validé en jeu par Xavier** (comparé à `?ombres=0`). Suite : V3 (matière du sol).
 
 ## 5. Risques
 
