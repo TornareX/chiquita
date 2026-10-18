@@ -89,7 +89,11 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const followPartner = partner !== null && s.players[partner] === 'humain';
       return new Bot(i, i + 1, { ...AI_LEVELS[c], followPartner });
     });
-    duel.players.forEach((player, i) => (player.assist = s.assists[i]!));
+    duel.players.forEach((player, i) => {
+      player.assist = s.assists[i]!;
+      // Les IA gardent le stick libre : le réglage ne change que le ressenti des humains.
+      player.prepMove = s.players[i] === 'humain' ? s.prepMove : 'libre';
+    });
     duel.profile.rally.pressure.scale = s.pressure;
   };
   apply(settings, false);

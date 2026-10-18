@@ -22,7 +22,7 @@ import {
   type ShotTuningKey,
 } from './shots';
 import { ballPressure, shotError } from './pressure';
-import { addScaled, length, vec3, type Vec3 } from './vec3';
+import { add, addScaled, length, vec3, type Vec3 } from './vec3';
 import { DOOR_MID, inCourt, moveWithin, outsideCourt, pathDistance, waypoint } from './walkable';
 
 /**
@@ -35,6 +35,20 @@ import { DOOR_MID, inCourt, moveWithin, outsideCourt, pathDistance, waypoint } f
  * - `off` : le joueur se place toujours lui-même ; la frappe part dès que la balle est à portée.
  */
 export type AssistLevel = 'magnet' | 'full' | 'partial' | 'off';
+
+/**
+ * Stick gauche pendant la préparation (de l'appui au relâcher), réglable par joueur pour comparer à la manette :
+ * - `libre` : il déplace le joueur comme d'habitude (avec l'aimant, la course assistée ne prend la main qu'à
+ *   `magnetRadius` du point d'impact) ;
+ * - `ralenti` : la course assistée mène le joueur au point d'impact dès qu'il est prévu, le stick n'ajoute que de
+ *   petits pas d'ajustement (`PREP_MOVE.ralenti` de la vitesse) et sert surtout à viser ;
+ * - `bloque` : comme Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser.
+ * Le placement manuel (`assist` `off`) n'est pas concerné.
+ */
+export type PrepMove = 'libre' | 'ralenti' | 'bloque';
+export const PREP_MOVES: readonly PrepMove[] = ['libre', 'ralenti', 'bloque'];
+/** Part de la vitesse donnée par le stick pendant la préparation. */
+export const PREP_MOVE: Record<PrepMove, number> = { libre: 1, ralenti: 0.25, bloque: 0 };
 export const ASSIST_LEVELS: readonly AssistLevel[] = ['magnet', 'full', 'partial', 'off'];
 /** En mode aimant, le point d'impact est recalculé tous les ce nombre de pas, d'après la position du joueur. */
 const REPLAN_TICKS = 12;
@@ -110,6 +124,8 @@ export interface DuelPlayer {
   /** Taille du joueur (m) : la bandeja et la víbora se frappent légèrement au-dessus de sa tête. */
   height: number;
   assist: AssistLevel;
+  /** Stick gauche pendant la préparation (`PrepMove`) ; les IA restent en `libre`. */
+  prepMove: PrepMove;
 }
 
 export interface DuelShot {
@@ -331,6 +347,7 @@ function createDuelPlayer(index: number, format: DuelFormat): DuelPlayer {
     lastWhiffLate: false,
     height: PLAYER_HEIGHT,
     assist: 'magnet',
+    prepMove: 'libre',
   };
 }
 
@@ -433,6 +450,7 @@ export class Duel {
         const previous = old[i] ?? old[teamOf(i)];
         if (previous) {
           player.assist = previous.assist;
+          player.prepMove = previous.prepMove;
           player.height = previous.height;
         }
         return player;
@@ -795,8 +813,12 @@ export class Duel {
     const t = this.profile.player;
     const target = engagement?.plan?.stand;
     const gap = target ? pathDistance(player.pos, target, player.side) : 0;
+    // Préparation en cours, stick gauche ralenti ou bloqué : la course assistée mène au point d'impact dès qu'il est
+    // prévu, le stick ne fait plus que de petits pas (ou rien) et sert à viser.
+    const preparing = engagement !== null && engagement.releaseTick === null && player.assist !== 'off';
+    const prepScale = preparing ? PREP_MOVE[player.prepMove] : 1;
     // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
-    if (engagement && !engagement.manual && (!magnet || (target && gap <= r.magnetRadius))) {
+    if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
       // Vitesse qui permet encore de s'arrêter pile sur le point ; pour sortir ou rentrer, par la porte.
       const speed = Math.min(t.maxSpeed, Math.sqrt(2 * t.deceleration * gap));
       const next = target ? waypoint(player.pos, target, player.side) : null;
@@ -805,19 +827,9 @@ export class Duel {
         next && leg > 1e-3
           ? vec3(((next.x - player.pos.x) / leg) * speed, 0, ((next.z - player.pos.z) / leg) * speed)
           : vec3(0, 0, 0);
+      if (prepScale > 0 && prepScale < 1) desired = add(desired, this.stickVelocity(player, cmd.stick, prepScale));
     } else {
-      let { forward, right } = cmd.stick;
-      const magnitude = Math.sqrt(forward * forward + right * right);
-      if (magnitude > 1) {
-        forward /= magnitude;
-        right /= magnitude;
-      }
-      desired = addScaled(
-        addScaled(vec3(0, 0, 0), forwardFor(player.side), forward * t.maxSpeed),
-        rightFor(player.side),
-        right * t.maxSpeed,
-      );
-      desired = this.towardDoor(player, desired);
+      desired = this.towardDoor(player, this.stickVelocity(player, cmd.stick, prepScale));
     }
 
     // Inertie : la vitesse se rapproche de la cible à accélération bornée.
@@ -839,6 +851,18 @@ export class Duel {
    * Aide à franchir la porte au stick : contre le mur latéral, près de la porte, pousser vers le mur
    * (pour sortir) ou vers le terrain (pour rentrer) fait glisser le joueur jusqu'à l'embrasure.
    */
+
+  /** Vitesse voulue au stick gauche, à `scale` de la vitesse de course (normée : la diagonale ne va pas plus vite). */
+  private stickVelocity(player: DuelPlayer, stick: ArcadeCommands['stick'], scale: number): Vec3 {
+    let { forward, right } = stick;
+    const magnitude = Math.sqrt(forward * forward + right * right);
+    if (magnitude > 1) {
+      forward /= magnitude;
+      right /= magnitude;
+    }
+    const speed = this.profile.player.maxSpeed * scale;
+    return addScaled(addScaled(vec3(0, 0, 0), forwardFor(player.side), forward * speed), rightFor(player.side), right * speed);
+  }
   private towardDoor(player: DuelPlayer, desired: Vec3): Vec3 {
     const { pos, side } = player;
     const radius = this.profile.player.radius;

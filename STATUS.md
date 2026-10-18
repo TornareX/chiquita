@@ -684,3 +684,23 @@ Arène : « très bien », rien à changer. 476 tests OK, typecheck OK, tests na
 - **Voix de l'arbitre retirée** (annonce du score) ; le « ¡Vamos! » du gagnant d'un grand point reste (`?voix=0`).
 - **Bulles « ¡Mía! / ¡Tuya! » masquées** pour l'instant (trop grosses, elles gênaient) ; `?bulles=1` les remet.
   Les annonces existent toujours dans la simulation et l'IA s'en sert.
+
+## Gameplay : stick gauche pendant la préparation (18/10/2026, branche `feat/deplacement-preparation`)
+
+Retour de Xavier, premier point de gameplay : on se place sous la balle, on prépare, et pousser le stick gauche pour
+viser fait bouger le joueur. 480 tests OK (dont `tests/sim/prepMove.test.ts`), typecheck OK, joueur automatique OK,
+tests navigateur (duel, double, stick, tutoriel, manette) OK. **À juger à la manette : c'est l'objet du réglage.**
+
+- **Cause trouvée** : avec l'aimant, tant que la course assistée n'a pas de point d'impact (balle pas encore renvoyée,
+  ou à peine), ou qu'elle en est à plus de 1,5 m, le stick déplace le joueur à pleine vitesse, même en préparant.
+  Mesuré : 3,7 m parcourus en « visant » pendant que l'adversaire renvoie.
+- **Nouveau réglage** `DuelPlayer.prepMove` (`PrepMove`), par joueur humain (les IA restent en `libre`, rien ne
+  change pour elles) : menu Réglages → Jeu → « Stick gauche pendant la préparation », ou `?prepa=` :
+  - `libre` : comme avant ;
+  - `ralenti` (**par défaut**) : dès qu'un point d'impact est prévu, la course assistée y mène ; le stick n'ajoute que
+    de petits pas (25 % de la vitesse) et sert à viser ; mesuré : < 1,2 m parcourus dans le même cas ;
+  - `bloque` : façon Virtua Tennis, la course assistée seule déplace le joueur, le stick ne fait que viser.
+  Le placement manuel (assistance « Placement manuel ») n'est pas concerné. Le choix s'applique tout de suite, en
+  pleine partie, pour comparer.
+- Recherche sur VT4 / Top Spin 4 : rien de net en ligne. Le manuel de VT4 dit que le stick règle la direction après
+  l'appui ; une critique de Top Spin 4 reproche au stick gauche de faire à la fois le déplacement et la visée.

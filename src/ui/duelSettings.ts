@@ -1,6 +1,6 @@
 import { PAD_FAMILY_NAMES, PAD_STYLES, type PadStyle } from '../input/padStyle';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
-import { ASSIST_LEVELS, type AssistLevel } from '../sim/duel';
+import { ASSIST_LEVELS, PREP_MOVES, type AssistLevel, type PrepMove } from '../sim/duel';
 import { DEFAULT_RULES } from '../sim/score';
 
 /** Qui joue un côté : un humain (manette ou clavier), ou l'IA à un niveau. */
@@ -23,6 +23,8 @@ export interface DuelSettings {
   assists: [AssistLevel, AssistLevel, AssistLevel, AssistLevel];
   /** Pression des balles (vertes, jaunes, rouges) : 0 = sans, 1 = normale, 1,5 = forte. */
   pressure: number;
+  /** Stick gauche pendant la préparation, pour les joueurs humains (`PrepMove`). */
+  prepMove: PrepMove;
   sound: boolean;
   /** Le joueur d'en face voit les directions de son côté plutôt que celles de l'écran. */
   farOwnView: boolean;
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: DuelSettings = {
   players: ['humain', 'humain', 'normal', 'normal'],
   assists: ['magnet', 'magnet', 'magnet', 'magnet'],
   pressure: 1,
+  prepMove: 'ralenti',
   sound: true,
   farOwnView: false,
   padStyle: 'auto',
@@ -63,6 +66,12 @@ const ASSIST_LABELS: Record<AssistLevel, string> = {
 
 const CONTROLLERS: readonly Controller[] = ['humain', ...AI_LEVEL_NAMES];
 
+const PREP_MOVE_LABELS: Record<PrepMove, string> = {
+  libre: 'Libre (le stick déplace)',
+  ralenti: 'Ralenti (petits pas, vise)',
+  bloque: 'Bloqué (le stick vise)',
+};
+
 /**
  * Nom de chaque joueur. En simple : Bleu et Rouge. En double : les joueurs 0 et 1 jouent à droite (drive),
  * les 2 et 3 à gauche (revés), dans l'équipe bleue (0, 2) ou rouge (1, 3).
@@ -86,6 +95,7 @@ function sanitize(raw: unknown): DuelSettings {
     if (i < 4 && ASSIST_LEVELS.includes(a)) s.assists[i] = a;
   });
   if (typeof r.pressure === 'number' && r.pressure >= 0 && r.pressure <= 2) s.pressure = r.pressure;
+  if (PREP_MOVES.includes(r.prepMove as PrepMove)) s.prepMove = r.prepMove as PrepMove;
   if (typeof r.sound === 'boolean') s.sound = r.sound;
   if (typeof r.farOwnView === 'boolean') s.farOwnView = r.farOwnView;
   if (PAD_STYLES.includes(r.padStyle as PadStyle)) s.padStyle = r.padStyle as PadStyle;
@@ -136,6 +146,8 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
   const pressure = Number(params.get('pression'));
   if (params.has('pression') && Number.isFinite(pressure) && pressure >= 0) s.pressure = pressure;
   if (params.get('far') === 'own') s.farOwnView = true;
+  const prep = params.get('prepa');
+  if (PREP_MOVES.includes(prep as PrepMove)) s.prepMove = prep as PrepMove;
   const style = params.get('manette');
   if (PAD_STYLES.includes(style as PadStyle)) s.padStyle = style as PadStyle;
   if (params.has('entrees')) s.inputDisplay = params.get('entrees') !== '0';
@@ -294,6 +306,14 @@ export function createSettingsMenu(
   pressureRow.className = 'slider';
   pressureRow.append(pressure, pressureValue);
   row(game, 'Pression des balles (vertes, jaunes, rouges)', pressureRow);
+  row(
+    game,
+    'Stick gauche pendant la préparation',
+    select(PREP_MOVES, (m) => PREP_MOVE_LABELS[m], settings.prepMove, (m) => {
+      settings.prepMove = m;
+      changed();
+    }),
+  );
   row(
     game,
     'Son',

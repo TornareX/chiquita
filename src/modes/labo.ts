@@ -34,6 +34,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   const settings = loadSettings(new URLSearchParams());
   duel.profile.rally.pressure.scale = settings.pressure;
   duel.players[0].assist = settings.assists[0];
+  duel.players[0].prepMove = settings.prepMove;
 
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();

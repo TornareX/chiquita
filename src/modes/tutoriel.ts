@@ -67,6 +67,7 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   duel.profile.rally.pressure.scale = settings.pressure;
   duel.players[0].assist = settings.assists[0];
+  duel.players[0].prepMove = settings.prepMove;
 
   const view = createDuelView(canvas, duel);
   const keyboard = createKeyboardPads();
