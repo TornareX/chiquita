@@ -227,22 +227,21 @@ describe('au-dessus de la tête', () => {
     expect(stickShotOf(head)).toBe('voleeCoupee');
   });
 
-  it('seuil par défaut aux yeux : la défense remise à plat, entre épaules et yeux, se joue de volée', () => {
-    expect(new Duel(null).highFloor).toBe('yeux');
+  it('seuil aux yeux : la défense remise à plat, entre épaules et yeux, se joue de volée', () => {
     // Coup droit de défense frappé du fond sous un peu de pression : il arrive au volleyeur vers 1,5 m.
     const defence = (duel: Duel): void =>
       duel.playSituation(1, [vec3(0, 0, -2.8), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.5, 8.5), target: vec3(0.8, 0.03, -8.8), error: 0.4 });
     const shoulders = rally(defence, { prepared: true, end: 'straight' }, 'epaules')!;
     expect(shoulders.contact.y).toBeGreaterThan(ARCADE.rally.overheadLow);
     expect(shoulders.overhead).not.toBeNull();
-    const eyes = rally(defence, { prepared: true, end: 'straight' }, new Duel(null).highFloor)!;
+    const eyes = rally(defence, { prepared: true, end: 'straight' }, 'yeux')!;
     expect(eyes.volley).toBe(true);
     expect(eyes.overhead).toBeNull();
     // Un lob, lui, reste un coup haut.
     expect(rally(lobOn(vec3(0.3, 0, -3.5)), { prepared: false }, 'yeux')?.overhead).toBe('bandeja');
   });
 
-  it('seuil « lob » : coup haut seulement sur un lob ; la même balle flottante haute se joue de volée', () => {
+  it('seuil « lob » : coup haut seulement sur un lob ; la même défense coupée haute (~11 m/s) se joue de volée', () => {
     const floaty = (duel: Duel): void =>
       duel.playSituation(1, [vec3(0, 0, -2.5), vec3(0, 0, 8.5)], { kind: 'slice', contact: vec3(0, 1, 8.5), target: vec3(0.8, 0.03, -5), error: 0.5 });
     // Aux épaules, cette balle se smashe ; ici, la course assistée la prend de volée, à hauteur de volée.
@@ -255,6 +254,22 @@ describe('au-dessus de la tête', () => {
     expect(rally(lob, { prepared: false }, 'lob')?.overhead).toBe('bandeja');
     expect(rally(lob, { prepared: true, end: 'straight' }, 'lob')?.overhead).toBe('remate');
     expect(rally(lob, { prepared: true, end: 'arc' }, 'lob')?.overhead).toBe('vibora');
+  });
+
+  it('seuil « lob » par défaut : la balle flottante (lente) au filet se smashe, la défense rapide se volleye', () => {
+    expect(new Duel(null).highFloor).toBe('lob');
+    // Balle qui flotte au-dessus du filet, à ~3,5 m/s : un smash, pas une volée qu'on ne peut pas atteindre.
+    const floater = (duel: Duel): void => {
+      duel.playSituation(1, [vec3(0.4, 0, -3), vec3(0, 0, 6)], { kind: 'normal', contact: vec3(0, 1, 6), target: vec3(0.5, 0.03, -3) });
+      duel.ball!.pos = vec3(0.3, 2.6, 1);
+      duel.ball!.vel = vec3(0, 2, -3.5);
+    };
+    expect(rally(floater, { prepared: true, end: 'straight' }, 'lob')?.overhead).toBe('remate');
+    const defence = (duel: Duel): void =>
+      duel.playSituation(1, [vec3(0, 0, -2.8), vec3(0, 0, 8.5)], { kind: 'normal', contact: vec3(0, 0.5, 8.5), target: vec3(0.8, 0.03, -8.8), error: 0.4 });
+    const volley = rally(defence, { prepared: true, end: 'straight' }, 'lob')!;
+    expect(volley.volley).toBe(true);
+    expect(volley.overhead).toBeNull();
   });
 });
 

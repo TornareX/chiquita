@@ -228,8 +228,19 @@ export interface RallyTuning {
   /** Le remate ne se joue qu'à moins de cette distance du filet, sur une balle au moins à `remateLow` (m) ; sinon, bandeja. */
   remateZone: number;
   remateLow: number;
+  /**
+   * Seuil `lob` des coups hauts : une balle plus lente que ça à l'horizontale (m/s) est flottante et se smashe
+   * comme un lob ; plus rapide (défense à plat, ~14 m/s), elle se volleye.
+   */
+  floatSpeed: number;
   /** Remate parfait : profondeur visée, courte, pour que la balle rebondisse haut et sorte du terrain (m). */
   remateKillDepth: number;
+  /**
+   * Remate parfait claqué à moins de `remateNearZone` m du filet (balle flottante) : plus court encore, à
+   * `remateKillNear` m, il rebondit assez haut pour sortir par le fond (por cuatro) ou le côté.
+   */
+  remateNearZone: number;
+  remateKillNear: number;
   /**
    * Écart latéral de la cible d'un remate au stick à fond : parfait (l'angle qui le fait sortir par le
    * côté), puis non parfait (il reste plus près de l'axe et revient de la vitre) ; et de la víbora (m).
@@ -504,6 +515,9 @@ export const REALISTIC: PhysicsProfile = {
     remateZone: 5, // un lob tombé avant la ligne de service (6,95 m) passe à 2,55 m vers 4,9 m du filet : remate
     remateLow: 2.2,
     remateKillDepth: 3,
+    remateNearZone: 1.8,
+    remateKillNear: 2.2, // à 3 m, claquée près du filet, elle ne sortait jamais [à calibrer en jouant]
+    floatSpeed: 8, // lob ~8 m/s, balle flottante au filet 3 à 5, défense à plat 14 à 15 [à calibrer en jouant]
     remateWidth: 3.2,
     remateWidthLoose: 1.1,
     viboraLateral: 4.3,

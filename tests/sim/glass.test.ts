@@ -81,8 +81,9 @@ describe('jeu par les vitres', () => {
     expect(perPoint).toBeLessThan(14);
     expect(s.winners / s.points).toBeGreaterThan(0.15);
     expect(s.winners / s.points).toBeLessThan(0.6);
-    // Le joueur choisit : au fond, la plupart des balles se jouent quand même après la vitre.
-    expect(s.afterGlass / s.backShots).toBeGreaterThan(0.6);
+    // Le joueur choisit : au fond, la plupart des balles se jouent quand même après la vitre (~0,6 ; 0,58 depuis
+    // les coups hauts réservés au lob et à la balle flottante, 18/10).
+    expect(s.afterGlass / s.backShots).toBeGreaterThan(0.55);
     expect(s.volleys).toBeGreaterThan(s.points);
   }, 30000);
 

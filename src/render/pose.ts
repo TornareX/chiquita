@@ -317,15 +317,14 @@ export function lowFamily(side: 'fore' | 'back', volley: boolean): SwingFamily {
 /**
  * La préparation en cours vise-t-elle un coup au-dessus de la tête ? Même règle que la simulation : la hauteur du
  * point d'impact prévu face au seuil des coups hauts (`Duel.swingFloor` au stick, au moins les yeux après un
- * rebond ; les épaules pour B aux boutons). Au stick, la commande est toujours celle d'un coup haut : seule la
+ * rebond ; `Duel.buttonFloor` pour B aux boutons). Au stick, la commande est toujours celle d'un coup haut : seule la
  * hauteur décide. Sans point prévu, coup au sol.
  */
 export function plansHighShot(duel: Duel, player: DuelPlayer, engagement: Engagement): boolean {
   const plan = engagement.plan;
   if (!plan) return false;
   const floor = duel.swingFloor(player.height);
-  // `swingFloor` infini : seuil `lob`, pas de coup haut sur cette balle, aux boutons non plus.
-  if (!engagement.swing) return engagement.kind === 'overhead' && floor !== Infinity && plan.contact.y >= duel.profile.rally.overheadLow;
+  if (!engagement.swing) return engagement.kind === 'overhead' && plan.contact.y >= duel.buttonFloor();
   return plan.contact.y >= (plan.volley ? floor : Math.max(floor, bandejaHeight(duel.profile, player.height) - 0.02));
 }
 

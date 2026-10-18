@@ -75,11 +75,12 @@ export interface Engagement {
 }
 
 /**
- * Seuil des coups au-dessus de la tête au stick droit : les yeux (par défaut), les épaules ou le dessus de la
+ * Seuil des coups au-dessus de la tête au stick droit : les yeux, les épaules ou le dessus de la
  * tête. Au-dessus, bandeja, víbora, smash ou feinte ; en dessous, volée (haute entre les épaules et les yeux) ou
  * coup au sol. Aux yeux, la défense remise à plat se volleye et le coup haut reste pour le lob, comme chez les pros.
- * `lob` (à l'essai) : coups hauts aux épaules, mais seulement sur une balle qui vient d'un lob ; toute autre
- * balle se joue de volée ou au sol, aux boutons comme au stick, IA comprise.
+ * `lob` (par défaut, choix de Xavier) : coups hauts aux épaules sur un lob ou une balle flottante (lente) ; toute
+ * autre balle se joue de volée ou au sol, sauf trop haute pour la volée : elle se smashe.
+ * Aux boutons comme au stick, IA comprise.
  */
 export type HighFloor = 'epaules' | 'yeux' | 'tete' | 'lob';
 
@@ -365,7 +366,7 @@ export class Duel {
   /** Joueurs : 2 en simple, 4 en double. Le joueur `i` est dans l'équipe `i % 2` (`teamOf`). */
   players: [DuelPlayer, DuelPlayer, ...DuelPlayer[]] = [] as unknown as [DuelPlayer, DuelPlayer];
   /** Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`). */
-  highFloor: HighFloor = 'yeux';
+  highFloor: HighFloor = 'lob';
   ball: Ball | null = null;
   prevBallPos: Vec3 | null = null;
   readonly contacts: Contact[] = [];
@@ -994,7 +995,7 @@ export class Duel {
       const clean = byHeight ? heightOff === 0 && miss <= r.sweetSpot : perfect;
       // Smash au stick joué loin du filet : il ne sort pas du terrain (pas de por tres), l'adversaire peut contrer.
       const far = variant === 'remate' && Math.abs(ball.pos.z) > r.remateZone;
-      let aimed = overheadTarget(variant, player.side, player.stick, clean && !far, this.profile, ball.pos.x);
+      let aimed = overheadTarget(variant, player.side, player.stick, clean && !far, this.profile, ball.pos.x, Math.abs(ball.pos.z));
       if (heightOff > 0) {
         const depth = Math.min(HALF_LENGTH_SAFE, Math.abs(aimed.z) + heightOff * r.overheadHighDepth);
         aimed = vec3(aimed.x, aimed.y, -player.side * depth);
@@ -1044,19 +1045,33 @@ export class Duel {
   /**
    * Seuil des coups au-dessus de la tête au stick droit (`?coupshauts=`), pour un joueur de cette taille (m).
    * `yeux` : le bas de la bande idéale de la bandeja, pour qu'une bandeja prise à hauteur des yeux reste un coup haut.
+   * `lob` (défaut) : aux épaules sur un lob ; sur une autre balle, au-dessus de la portée de la volée.
    */
   swingFloor(playerHeight: number): number {
-    if (!this.overheadAllowed()) return Infinity;
+    const ceiling = this.volleyCeiling();
+    if (ceiling !== null) return ceiling;
     if (this.highFloor === 'tete') return playerHeight;
     if (this.highFloor === 'yeux') return bandejaHeight(this.profile, playerHeight) - this.profile.rally.overheadBand;
     return this.profile.rally.overheadLow * (playerHeight / PLAYER_HEIGHT);
   }
 
-  /** Seuil `lob` : un coup haut ne se joue que sur la balle d'un lob (la dernière frappe en jeu). */
-  private overheadAllowed(): boolean {
-    if (this.highFloor !== 'lob') return true;
+  /** Seuil des coups au-dessus de la tête aux boutons (B) : les épaules, ou le seuil `lob`. */
+  buttonFloor(): number {
+    return this.volleyCeiling() ?? this.profile.rally.overheadLow;
+  }
+
+  /**
+   * Seuil `lob`, sur une balle rapide qui ne vient pas d'un lob (la dernière frappe en jeu) : pas de coup haut
+   * tant qu'elle se volleye, au-dessus seulement. Un lob ou une balle flottante (lente, `floatSpeed`) se smashe
+   * dès les épaules. `null` : pas de plafond, le seuil réglé s'applique.
+   */
+  private volleyCeiling(): number | null {
+    if (this.highFloor !== 'lob') return null;
     const hitter = this.lastHitter === null ? null : this.players[this.lastHitter];
-    return hitter?.lastHit?.kind === 'lob';
+    if (hitter?.lastHit?.kind === 'lob') return null;
+    const ball = this.ball;
+    if (ball && Math.hypot(ball.vel.x, ball.vel.z) < this.profile.rally.floatSpeed) return null;
+    return this.profile.rally.hitHigh;
   }
 
   /**
@@ -1065,7 +1080,7 @@ export class Duel {
    * hauteur d'épaules se joue au sol ; un lob qui rebondit très haut, en bajada.
    */
   private overheadFloor(engagement: Engagement, playerHeight: number, bounced = this.bounces > 0): number {
-    if (!engagement.swing) return this.overheadAllowed() ? this.profile.rally.overheadLow : Infinity;
+    if (!engagement.swing) return this.buttonFloor();
     const floor = this.swingFloor(playerHeight);
     return bounced ? Math.max(floor, bandejaHeight(this.profile, playerHeight) - 0.02) : floor;
   }

@@ -91,7 +91,8 @@ export function overheadKind(
  * Point de chute d'un coup au-dessus de la tête. Bandeja : profonde, vers le coin le long de la ligne,
  * ou au stick comme un coup normal. Bajada : profonde, au stick.
  * Víbora : contre la vitre latérale du côté du stick, au fond. Remate : parfait, court et dirigé au
- * stick (il rebondit haut et peut sortir du terrain : por tres de côté, por cuatro dans l'axe) ;
+ * stick (il rebondit haut et peut sortir du terrain : por tres de côté, por cuatro dans l'axe, surtout claqué
+ * tout près du filet sur une balle flottante) ;
  * sinon plus long, il reste dans le terrain et revient de la vitre.
  */
 export function overheadTarget(
@@ -102,6 +103,8 @@ export function overheadTarget(
   profile: PhysicsProfile,
   /** Position latérale du contact (x) : la bandeja sans direction part le long de la ligne. */
   contactX = 0,
+  /** Distance du contact au filet (m) : tout près, le remate parfait se joue encore plus court. */
+  contactDepth = Infinity,
 ): Vec3 {
   const r = profile.rally;
   const t = shotTuning(kind, profile);
@@ -118,7 +121,7 @@ export function overheadTarget(
     const lateral = Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0));
     return vec3(Math.sign(aim.right || 1) * lateral * toRight, BALL_RADIUS, -side * t.depthNeutral);
   }
-  const depth = perfect ? r.remateKillDepth : t.depthNeutral;
+  const depth = !perfect ? t.depthNeutral : contactDepth <= r.remateNearZone ? r.remateKillNear : r.remateKillDepth;
   const x = clamp(clamp(aim.right, -1, 1) * (perfect ? r.remateWidth : r.remateWidthLoose) * toRight, -limit, limit);
   return vec3(x, BALL_RADIUS, -side * depth);
 }

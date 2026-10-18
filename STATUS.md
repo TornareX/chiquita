@@ -732,3 +732,21 @@ pas ; chez les pros, le coup haut vient surtout après un lob. 482 tests OK (don
   sous le seuil au moindre retard et partait dans le vide (leçon bandeja du tutoriel). Entre les épaules et ce seuil,
   c'est une volée haute. Coups droits de défense au-dessus du seuil : 36 % → 22 % ; les lobs restent tous des coups
   hauts. `?coupshauts=epaules` remet l'ancien seuil. Aux boutons (B), rien ne change.
+
+## Gameplay : coups hauts sur le lob et la balle flottante, por cuatro près du filet (18/10/2026)
+
+Retour de Xavier : il préfère `?coupshauts=lob`, mais au filet une balle flottante, lente et courte, était
+intouchable. Elle passait trop haut pour une volée (portée 2,1 m) et ne venait pas d'un lob, donc pas de coup haut
+non plus. Il veut pouvoir la claquer, por cuatro. 485 tests OK, typecheck OK. **À juger à la manette.**
+
+- **Mesuré** (vitesse horizontale de la balle à l'arrivée au filet) : défense à plat du fond 14 à 15 m/s, défense
+  coupée ~11 m/s, situation « balle flottante » du labo 12 m/s, lob ~8 m/s, vraie balle flottante 3 à 5 m/s.
+- **Changement** : seuil `lob` par défaut (`?coupshauts=yeux`, `epaules` ou `tete` pour les autres). Coup haut
+  dès les épaules sur un lob, ou sur une balle plus lente que `floatSpeed` (8 m/s), qui se joue comme un lob. Une
+  balle rapide se volleye, sauf trop haute pour la volée (`hitHigh`) : elle se smashe. Aux boutons comme au stick,
+  IA comprise (`Duel.volleyCeiling`, `Duel.buttonFloor`).
+- **Por cuatro** : à 3 m, un remate parfait frappé près du filet ne sortait jamais (aucun por tres/cuatro sur 44
+  points IA contre IA). À moins de `remateNearZone` (1,8 m) du filet, le remate parfait vise `remateKillNear`
+  (2,2 m). Sur les balles flottantes testées, il sort por cuatro ; le lob court smashé plus loin ne change pas.
+- **Effet sur l'IA** (IA normale, simple) : 6,0 coups/point (6,4 avant), coups hauts 24 % des gagnants (30 %), lobs
+  qui passent 42 % (35 %), sorties 21 (17). Seuils de `overhead.test.ts` et `glass.test.ts` recalés.

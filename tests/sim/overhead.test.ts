@@ -34,7 +34,10 @@ function rally(hitter: 0 | 1, ball: { pos: Vec3; vel: Vec3; spin?: Vec3 }, at: V
 function lobTo(at: Vec3, aim: ArcadeCommands['stick'], perfect = false): Duel {
   const from = vec3(0, 1, 8.5);
   const shot = solveShot('lob', from, aimTarget('lob', 1, aim, perfect, ARCADE), perfect, ARCADE);
-  return rally(1, { pos: from, vel: shot.vel, spin: shot.spin }, at);
+  const duel = rally(1, { pos: from, vel: shot.vel, spin: shot.spin }, at);
+  // Le seuil des coups hauts (`lob` par défaut) regarde le dernier coup joué.
+  duel.players[1].lastHit = { kind: 'lob' } as DuelShot;
+  return duel;
 }
 
 /**
@@ -130,6 +133,16 @@ describe('sur un lob, au filet', () => {
     const { shot } = play(lobTo(vec3(0.3, 0, -3), { forward: 1, right: 0 }), 'overhead', { forward: 1, right: 0 });
     expect(shot?.overhead).toBe('bandeja');
     expect(Math.abs(shot!.contact.z)).toBeGreaterThan(ARCADE.rally.remateZone);
+  });
+
+  it('balle flottante claquée tout près du filet : le remate parfait sort por cuatro', () => {
+    // Pas un lob : une balle lente (~3,5 m/s) qui flotte au-dessus du filet.
+    const duel = rally(1, { pos: vec3(0.3, 2.6, 1), vel: vec3(0, 2, -3.5) }, vec3(0.4, 0, -2));
+    const { shot, result } = play(duel, 'overhead', { forward: 1, right: 0 });
+    expect(shot?.overhead).toBe('remate');
+    expect(shot?.perfect).toBe(true);
+    expect(Math.abs(shot!.contact.z)).toBeLessThan(ARCADE.rally.remateNearZone);
+    expect(result?.reason).toBe('por-cuatro');
   });
 
   it('B sur une balle basse : coup défensif coupé', () => {
@@ -384,8 +397,10 @@ describe('IA contre IA : le jeu au-dessus de la tête', () => {
     // Le lob court (tombé avant la ligne de service) se fait punir d'un remate, qui sort par la vitre latérale
     // (17/10) : remate 27 % des gagnants (avant, 3 % ; pros 35-43 %). Puis la volée coupée (X) devient aussi
     // rapide que la volée normale : elle prend des points au remate (20 %) et raccourcit les échanges (6,9 → 6,4
-    // coups/point ; pros 8-11). Coups hauts 30 %, lobs qui passent 35 % (pros ~35 %). [à recaler en jouant]
-    expect(perPoint).toBeGreaterThan(6.2);
+    // coups/point ; pros 8-11). Coups hauts 30 %, lobs qui passent 35 % (pros ~35 %). Coups hauts réservés au lob
+    // et à la balle flottante par défaut (18/10) : 6,0 coups/point, coups hauts 24 %, lobs qui passent 42 %, plus
+    // de sorties (balles flottantes claquées por cuatro). [à recaler en jouant]
+    expect(perPoint).toBeGreaterThan(5.8);
     expect(perPoint).toBeLessThan(11);
     expect(t.smashWinners / t.winners).toBeGreaterThan(0.17);
     expect(t.overheadWinners / t.winners).toBeGreaterThan(0.22);
