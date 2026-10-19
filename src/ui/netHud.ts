@@ -7,6 +7,8 @@ export interface NetFrame {
   replayed: number;
   /** Corrections de la balle (saut lissé à l'écran) pendant cette image. */
   corrections: number;
+  /** Joueurs déplacés par une correction (glissement lissé à l'écran) pendant cette image. */
+  playerCorrections: number;
   /** Pas où la partie a dû attendre les commandes distantes. */
   stalls: number;
   /** Plus long rollback de l'image (pas). */
@@ -34,7 +36,7 @@ export function createNetHud(config: FakeNetConfig): { frame(stats: NetFrame): v
   const link = `réseau simulé · ping ${ping} ms${jitter ? ` ±${jitter}` : ''}${loss ? ` · perte ${Math.round(loss * 100)} %` : ''} · délai ${config.delayFrames} im. · fenêtre ${config.windowMs} ms`;
   box.textContent = link;
 
-  const totals = { frames: 0, replayed: 0, corrections: 0, stalls: 0, longest: 0 };
+  const totals = { frames: 0, replayed: 0, corrections: 0, playerCorrections: 0, stalls: 0, longest: 0 };
   window.__net = { totals };
   let shown = { frames: 0, replayed: 0, worst: 0, longest: 0, stalls: 0 };
   let shownAt = 0;
@@ -43,6 +45,7 @@ export function createNetHud(config: FakeNetConfig): { frame(stats: NetFrame): v
       totals.frames++;
       totals.replayed += stats.replayed;
       totals.corrections += stats.corrections;
+      totals.playerCorrections += stats.playerCorrections;
       totals.stalls += stats.stalls;
       totals.longest = Math.max(totals.longest, stats.longest);
       shown.frames++;
@@ -58,7 +61,7 @@ export function createNetHud(config: FakeNetConfig): { frame(stats: NetFrame): v
       box.textContent =
         `${link}\n` +
         `rejoués : ${mean.toFixed(1)} pas/image (pire ${shown.worst}) · plus long retour ${Math.round(ms)} ms\n` +
-        `corrections de balle : ${totals.corrections} · attentes : ${totals.stalls}${shown.stalls ? ` (+${shown.stalls})` : ''}`;
+        `corrections : balle ${totals.corrections}, joueurs ${totals.playerCorrections} · attentes : ${totals.stalls}${shown.stalls ? ` (+${shown.stalls})` : ''}`;
       shown = { frames: 0, replayed: 0, worst: 0, longest: 0, stalls: 0 };
     },
   };

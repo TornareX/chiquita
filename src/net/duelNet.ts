@@ -51,8 +51,14 @@ export interface NetMatchOptions {
   localA: readonly number[];
   /** Conditions de la liaison, les mêmes dans les deux sens. */
   conditions: LinkConditions;
-  /** Délai d'entrée (pas de simulation). */
+  /** Délai d'entrée (pas de simulation) de la machine A. */
   inputDelay: number;
+  /**
+   * Délai d'entrée de la machine B (pas), par défaut le même. Pour les IA : 0. Elles décident en lisant leur propre
+   * état (bouton tenu, `heldShot`) ; avec un délai, elles le voient en retard sur leurs commandes et relâchent puis
+   * réappuient sans cesse (une IA qui remplace un joueur sur le serveur n'aura pas de délai non plus).
+   */
+  inputDelayB?: number;
   /** Prédiction au plus (pas) avant d'attendre. */
   maxRollback: number;
   seed?: number;
@@ -85,9 +91,11 @@ export class NetMatch {
   ) {
     const players = duel.players.length;
     const localB = Array.from({ length: players }, (_, i) => i).filter((i) => !options.localA.includes(i));
-    const common = { players, inputDelay: options.inputDelay, maxRollback: options.maxRollback, startTick: duel.tick };
-    this.a = new Peer(duel, DUEL_GAME, options.localA, common, hooksA);
-    this.b = new Peer(deepClone(duel), DUEL_GAME, localB, common);
+    const delayA = options.inputDelay;
+    const delayB = options.inputDelayB ?? delayA;
+    const common = { players, maxRollback: options.maxRollback, startTick: duel.tick };
+    this.a = new Peer(duel, DUEL_GAME, options.localA, { ...common, inputDelay: delayA, remoteInputDelay: delayB }, hooksA);
+    this.b = new Peer(deepClone(duel), DUEL_GAME, localB, { ...common, inputDelay: delayB, remoteInputDelay: delayA });
     const seed = options.seed ?? 1;
     this.linkAB = new FakeLink(options.conditions, seed * 2 + 1);
     this.linkBA = new FakeLink(options.conditions, seed * 2 + 2);

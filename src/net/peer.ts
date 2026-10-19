@@ -28,7 +28,7 @@ export class Peer<S> {
     state: S,
     game: RollbackGame<S, ArcadeCommands>,
     readonly local: readonly number[],
-    options: { players: number; inputDelay: number; maxRollback: number; startTick?: number },
+    options: { players: number; inputDelay: number; remoteInputDelay?: number; maxRollback: number; startTick?: number },
     hooks: RollbackHooks<S> = {},
   ) {
     this.session = new RollbackSession(state, game, { ...options, local, neutral: NEUTRAL_ARCADE, same: sameCommands }, hooks);

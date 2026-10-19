@@ -23,6 +23,8 @@ declare global {
     __effects?: Effects;
     /** Visionneur d'animations (`?mode=animations`) : aller à un instant du geste, phase affichée. */
     __anim?: { seek(t: number): void; readonly phase: string };
+    /** Dernière pose dessinée de chaque joueur et sa place à l'écran (mode debug). */
+    __poses?: { pose: import('./render/pose').Pose; x: number; z: number; yaw: number; prep?: { family: string; seconds: number } | null; strike?: { family: string; seconds: number } | null }[];
     /** Arène et public (étape E6), exposés en mode debug. */
     __arena?: Arena;
   }

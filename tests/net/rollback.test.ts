@@ -20,10 +20,10 @@ interface Played {
  * autres sur la machine B. Les IA sont interrogées sur la partie de leur machine, comme un vrai joueur qui ne voit que
  * son écran. Après `ticks` pas, plus personne ne joue : on laisse arriver les derniers paquets et on rattrape.
  */
-function playOnline(ticks: number, conditions: LinkConditions, inputDelay: number, maxRollback = 36, seed = 5): Played {
+function playOnline(ticks: number, conditions: LinkConditions, inputDelay: number, maxRollback = 36, seed = 5, inputDelayB = inputDelay): Played {
   const duel = new Duel(RULES, 'double');
   const bots = duel.players.map((_, i) => new Bot(i, seed + i, AI_LEVELS.normal));
-  const net = new NetMatch(duel, { localA: [0], conditions, inputDelay, maxRollback, seed });
+  const net = new NetMatch(duel, { localA: [0], conditions, inputDelay, inputDelayB, maxRollback, seed });
   const log = duel.players.map(() => new Map<number, ArcadeCommands>());
   const read = (state: Duel, player: number): ArcadeCommands => bots[player]!.commands(state);
   const onLocal = (player: number, tick: number, commands: ArcadeCommands): void => void log[player]!.set(tick, commands);
@@ -80,6 +80,13 @@ describe('rollback à travers un faux réseau', () => {
       expect(offlineA.players.some((p) => Number.isFinite(p.lastHitTick))).toBe(true);
     });
   }
+
+  it('délais différents (humain 2 images, IA sans délai) : même match que sans réseau', () => {
+    const { net, log } = playOnline(240 * 8, { ping: 120, jitter: 20, loss: 0.05 }, 8, 36, 7, 0);
+    expect(net.a.session.stats.rollbacks).toBeGreaterThan(50);
+    expect(hashState(net.a.session.state)).toBe(hashState(playOffline(log, net.a.session.tick)));
+    expect(hashState(net.b.session.state)).toBe(hashState(playOffline(log, net.b.session.tick)));
+  });
 
   it('au-delà de la fenêtre de rollback, la machine attend et le match reste juste', () => {
     const { net, log } = playOnline(240 * 4, { ping: 400, jitter: 0, loss: 0 }, 2, 36);

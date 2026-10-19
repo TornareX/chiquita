@@ -269,9 +269,11 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   let net: NetMatch | null = null;
   let netRestart = false;
   const netHud = fakeNet ? createNetHud(fakeNet) : null;
-  let netFrame = { replayed: 0, corrections: 0, stalls: 0, longest: 0 };
-  /** Balle juste avant un rollback, pour lisser à l'écran le saut que la correction lui fait faire. */
+  let netFrame = { replayed: 0, corrections: 0, playerCorrections: 0, stalls: 0, longest: 0 };
+  /** Balle et joueurs juste avant un rollback, pour lisser à l'écran le saut que la correction leur fait faire. */
   let ballBefore: Vec3 | null = null;
+  let playersBefore: Vec3[] = [];
+  if (fakeNet) view.setOnline(true);
   /** (Re)part de l'état de la partie : au début, et quand un réglage la change (menu, assistance). */
   const startNet = (): void => {
     if (!fakeNet) return;
@@ -279,13 +281,26 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     const { conditions, inputDelay, maxRollback } = fakeNet;
     net = new NetMatch(
       duel,
-      { localA, conditions, inputDelay, maxRollback },
+      // Les IA jouent sans délai sur leur machine (voir `inputDelayB`).
+      { localA, conditions, inputDelay, inputDelayB: 0, maxRollback },
       {
         onStep: (_, __, replayed) => afterSimStep(replayed),
         beforeRollback: (state) => {
           ballBefore = state.ball ? { ...state.ball.pos } : null;
+          playersBefore = state.players.map((p) => ({ ...p.pos }));
         },
         afterRollback: (state) => {
+          state.players.forEach((p, i) => {
+            const before = playersBefore[i];
+            if (!before) return;
+            const offset = { x: before.x - p.pos.x, y: 0, z: before.z - p.pos.z };
+            const jump = Math.hypot(offset.x, offset.z);
+            // Au-delà de 3 m, c'est un nouveau point (replacement) : pas de fondu.
+            if (jump > 0.005 && jump < 3) {
+              view.correctPlayer(i, offset);
+              netFrame.playerCorrections++;
+            }
+          });
           const after = state.ball?.pos;
           if (!ballBefore || !after) return;
           const offset = { x: ballBefore.x - after.x, y: ballBefore.y - after.y, z: ballBefore.z - after.z };
@@ -377,7 +392,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     perf?.frame(frameTime, performance.now() - renderStart, view.info());
     if (netHud) {
       netHud.frame(netFrame);
-      netFrame = { replayed: 0, corrections: 0, stalls: 0, longest: 0 };
+      netFrame = { replayed: 0, corrections: 0, playerCorrections: 0, stalls: 0, longest: 0 };
     }
     mood.update(frameTime);
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.

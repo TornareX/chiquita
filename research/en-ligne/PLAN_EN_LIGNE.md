@@ -129,6 +129,16 @@ Fait : points 3, 4, 5 et 6 de la phase 0. Pas fait : les maths déterministes et
 | Faux réseau | `src/net/link.ts`, `src/net/duelNet.ts` | Deux « machines » dans la même page, A (les humains, la partie dessinée) et B (les IA), reliées par deux fausses liaisons (latence, gigue, perte, paquets dans le désordre). |
 | Sons et effets | `src/net/fakeNet.ts` (`EventGate`) | Chaque frappe, rebond, fin de point est daté (pas + joueur) : rejoué par un rollback, il ne repart pas. |
 | Lissage de la balle | `src/render/duelScene.ts` (`correctBall`) | Quand une correction déplace la balle, elle est dessinée à l'ancienne place puis glisse vers la bonne en 80 ms. La sim n'est pas touchée. |
+| Animations en ligne | `src/render/duelScene.ts` (`correctPlayer`, `setOnline`) | Un joueur déplacé par une correction glisse en 100 ms ; sa foulée suit une vitesse lissée (60 ms) ; une préparation qui disparaît sans frappe derrière garde sa pose 120 ms. Seulement avec `?reseau`. |
+
+**Animations des IA qui « recommençaient » sans cesse (corrigé le 20/10, après le premier essai de Xavier).** Cause :
+l'IA décide de garder son bouton en lisant son propre bouton tenu dans la partie (`heldShot`). Avec un délai
+d'entrée, elle le voyait en retard sur ses commandes, relâchait puis réappuyait en boucle ; la prédiction de l'autre
+machine prolongeait chaque relâcher, et la préparation apparaissait puis disparaissait toutes les 2 ou 3 images.
+Correction : la machine des IA joue sans délai d'entrée (`inputDelayB: 0`, comme une IA sur le serveur plus
+tard), plus les protections du rendu ci-dessus. Mesuré (à-coup moyen de la pose par image, `tests/e2e/reseau.spec.ts`) :
+avant, 2 à 7 fois celui du jeu hors ligne ; après, le même qu'hors ligne, à 120 ms comme à 200 ms de ping avec 10 %
+de perte.
 
 Seul changement de la sim : aucun. Une trouvaille, à garder en tête : `bounceCache` (dans `Duel.passesBehind`) se
 remplit au premier appel, et la lecture de la manette l'appelle **hors du pas** (`counterWallReady`). Deux machines
@@ -169,13 +179,14 @@ Paramètres : `reseau` = ping aller-retour (ms) ; `gigue` = ± ms par paquet ; `
 
 Quoi regarder :
 - L'encart en bas à droite : le réseau simulé, les **pas rejoués par image** (moyenne et pire sur la demi-seconde ;
-  un pas = 1/240 s), le plus long retour en arrière (ms), les **corrections de balle** (sauts lissés) et les
-  **attentes** (pas où la partie a dû attendre).
+  un pas = 1/240 s), le plus long retour en arrière (ms), les **corrections** de la balle et des joueurs (sauts
+  lissés) et les **attentes** (pas où la partie a dû attendre).
 - Sa propre frappe : elle doit partir aussi net qu'hors ligne (`delai=0` ou `1`), ou un poil plus tard (`2`).
 - La balle après une frappe adverse : elle doit se recaler sans téléporter. Si on voit encore le saut, allonger le
   fondu (`BALL_CORRECTION_FADE`, 80 ms) ; s'il « flotte », le raccourcir.
-- Les adversaires : leurs pas et leurs départs vers la balle se recalent (non lissés pour l'instant : c'est
-  justement à juger).
+- Les adversaires et le partenaire : ils doivent s'animer comme hors ligne, sans bras qui retombent ni foulée qui se
+  retourne ; quand une correction les déplace, ils glissent (100 ms) au lieu de sauter. Comparer `/?double=1` et
+  `/?double=1&reseau=120&gigue=20&perte=5` en regardant un adversaire préparer un smash ou une bandeja.
 - Les sons : une frappe, un rebond ou une réaction du public ne doivent jamais s'entendre deux fois.
 
 Limites de ce mode : pas de ralenti du coup gagnant ni de micro-pause à la frappe (la sim ne peut pas s'arrêter

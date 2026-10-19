@@ -38,6 +38,14 @@ export interface DuelView {
    * est pour rien.
    */
   correctBall(offset: Vec3): void;
+  /** Même chose pour le joueur `index`, déplacé par une correction : il glisse en `PLAYER_CORRECTION_FADE` s. */
+  correctPlayer(index: number, offset: Vec3): void;
+  /**
+   * Jeu en ligne (`?reseau`) : les rollbacks réécrivent sans cesse le passé récent des joueurs distants. L'animation
+   * ignore alors les allers-retours d'état trop brefs (une préparation qui disparaît puis revient) et suit une vitesse
+   * lissée. Hors ligne, rien ne change.
+   */
+  setOnline(online: boolean): void;
   /** Léger tremblement de caméra ; `strength` de 0 à 1. */
   shake(strength: number): void;
   /** Zone à viser, dessinée au sol (tutoriel), ou `null` pour l'effacer. */
@@ -53,6 +61,14 @@ export interface DuelView {
 
 /** Durée du fondu qui efface le saut de la balle après une correction du réseau (s). [à juger en jouant] */
 const BALL_CORRECTION_FADE = 0.08;
+/** En ligne : fondu d'un joueur déplacé par une correction (s), et lissage de la vitesse qui oriente sa foulée (s). */
+const PLAYER_CORRECTION_FADE = 0.1;
+const ONLINE_VELOCITY_SMOOTHING = 0.06;
+/**
+ * En ligne : une préparation qui disparaît sans qu'aucune frappe ne parte garde sa pose ce temps (s). Un rollback
+ * qui prédit un relâcher puis le corrige ne fait plus retomber les bras. [à juger en jouant]
+ */
+const ONLINE_PREP_HOLD = 0.12;
 
 /** Lumières du rendu soigné (`look.ts`). [à calibrer en jouant] */
 const SKY_COLOR = 0xfff9f2;
@@ -431,6 +447,9 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   // Effets de balle et de vitre (étape E3), coupés par `?effets=0`.
   const effects = effectsEnabled() ? createEffectsView(scene, NEAR_CLIP_PLANES) : null;
   if (effects && (import.meta.env.DEV || new URLSearchParams(location.search).has('debug'))) window.__effects = effects.effects;
+  /** Dernière pose dessinée de chaque joueur, en mode debug (mesure des à-coups d'animation, `tests/e2e/reseau.spec.ts`). */
+  const debugPoses: NonNullable<Window['__poses']> | null =
+    import.meta.env.DEV || new URLSearchParams(location.search).has('debug') ? (window.__poses = []) : null;
   const drawingSize = new THREE.Vector2();
   const trailTip = new THREE.Vector3();
   const trailThroat = new THREE.Vector3();
@@ -518,6 +537,11 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   /** Décalage de la balle laissé par une correction du réseau, et temps restant de son fondu (s). */
   let ballOffset: Vec3 = { x: 0, y: 0, z: 0 };
   let ballOffsetLeft = 0;
+  /** En ligne : décalage de chaque joueur après une correction, vitesse lissée, dernière préparation montrée. */
+  let online = false;
+  const playerOffsets: { offset: Vec3; left: number }[] = [];
+  const smoothVel: (Vec3 | null)[] = [];
+  const heldPreps: ({ family: SwingFamily; pressTick: number; left: number } | null)[] = [];
   let shakeTime = 0;
 
   const resize = (): void => {
@@ -586,6 +610,18 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       strike = { family, seconds: (now - strikeTick) * SIM_DT };
     }
 
+    // En ligne : une préparation qui s'efface sans frappe derrière garde sa pose un court instant (voir `ONLINE_PREP_HOLD`).
+    const index = players.indexOf(view);
+    if (online) {
+      const held = heldPreps[index];
+      const struck = Number.isFinite(strikeTick) && held !== null && held !== undefined && strikeTick >= held.pressTick;
+      if (prep && engagement) heldPreps[index] = { family: prep.family, pressTick: engagement.pressTick, left: ONLINE_PREP_HOLD };
+      else if (held && !struck && held.left > 0) {
+        held.left -= frameTime;
+        prep = { family: held.family, seconds: (now - held.pressTick) * SIM_DT };
+      } else heldPreps[index] = null;
+    }
+
     // Arc de raquette : un nouvel arc à chaque frappe (ou coup dans le vide), dessiné jusque dans l'accompagnement.
     if (view.trail && Number.isFinite(strikeTick) && strikeTick !== view.trailTick) {
       view.trailTick = strikeTick;
@@ -594,8 +630,16 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
     view.anim.swinging = strike !== null && strike.seconds >= 0 && strike.seconds < FOLLOW_TIME * 0.75;
 
     // Course : vitesse et direction dans le repère du filet ; la foulée avance avec la distance parcourue.
-    const speed = Math.hypot(player.vel.x, player.vel.z);
-    const heading = Math.atan2(player.vel.x * f * m, player.vel.z * f);
+    // En ligne, la vitesse est lissée : une correction ne retourne pas la foulée d'une image à l'autre.
+    let vel: Vec3 = player.vel;
+    if (online) {
+      const k = 1 - Math.exp(-frameTime / ONLINE_VELOCITY_SMOOTHING);
+      const s = smoothVel[index] ?? player.vel;
+      vel = { x: s.x + (player.vel.x - s.x) * k, y: 0, z: s.z + (player.vel.z - s.z) * k };
+      smoothVel[index] = vel;
+    }
+    const speed = Math.hypot(vel.x, vel.z);
+    const heading = Math.atan2(vel.x * f * m, vel.z * f);
     const last = view.anim.last;
     if (last) view.anim.stride += (Math.hypot(pos.x - last.x, pos.z - last.z) / (STRIDE * scale)) * Math.PI * 2;
     view.anim.last = { x: pos.x, z: pos.z };
@@ -605,8 +649,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
     // Vitesse lissée pour la pose : un démarrage ou un arrêt brusque ne fait pas sauter les jambes.
     view.anim.speed += (speed - view.anim.speed) * (1 - Math.exp(-GAIT_FOLLOW * frameTime));
 
-    view.rig.apply(
-      computePose({
+    const pose = computePose({
         inPlay: duel.phase !== 'dead' && duel.phase !== 'over',
         prep,
         strike,
@@ -615,12 +658,19 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
         bodyYaw: view.anim.yaw,
         stride: view.anim.stride,
         time: now * SIM_DT,
-      }),
-    );
+      });
+    view.rig.apply(pose);
+    if (debugPoses) debugPoses[players.indexOf(view)] = { pose, x: pos.x, z: pos.z, yaw: view.object.rotation.y, prep, strike };
   };
 
   const updatePlayer = (view: PlayerView, player: DuelPlayer, index: number, alpha: number, frameTime: number): void => {
-    const pos = lerp(player.prevPos, player.pos, alpha);
+    let pos = lerp(player.prevPos, player.pos, alpha);
+    const correction = playerOffsets[index];
+    if (correction && correction.left > 0) {
+      correction.left = Math.max(0, correction.left - frameTime);
+      const k = correction.left / PLAYER_CORRECTION_FADE;
+      pos = { x: pos.x + correction.offset.x * k, y: pos.y, z: pos.z + correction.offset.z * k };
+    }
     view.object.position.set(pos.x, 0, pos.z);
     // Annonce entre partenaires, au-dessus de la tête pendant un court instant.
     const call = SHOW_CALLS && player.call && (duel.tick - player.call.tick) * SIM_DT < CALL_TIME ? player.call.kind : null;
@@ -740,6 +790,17 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
         for (const reaction of stepCrowdReactions(duel)) arena.react(reaction);
         if (duel.result?.reason === 'por-tres' || duel.result?.reason === 'por-cuatro') arena.porTres();
       }
+    },
+
+    correctPlayer(index: number, offset: Vec3): void {
+      const current = playerOffsets[index];
+      const k = current ? current.left / PLAYER_CORRECTION_FADE : 0;
+      const base = current?.offset ?? { x: 0, y: 0, z: 0 };
+      playerOffsets[index] = { offset: { x: base.x * k + offset.x, y: 0, z: base.z * k + offset.z }, left: PLAYER_CORRECTION_FADE };
+    },
+
+    setOnline(on: boolean): void {
+      online = on;
     },
 
     correctBall(offset: Vec3): void {

@@ -22,8 +22,13 @@ export interface RollbackOptions<C> {
   players: number;
   /** Joueurs tenus par cette machine ; les autres sont distants. */
   local: readonly number[];
-  /** Délai d'entrée local (pas) : une commande donnée au pas `t` joue au pas `t + inputDelay`. Le même partout. */
+  /** Délai d'entrée local (pas) : une commande donnée au pas `t` joue au pas `t + inputDelay`. */
   inputDelay: number;
+  /**
+   * Délai d'entrée des joueurs distants (pas), convenu au début du match ; par défaut le même. Les premiers pas qu'il
+   * couvre sont neutres, chaque machine le sait sans rien recevoir.
+   */
+  remoteInputDelay?: number;
   /** Pas prédits au plus avant d'attendre les commandes distantes. */
   maxRollback: number;
   /** Commande « rien », pour les premiers pas (délai d'entrée) et un joueur dont on n'a encore rien reçu. */
@@ -80,9 +85,12 @@ export class RollbackSession<S, C> {
     this.prunedBefore = start;
     this.isLocal = Array.from({ length: options.players }, (_, i) => options.local.includes(i));
     this.confirmed = Array.from({ length: options.players }, () => new Map<number, C>());
-    // Les premiers pas, couverts par le délai d'entrée, sont neutres pour tout le monde : chaque machine le sait.
-    for (const inputs of this.confirmed) for (let t = start; t < start + options.inputDelay; t++) inputs.set(t, options.neutral);
-    this.confirmedUntil = Array.from({ length: options.players }, () => start + options.inputDelay - 1);
+    // Les premiers pas, couverts par le délai d'entrée de chacun, sont neutres : chaque machine le sait.
+    const delayOf = (p: number): number => (this.isLocal[p] ? options.inputDelay : (options.remoteInputDelay ?? options.inputDelay));
+    this.confirmed.forEach((inputs, p) => {
+      for (let t = start; t < start + delayOf(p); t++) inputs.set(t, options.neutral);
+    });
+    this.confirmedUntil = Array.from({ length: options.players }, (_, p) => start + delayOf(p) - 1);
   }
 
   /** Pas où jouera la prochaine commande locale. */
