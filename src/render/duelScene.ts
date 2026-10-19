@@ -26,8 +26,18 @@ import { WALLS } from '../sim/court';
 export interface DuelView {
   /** `frozen` : micro-pause en cours, les effets restent figés. */
   render(alpha: number, frameTime: number, frozen?: boolean): void;
-  /** À appeler après chaque pas de simulation : lance les effets de ses événements (contacts, frappe, point). */
-  afterStep(): void;
+  /**
+   * À appeler après chaque pas de simulation : lance les effets de ses événements (contacts, frappe, point).
+   * `replayed` : pas refait par un rollback (`src/net`) ; seuls ses événements comptent, pas ce qui suit le temps
+   * (glissades).
+   */
+  afterStep(replayed?: boolean): void;
+  /**
+   * La balle vient d'être déplacée par une correction du réseau (rollback) : elle est dessinée décalée de `offset`
+   * (ancienne position moins nouvelle), un décalage qui s'efface en `BALL_CORRECTION_FADE` s. La simulation n'y
+   * est pour rien.
+   */
+  correctBall(offset: Vec3): void;
   /** Léger tremblement de caméra ; `strength` de 0 à 1. */
   shake(strength: number): void;
   /** Zone à viser, dessinée au sol (tutoriel), ou `null` pour l'effacer. */
@@ -40,6 +50,9 @@ export interface DuelView {
    */
   setSource(source: Duel, crowd: boolean): void;
 }
+
+/** Durée du fondu qui efface le saut de la balle après une correction du réseau (s). [à juger en jouant] */
+const BALL_CORRECTION_FADE = 0.08;
 
 /** Lumières du rendu soigné (`look.ts`). [à calibrer en jouant] */
 const SKY_COLOR = 0xfff9f2;
@@ -502,6 +515,9 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   let zoom = 1;
   const framePoint = new THREE.Vector3();
   let shake = 0;
+  /** Décalage de la balle laissé par une correction du réseau, et temps restant de son fondu (s). */
+  let ballOffset: Vec3 = { x: 0, y: 0, z: 0 };
+  let ballOffsetLeft = 0;
   let shakeTime = 0;
 
   const resize = (): void => {
@@ -702,7 +718,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   };
 
   return {
-    afterStep(): void {
+    afterStep(replayed = false): void {
       effects?.effects.fromStep(duel);
       if (juice.squash) {
         // La balle s'écrase dans le sens de son départ à la frappe, contre la surface au rebond.
@@ -714,7 +730,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
           else if (contact.surface === 'glass' && contact.wall) ball.squash(WALLS[contact.wall].normal, amount);
         }
       }
-      if (effects && juice.sand) {
+      if (effects && juice.sand && !replayed) {
         duel.players.forEach((player, i) => {
           const slide = slides.update(i, player.vel, SIM_DT);
           if (slide) effects.effects.slide(player.pos.x, player.pos.z, slide.dx, slide.dz, slide.strength);
@@ -724,6 +740,13 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
         for (const reaction of stepCrowdReactions(duel)) arena.react(reaction);
         if (duel.result?.reason === 'por-tres' || duel.result?.reason === 'por-cuatro') arena.porTres();
       }
+    },
+
+    correctBall(offset: Vec3): void {
+      // Le saut s'ajoute à ce qui reste du précédent : la balle repart toujours de là où on la voyait.
+      const k = ballOffsetLeft / BALL_CORRECTION_FADE;
+      ballOffset = { x: ballOffset.x * k + offset.x, y: ballOffset.y * k + offset.y, z: ballOffset.z * k + offset.z };
+      ballOffsetLeft = BALL_CORRECTION_FADE;
     },
 
     shake(strength: number): void {
@@ -780,6 +803,11 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       let pos: Vec3 | null = null;
       if (simBall && prevBallPos) pos = lerp(prevBallPos, simBall.pos, alpha);
       else if (duel.phase === 'serve') pos = duel.servePosition();
+      if (ballOffsetLeft > 0) {
+        ballOffsetLeft = Math.max(0, ballOffsetLeft - frameTime);
+        const k = ballOffsetLeft / BALL_CORRECTION_FADE;
+        if (pos) pos = { x: pos.x + ballOffset.x * k, y: Math.max(0, pos.y + ballOffset.y * k), z: pos.z + ballOffset.z * k };
+      }
       ball.update(pos, simBall && prevBallPos ? simBall.vel : null, camera, frozen ? 0 : frameTime);
 
       wallMarker.visible = false;

@@ -32,6 +32,12 @@ import { loadFeel } from '../ui/feelStorage';
 import { applyFeel } from '../sim/feel';
 import { hitstopMs, juiceFlags } from '../render/juice';
 import { createReplayBadge, REPLAY_DELAY, ReplayRecorder, replayWorthy, type Replay } from './replay';
+import { quantizeCommands } from '../net/codec';
+import { NetMatch } from '../net/duelNet';
+import { EventGate, fakeNetFromUrl } from '../net/fakeNet';
+import { createNetHud } from '../ui/netHud';
+import { NEUTRAL_ARCADE } from '../sim/commands';
+import type { Vec3 } from '../sim/vec3';
 
 /** Bouton Start (Menu) de la disposition standard : ouvre et ferme les réglages. */
 const START_BUTTON = 9;
@@ -59,6 +65,10 @@ function muteable<T extends object>(sounds: T, audible: () => boolean): T {
  * - `?pression=0` (sans), `0.5`, `1.5` ; `?far=own` ; `?assist=full|partial|off|magnet` ou `?assist=full,off`.
  * - `?gaucher=1,3` : places jouées par un gaucher (à partir de 1), les autres droitières.
  * - `?figer=4` : la simulation s'arrête net à 4 s de jeu, le rendu continue (banc d'essai du rendu, captures).
+ * - `?reseau=120` : faux réseau (`src/net`), ping aller-retour en ms, avec `&gigue=20`, `&perte=5` (%), `&delai=2`
+ *   (délai d'entrée, en images) et `&fenetre=150` (rollback au plus, ms). Les humains jouent sur la machine locale,
+ *   les IA sur une autre, reliées par une fausse liaison ; chaque machine prédit et corrige (rollback). Pas de
+ *   ralenti ni de micro-pause dans ce mode.
  */
 export function startDuel(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
@@ -127,6 +137,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       apply(s, restart);
       // Nouvelle partie : l'historique du ralenti ne la rejoue plus.
       if (restart) recorder?.clear();
+      // Faux réseau : les deux machines repartent de la partie réglée (et des nouvelles places humaines et IA).
+      if (fakeNet) netRestart = true;
     },
     () => padTest.open(),
   );
@@ -147,40 +159,43 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const assistHeld = [false, false, false, false];
 
   /** Commandes de chaque joueur : la manette ou le clavier choisis pour sa place, ou son IA. */
+  const read = (index: number, pads: readonly Gamepad[]): ArcadeCommands => {
+    const bot = bots[index];
+    const controller = settings.players[index]!;
+    sources[index] = CONTROLLER_SHORT[controller];
+    if (bot && !isHuman(controller)) {
+      states[index] = buttons[index] = playerSwings[index] = null;
+      return bot.commands(duel);
+    }
+    const padIndex = padOf(controller);
+    const keys = keyboardOf(controller);
+    const pad = padIndex === null ? undefined : pads[padIndex];
+    if (padIndex !== null && !pad) sources[index] += ' (pas branchée)';
+    const slot = padIndex ?? (keys === null ? null : 4 + keys);
+    const swing = slot === null ? null : (swings?.[slot] ?? null);
+    playerSwings[index] = swing;
+    // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).
+    if (swing) swing.wallReady = duel.counterWallReady(index);
+    const raw: PadState = pad ? readGamepad(pad) : keys === null ? IDLE_PAD : keyboard.read(keys, SIM_DT);
+    const state = applySwing(raw, swing ?? undefined, SIM_DT);
+    states[index] = state;
+    buttons[index] = pad
+      ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
+      : { kind: 'keyboard', player: keys ?? ((index % 2) as 0 | 1), layout: keyboardLayout };
+    if (state.assistButton && !assistHeld[index]) {
+      const player = duel.players[index]!;
+      player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;
+      settings.assists[index] = player.assist;
+      // Faux réseau : l'autre machine doit le savoir aussi ; le match en ligne repart de cet état.
+      netRestart = true;
+    }
+    assistHeld[index] = state.assistButton;
+    return toCommands(state, duel.players[index]!.side < 0, settings.farOwnView);
+  };
+  /** Commandes de tous les joueurs pour ce pas, arrondies comme elles le seraient en ligne (`src/net/codec.ts`). */
   const sample = (): ArcadeCommands[] => {
     const pads = connectedGamepads();
-    const read = (index: number): ArcadeCommands => {
-      const bot = bots[index];
-      const controller = settings.players[index]!;
-      sources[index] = CONTROLLER_SHORT[controller];
-      if (bot && !isHuman(controller)) {
-        states[index] = buttons[index] = playerSwings[index] = null;
-        return bot.commands(duel);
-      }
-      const padIndex = padOf(controller);
-      const keys = keyboardOf(controller);
-      const pad = padIndex === null ? undefined : pads[padIndex];
-      if (padIndex !== null && !pad) sources[index] += ' (pas branchée)';
-      const slot = padIndex ?? (keys === null ? null : 4 + keys);
-      const swing = slot === null ? null : (swings?.[slot] ?? null);
-      playerSwings[index] = swing;
-      // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).
-      if (swing) swing.wallReady = duel.counterWallReady(index);
-      const raw: PadState = pad ? readGamepad(pad) : keys === null ? IDLE_PAD : keyboard.read(keys, SIM_DT);
-      const state = applySwing(raw, swing ?? undefined, SIM_DT);
-      states[index] = state;
-      buttons[index] = pad
-        ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
-        : { kind: 'keyboard', player: keys ?? ((index % 2) as 0 | 1), layout: keyboardLayout };
-      if (state.assistButton && !assistHeld[index]) {
-        const player = duel.players[index]!;
-        player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;
-        settings.assists[index] = player.assist;
-      }
-      assistHeld[index] = state.assistButton;
-      return toCommands(state, duel.players[index]!.side < 0, settings.farOwnView);
-    };
-    return duel.players.map((_, i) => read(i));
+    return duel.players.map((_, i) => quantizeCommands(read(i, pads)));
   };
 
   /** Micro-pause sur une frappe forte (`hitstopMs`) : fin de la pause, en temps réel (ms). */
@@ -189,8 +204,10 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const freezeSeconds = Number(params.get('figer'));
   const freezeTick = freezeSeconds > 0 ? Math.round(freezeSeconds / SIM_DT) : null;
   const frozen = (): boolean => freezeTick !== null && duel.tick >= freezeTick;
-  // Ralenti du coup gagnant entre les points (étape V7) ; jamais sur le banc d'essai figé.
-  const recorder = juice.replay !== 'off' && freezeTick === null ? new ReplayRecorder() : null;
+  // Faux réseau : réglages lus dans l'URL, ou `null`.
+  const fakeNet = fakeNetFromUrl(params);
+  // Ralenti du coup gagnant entre les points (étape V7) ; jamais sur le banc d'essai figé ni en faux réseau.
+  const recorder = juice.replay !== 'off' && freezeTick === null && !fakeNet ? new ReplayRecorder() : null;
   const badge = recorder ? createReplayBadge() : null;
   /** Point qui attend son ralenti (pas de la fin du point), et ralenti en cours. */
   let replayPending: number | null = null;
@@ -205,21 +222,23 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       if (!(event instanceof KeyboardEvent && event.repeat)) skipPressed = true;
     });
   }
-  const loop = new FixedStepLoop(SIM_DT, () => {
-    if (frozen()) return;
-    // Ralenti dû (le public a eu le temps de réagir) : la partie s'arrête là, il démarre à l'image suivante.
-    if (replay || replayDue()) return;
-    const commands = sample();
-    recorder?.record(duel, commands);
-    duel.step(commands);
-    view.afterStep();
-    if (recorder && duel.result && replayWorthy(duel, juice.replay === 'all' ? 'all' : 'big')) replayPending = duel.tick;
-    inputs.step(duel, states);
+  /** Événements déjà joués (faux réseau) : un rollback refait des pas, leurs sons et effets ne repartent pas. */
+  const gate = fakeNet ? new EventGate() : null;
+  /**
+   * Sons et effets d'un pas qui vient d'être calculé. `replayed` : pas refait par un rollback ; seuls ses événements
+   * encore jamais vus comptent, ce qui suit le temps (crissements, affichage des entrées) attend le présent.
+   */
+  const afterSimStep = (replayed: boolean): void => {
+    const unmute = gate?.muteSeen(duel);
+    view.afterStep(replayed);
+    if (!replayed) inputs.step(duel, states);
     for (const contact of duel.contacts) sounds.contact(contact);
-    duel.players.forEach((player, i) => {
-      const squeak = squeaks.update(i, player.vel, SIM_DT);
-      if (squeak > 0) sounds.squeak(player.pos, squeak);
-    });
+    if (!replayed) {
+      duel.players.forEach((player, i) => {
+        const squeak = squeaks.update(i, player.vel, SIM_DT);
+        if (squeak > 0) sounds.squeak(player.pos, squeak);
+      });
+    }
     for (const reaction of stepCrowdReactions(duel)) {
       sounds.crowd(reaction);
       mood.react(reaction);
@@ -236,16 +255,85 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const quality = shot.perfect ? 1 : Math.max(0.25, 0.85 - (Math.abs(shot.timing) / 0.12) * 0.6);
       sounds.shot({ ...shot, quality });
       sounds.grunt(shot.contact, shotPower(shot), VOICES[shot.player % VOICES.length]!);
-      const hitstop = hitstopMs(shot, juice.hitstop);
+      // Pas de micro-pause en ligne : la simulation ne peut pas s'arrêter pour un seul joueur.
+      const hitstop = fakeNet ? 0 : hitstopMs(shot, juice.hitstop);
       if (hitstop > 0) hitstopUntil = performance.now() + hitstop;
       if (shot.perfect) view.shake(0.5);
       // Le remate secoue la caméra, même sans frappe parfaite (GAME_DESIGN.md §6). [à calibrer]
       if (shot.overhead === 'remate') view.shake(shot.perfect ? 1 : 0.6);
     }
+    unmute?.();
+  };
+
+  /** Faux réseau : le match à deux machines, et ce qu'en montre l'encart (compté par image). */
+  let net: NetMatch | null = null;
+  let netRestart = false;
+  const netHud = fakeNet ? createNetHud(fakeNet) : null;
+  let netFrame = { replayed: 0, corrections: 0, stalls: 0, longest: 0 };
+  /** Balle juste avant un rollback, pour lisser à l'écran le saut que la correction lui fait faire. */
+  let ballBefore: Vec3 | null = null;
+  /** (Re)part de l'état de la partie : au début, et quand un réglage la change (menu, assistance). */
+  const startNet = (): void => {
+    if (!fakeNet) return;
+    const localA = duel.players.map((_, i) => i).filter((i) => isHuman(settings.players[i]!));
+    const { conditions, inputDelay, maxRollback } = fakeNet;
+    net = new NetMatch(
+      duel,
+      { localA, conditions, inputDelay, maxRollback },
+      {
+        onStep: (_, __, replayed) => afterSimStep(replayed),
+        beforeRollback: (state) => {
+          ballBefore = state.ball ? { ...state.ball.pos } : null;
+        },
+        afterRollback: (state) => {
+          const after = state.ball?.pos;
+          if (!ballBefore || !after) return;
+          const offset = { x: ballBefore.x - after.x, y: ballBefore.y - after.y, z: ballBefore.z - after.z };
+          const jump = Math.hypot(offset.x, offset.y, offset.z);
+          // Au-delà de quelques mètres, ce n'est plus la même balle (le point a tourné autrement) : pas de fondu.
+          if (jump > 0.005 && jump < 4) {
+            view.correctBall(offset);
+            netFrame.corrections++;
+          }
+        },
+      },
+    );
+  };
+  /** Les IA jouent sur l'autre machine, avec ce qu'elles voient de la partie là-bas. */
+  const readRemote = (state: Duel, index: number): ArcadeCommands => {
+    sources[index] = CONTROLLER_SHORT[settings.players[index]!];
+    states[index] = buttons[index] = playerSwings[index] = null;
+    return bots[index]?.commands(state) ?? NEUTRAL_ARCADE;
+  };
+  startNet();
+
+  const loop = new FixedStepLoop(SIM_DT, () => {
+    if (frozen()) return;
+    if (net) {
+      const pads = connectedGamepads();
+      const { replayed, rollbacks } = net.a.session.stats;
+      if (!net.step((_, index) => read(index, pads), readRemote)) netFrame.stalls++;
+      const stats = net.a.session.stats;
+      netFrame.replayed += stats.replayed - replayed;
+      if (stats.rollbacks > rollbacks) netFrame.longest = Math.max(netFrame.longest, stats.lastReplayed);
+      gate?.forget(duel.tick - 4 * (fakeNet?.maxRollback ?? 0));
+      if (netRestart) {
+        netRestart = false;
+        startNet();
+      }
+      return;
+    }
+    // Ralenti dû (le public a eu le temps de réagir) : la partie s'arrête là, il démarre à l'image suivante.
+    if (replay || replayDue()) return;
+    const commands = sample();
+    recorder?.record(duel, commands);
+    duel.step(commands);
+    afterSimStep(false);
+    if (recorder && duel.result && replayWorthy(duel, juice.replay === 'all' ? 'all' : 'big')) replayPending = duel.tick;
   });
 
   const debug = import.meta.env.DEV || params.has('debug');
-  if (debug) window.__duel = { duel, Bot };
+  if (debug) window.__duel = { duel, Bot, net: () => net };
 
   const perf = debug ? createPerfMeter(params.has('perf')) : null;
   let last = performance.now();
@@ -287,6 +375,10 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     if (replay) view.render(replayAlpha, frameTime * replay.speed, menu.isOpen || padTest.isOpen);
     else view.render(frozen() ? 0 : alpha, frameTime, now < hitstopUntil || frozen());
     perf?.frame(frameTime, performance.now() - renderStart, view.info());
+    if (netHud) {
+      netHud.frame(netFrame);
+      netFrame = { replayed: 0, corrections: 0, stalls: 0, longest: 0 };
+    }
     mood.update(frameTime);
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.
     audio.ambience(settings.sound && !menu.isOpen ? mood.stir : -1);

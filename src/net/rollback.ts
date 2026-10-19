@@ -44,7 +44,7 @@ export interface RollbackHooks<S> {
 
 /** Compteurs, pour l'affichage et les tests. */
 export interface RollbackStats {
-  /** Pas rejoués au total, et au dernier `advance`. */
+  /** Pas rejoués au total, et au dernier retour en arrière. */
   replayed: number;
   lastReplayed: number;
   /** Retours en arrière, et le plus long (pas). */
@@ -133,7 +133,6 @@ export class RollbackSession<S, C> {
    * machine doit attendre des commandes distantes.
    */
   advance(): boolean {
-    this.stats.lastReplayed = 0;
     this.rollback();
     if (!this.canAdvance()) {
       this.stats.stalls++;
@@ -158,7 +157,7 @@ export class RollbackSession<S, C> {
     while (this.tick < present) this.compute(true);
     const count = present - from;
     this.stats.replayed += count;
-    this.stats.lastReplayed += count;
+    this.stats.lastReplayed = count;
     this.stats.rollbacks++;
     this.stats.longest = Math.max(this.stats.longest, count);
     this.hooks.afterRollback?.(this.state);

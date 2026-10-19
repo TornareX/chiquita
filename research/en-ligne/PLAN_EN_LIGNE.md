@@ -114,3 +114,71 @@ Files classées, OpenSkill, classement, saisons, signalements.
 - OpenSkill (npm) : https://npmjs.com/package/openskill
 - Fermeture d'Hathora : https://crux.supercraft.host/blog/hathora-shut-down-where-to-go-after-may-2026/ ,
   https://docs.edgegap.com/docs/tools-and-integrations/switch-from-hathora
+
+## Phase 0 faite en partie : rollback et faux réseau (19/10/2026, branche du worktree `epic-davinci-74c02a`)
+
+Fait : points 3, 4, 5 et 6 de la phase 0. Pas fait : les maths déterministes et le test croisé entre navigateurs
+(points 1 et 2).
+
+| Pièce | Où | Ce qu'elle fait |
+|---|---|---|
+| Commandes arrondies | `src/net/codec.ts` | Stick sur 1 octet par axe (-127..127), boutons sur 2 octets : 4 octets par joueur et par pas. Arrondies **avant** la sim, pour l'humain et pour l'IA, avec ou sans `?reseau` (`src/modes/duel.ts`). |
+| Empreinte | `src/net/hash.ts` | 32 bits sur tout l'état d'un `Duel`, au bit près (clés triées, flottants par leurs 64 bits). |
+| Moteur de rollback | `src/net/rollback.ts` | Générique, sans réseau : instantané à chaque pas prédit (`deepClone`, ~30 µs), prédiction = dernière commande reçue, retour et rejeu à l'arrivée d'une commande qui contredit la prédiction, délai d'entrée, fenêtre max au-delà de laquelle on attend. |
+| Paquets | `src/net/peer.ts` | Chaque machine renvoie ses commandes tant que l'autre n'en a pas accusé réception : un paquet perdu ne perd rien. |
+| Faux réseau | `src/net/link.ts`, `src/net/duelNet.ts` | Deux « machines » dans la même page, A (les humains, la partie dessinée) et B (les IA), reliées par deux fausses liaisons (latence, gigue, perte, paquets dans le désordre). |
+| Sons et effets | `src/net/fakeNet.ts` (`EventGate`) | Chaque frappe, rebond, fin de point est daté (pas + joueur) : rejoué par un rollback, il ne repart pas. |
+| Lissage de la balle | `src/render/duelScene.ts` (`correctBall`) | Quand une correction déplace la balle, elle est dessinée à l'ancienne place puis glisse vers la bonne en 80 ms. La sim n'est pas touchée. |
+
+Seul changement de la sim : aucun. Une trouvaille, à garder en tête : `bounceCache` (dans `Duel.passesBehind`) se
+remplit au premier appel, et la lecture de la manette l'appelle **hors du pas** (`counterWallReady`). Deux machines
+dont l'une a lu la manette et l'autre non calculaient donc un rebond prévu à des instants différents. Le faux
+réseau fait ces lectures « sans trace » (`withoutTrace`) ; pour le vrai serveur, mieux vaudra que la sim ne garde
+pas en mémoire ce qu'on lui demande de l'extérieur.
+
+Mesuré :
+- Tests (`tests/net/`) : un match en double joué à travers le faux réseau (ping 120 ms, gigue 20 ms, perte 5 % ;
+  et ping 80, gigue 40, perte 30 %, sans délai) finit **avec la même empreinte, au bit près**, que le même match
+  rejoué sans réseau avec les mêmes commandes, sur les deux machines. Ping 400 ms : la machine attend, le match
+  reste juste.
+- Coût dans le navigateur : les deux machines, rollbacks, sons et effets compris, **~0,7 ms par image** à 60 i/s
+  (ping 120, gigue 20, perte 5 %).
+- Ping 120 ms, délai d'une image : un rollback typique remonte de 8 à 15 pas (30 à 60 ms).
+
+## Comment tester
+
+Lancer le jeu (`npm run dev`), brancher une manette, puis ouvrir une de ces adresses. Le joueur à la manette est
+« chez lui » ; les IA sont « chez quelqu'un d'autre », derrière la fausse liaison. On voit donc les corrections
+comme en vrai : les adversaires et le partenaire IA sautent parfois un peu, la balle se recale après leurs frappes.
+
+| Adresse | Pour sentir |
+|---|---|
+| `/?reseau=0&delai=0` | Le rollback seul, sans latence (les IA arrivent un pas en retard) : doit se jouer comme le jeu normal (référence). |
+| `/?reseau=40` | Un bon réseau en France. |
+| `/?reseau=80&gigue=10` | Un réseau européen moyen. |
+| `/?reseau=120&gigue=20&perte=5` | Un réseau médiocre : le cas à juger. |
+| `/?reseau=120&gigue=20&perte=5&delai=2` | Même chose avec 2 images de délai d'entrée : moins de corrections, frappe un peu plus molle ? |
+| `/?reseau=120&delai=0` | Sans délai : la frappe est immédiate, mais plus de corrections. |
+| `/?reseau=400` | Trop loin : 200 ms dans chaque sens, la fenêtre de 150 ms ne suffit plus, la partie attend (« attentes » grimpe) et ralentit. |
+| `/?reseau=400&fenetre=300` | Même ping, fenêtre plus grande : plus fluide, corrections plus grosses. |
+
+Ajouter `&double=1` pour un 2 contre 2 (partenaire et adversaires IA), `&ai=fort` pour des adversaires plus durs.
+
+Paramètres : `reseau` = ping aller-retour (ms) ; `gigue` = ± ms par paquet ; `perte` = % de paquets perdus ;
+`delai` = délai d'entrée en images de 1/60 s (1 par défaut) ; `fenetre` = rollback au plus, en ms (150 par défaut).
+
+Quoi regarder :
+- L'encart en bas à droite : le réseau simulé, les **pas rejoués par image** (moyenne et pire sur la demi-seconde ;
+  un pas = 1/240 s), le plus long retour en arrière (ms), les **corrections de balle** (sauts lissés) et les
+  **attentes** (pas où la partie a dû attendre).
+- Sa propre frappe : elle doit partir aussi net qu'hors ligne (`delai=0` ou `1`), ou un poil plus tard (`2`).
+- La balle après une frappe adverse : elle doit se recaler sans téléporter. Si on voit encore le saut, allonger le
+  fondu (`BALL_CORRECTION_FADE`, 80 ms) ; s'il « flotte », le raccourcir.
+- Les adversaires : leurs pas et leurs départs vers la balle se recalent (non lissés pour l'instant : c'est
+  justement à juger).
+- Les sons : une frappe, un rebond ou une réaction du public ne doivent jamais s'entendre deux fois.
+
+Limites de ce mode : pas de ralenti du coup gagnant ni de micro-pause à la frappe (la sim ne peut pas s'arrêter
+pour un seul joueur) ; changer un réglage dans le menu ou l'assistance (bouton) repart de l'état de la partie,
+sans perdre le score ; la « machine distante » fait jouer les IA sur ce qu'elles voient de la partie là-bas,
+avec leur propre retard sur l'humain.
