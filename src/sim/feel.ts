@@ -22,7 +22,7 @@ export interface FeelTuning {
 }
 
 /** Coups dont la vitesse suit `shotSpeed`. Le lob a un temps de vol imposé, le remate garde ses 120-130 km/h. */
-const SCALED_SHOTS: readonly ShotTuningKey[] = ['normal', 'slice', 'cut', 'chiquita', 'bandeja', 'vibora'];
+const SCALED_SHOTS: readonly ShotTuningKey[] = ['normal', 'slice', 'cut', 'punch', 'lowVolley', 'chiquita', 'bandeja', 'vibora'];
 
 export const FEEL_LIMITS: Record<keyof FeelTuning, { min: number; max: number; step: number }> = {
   gravity: { min: 6, max: 11, step: 0.1 },

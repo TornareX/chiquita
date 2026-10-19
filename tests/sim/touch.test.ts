@@ -107,6 +107,34 @@ describe('toucher : volée coupée, chiquita, blocage', () => {
     expect(shotStyle('lob', false, false, neutral, 0.1, ARCADE)).toBeNull();
   });
 
+  it('volée préparée : de pression par défaut, de définition seulement sur une balle offerte, basse sous le filet', () => {
+    const neutral = { forward: 0, right: 0 };
+    const back = { forward: -1, right: 0 };
+    const ball = { height: 1.3, pressure: 0.2, perfect: true, nearNet: true };
+    const style = (b: Partial<typeof ball>, volley = true) => shotStyle('slice', volley, false, neutral, 1, ARCADE, false, { ...ball, ...b });
+    expect(style({})).toBe('punch');
+    // Pas parfaite, balle jaune ou prise sous la bande : la volée de pression.
+    expect(style({ perfect: false })).toBe('cut');
+    expect(style({ pressure: 0.5 })).toBe('cut');
+    expect(style({ height: 0.95 })).toBe('cut');
+    // Sous la bande du filet (une chiquita), de volée ou au pied : volée basse, on remonte la balle.
+    expect(style({ height: 0.5 })).toBe('low');
+    expect(style({ height: 0.4 }, false)).toBe('low');
+    expect(style({ height: 0.4, nearNet: false }, false)).toBeNull();
+    // Sans préparation, toujours le blocage ; la chiquita reste une chiquita.
+    expect(shotStyle('slice', true, false, neutral, 0.1, ARCADE, false, { ...ball, height: 0.5 })).toBe('block');
+    expect(shotStyle('slice', false, false, back, 1, ARCADE, false, { ...ball, height: 0.4 })).toBe('chiquita');
+  });
+
+  it('vitesses : la volée coupée met la pression (~70 km/h), la définition conclut, la volée basse remonte la balle', () => {
+    const { cut, punch, lowVolley } = ARCADE.rally;
+    expect(cut.speed * 3.6).toBeGreaterThan(60);
+    expect(cut.speed * 3.6).toBeLessThan(80);
+    expect(punch.speed).toBeGreaterThan(cut.speed * 1.25);
+    expect(lowVolley.speed).toBeLessThan(cut.speed);
+    expect(lowVolley.clearance).toBeGreaterThan(cut.clearance);
+  });
+
   it('préparation : sans temps, on bloque ; armé tôt, le coup part plein, sans rien de plus au-delà', () => {
     expect(preparation(0.1, ARCADE)).toBe(ARCADE.rally.blockSpeed);
     expect(preparation(ARCADE.rally.fullPrep, ARCADE)).toBe(1);
@@ -114,7 +142,7 @@ describe('toucher : volée coupée, chiquita, blocage', () => {
     expect(preparation(0.45, ARCADE)).toBeGreaterThan(ARCADE.rally.blockSpeed);
   });
 
-  it('volée coupée sur une balle flottante : aussi rapide que la volée normale, elle rebondit plus bas', () => {
+  it('volée coupée parfaite sur une balle flottante : volée de définition, aussi rapide que la volée normale, elle rebondit plus bas', () => {
     // Coup de fond lent et haut vers le joueur au filet.
     const volley = (kind: 'slice' | 'normal') => {
       const duel = incoming('normal', vec3(0, 1, 8.5), { forward: -0.5, right: 0 }, vec3(0.6, 0, -3), true);
@@ -124,7 +152,7 @@ describe('toucher : volée coupée, chiquita, blocage', () => {
     };
     const cut = volley('slice');
     const flat = volley('normal');
-    expect(cut.shot.style).toBe('cut');
+    expect(cut.shot.style).toBe('punch');
     expect(cut.shot.volley).toBe(true);
     expect(cut.shot.perfect).toBe(true);
     // Au padel, la volée se joue coupée, aussi fort.

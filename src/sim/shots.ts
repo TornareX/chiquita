@@ -36,7 +36,7 @@ export function forehandFor(side: CourtSide, hand: Hand): Vec3 {
 }
 
 /** Réglages d'un coup : un bouton (sauf B, qui se décline) ou une variante du coup au-dessus de la tête. */
-export type ShotTuningKey = Exclude<ShotKind, 'overhead'> | OverheadKind | 'cut' | 'chiquita';
+export type ShotTuningKey = Exclude<ShotKind, 'overhead'> | OverheadKind | 'cut' | 'punch' | 'lowVolley' | 'chiquita';
 
 export function shotTuning(kind: ShotTuningKey, profile: PhysicsProfile): ShotTypeTuning {
   return profile.rally[kind];

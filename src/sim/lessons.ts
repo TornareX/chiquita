@@ -264,7 +264,9 @@ export const STICK_HOW: Record<StickShot, string> = {
 export function stickShotOf(shot: DuelShot): StickShot | null {
   if (shot.overhead === 'remate' || shot.overhead === 'bajada') return 'smash';
   if (shot.overhead) return shot.overhead;
-  if (shot.volley) return shot.style === 'cut' ? 'voleeCoupee' : shot.style === 'block' ? 'voleeBloquee' : null;
+  // Volée de définition et volée basse : le geste de la volée coupée, sur une balle haute offerte ou sous le filet.
+  const cutGesture = shot.style === 'cut' || shot.style === 'punch' || shot.style === 'low';
+  if (shot.volley) return cutGesture ? 'voleeCoupee' : shot.style === 'block' ? 'voleeBloquee' : null;
   if (shot.style === 'chiquita') return 'chiquita';
   if (shot.style === 'block') return 'sansPrep';
   return shot.kind === 'lob' ? 'lob' : shot.kind === 'normal' ? 'normal' : null;
@@ -356,7 +358,7 @@ export const STICK_LESSONS: readonly Lesson[] = [
   stickLesson('chiquita', 'La chiquita', 2, 'Sur une balle facile, face à des adversaires au filet : courte et basse, dans leurs pieds.', 'Même préparation : à la fin, lâche le stick, il revient tout seul au centre.', { prepared: true, end: 'letGo' }),
   stickLesson('sansPrep', 'Sans préparation', 1, 'En défense, quand la balle arrive trop vite pour préparer.', 'Un coup sec du stick vers l’avant, sans le tirer vers toi : la balle repart, moins fort et moins précise.', { prepared: false }),
   stickLesson('voleeBloquee', 'La volée bloquée', 2, 'Au filet, quand la balle arrive vite : on met la raquette devant.', 'Ne prépare pas : un coup sec du stick vers l’avant quand la balle arrive à côté de toi.', { prepared: false }),
-  stickLesson('voleeCoupee', 'La volée coupée', 2, 'Au filet, sur une balle flottante : elle rebondit bas et meurt avant la vitre.', 'Comme un coup normal, mais de volée : tire le stick vers toi dès que Rouge frappe, puis ramène-le tout droit.', { prepared: true, end: 'straight' }),
+  stickLesson('voleeCoupee', 'La volée coupée', 2, 'Au filet, la volée de base : profonde et coupée, elle met la pression. Parfaite sur une balle haute et facile, elle conclut ; sous le filet, elle remonte la balle.', 'Comme un coup normal, mais de volée : tire le stick vers toi dès que Rouge frappe, puis ramène-le tout droit.', { prepared: true, end: 'straight' }),
   stickLesson('bandeja', 'La bandeja', 3, 'Au filet, sur un lob pas assez haut pour un smash : elle te garde au filet.', 'Sans préparer : un coup sec du stick vers l’avant quand la balle redescend à hauteur de tes yeux. Trop tôt, elle rebondit ; trop tard, filet.', { prepared: false }),
   stickLesson('smash', 'Le smash', 3, 'Sur un lob, près du filet : il peut sortir du terrain. Mal minuté ou de trop loin, il rebondit chez l’adversaire, qui peut contrer.', 'Prépare dès que Rouge lobe (stick tiré vers toi), puis ramène-le tout droit vers l’avant quand la balle est en haut, bras tendu.', { prepared: true, end: 'straight' }),
   stickLesson('vibora', 'La víbora', 3, 'Sur un lob : plus rapide que la bandeja, avec un effet qui longe la vitre latérale.', 'Même préparation que le smash : à la fin, ramène le stick en arc, par un côté.', { prepared: true, end: 'arc' }),

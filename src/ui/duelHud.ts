@@ -118,7 +118,9 @@ function shotLabel(shot: DuelShot, detailed: boolean): string | null {
   if (!detailed && !shot.perfect && !shot.outside) return null;
   if (shot.outside) return 'salida de pista !';
   if (shot.overhead) return OVERHEADS[shot.overhead] + (shot.perfect ? ' parfaite !' : '');
+  if (shot.style === 'punch') return 'volée de définition !';
   if (shot.style === 'cut') return shot.perfect ? 'volée coupée parfaite !' : 'volée coupée';
+  if (shot.style === 'low') return 'volée basse';
   if (shot.style === 'chiquita') return 'chiquita';
   if (shot.style === 'block') return 'bloquée';
   return shot.perfect ? 'parfait !' : null;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NEUTRAL_ARCADE, type ArcadeCommands } from '../../src/sim/commands';
 import { SIM_DT } from '../../src/sim/constants';
 import { Duel, type PrepMove } from '../../src/sim/duel';
+import { ARCADE } from '../../src/sim/profile';
 import { aimTarget, forwardFor, rightFor, solveShot } from '../../src/sim/shots';
 import { vec3 } from '../../src/sim/vec3';
 import { AI_LEVELS, Bot } from '../../src/sim/bot';
@@ -83,7 +84,8 @@ describe('stick gauche pendant la préparation', () => {
       const end = duel.players[0].pos;
       return Math.hypot(end.x - start.x, end.z - start.z);
     };
-    expect(moved('bloque')).toBeLessThan(0.01);
+    // Bloqué : seulement le pas d'ajustement vers le point d'impact, s'il est tout près.
+    expect(moved('bloque')).toBeLessThan(ARCADE.rally.adjustStep + 0.05);
     // L'impact est encore loin : bloqué au dernier moment se place comme libre.
     expect(moved('tard')).toBeGreaterThan(2);
     expect(moved('ralenti')).toBeGreaterThan(0.3);
@@ -130,6 +132,31 @@ describe('stick gauche pendant la préparation', () => {
       hit = duel.shot?.player === 0;
     }
     expect(hit).toBe(true);
+  });
+
+  it('placement manuel, bloqué : préparé dès la frappe adverse au filet, le pas d’ajustement va chercher la chiquita', () => {
+    // Le cas qui frustrait (19/10) : tiré vers soi dès que Rouge frappe, le joueur restait figé à côté de la balle.
+    for (const right of [-1, 1]) {
+      const duel = new Duel(null);
+      duel.players[0].assist = 'off';
+      duel.players[0].prepMove = 'bloque';
+      const from = vec3(0.3, 0.6, 8.3);
+      duel.playSituation(1, [vec3(0.4, 0, -3.2), vec3(0.3, 0, 8.5)], { kind: 'normal', contact: from, target: vec3(0, 0.03, -5) });
+      const chiquita = solveShot('chiquita', from, aimTarget('chiquita', 1, { forward: -0.6, right: right * 0.4 }, false, duel.profile), false, duel.profile);
+      duel.ball!.vel = chiquita.vel;
+      duel.ball!.spin = chiquita.spin;
+      const me = duel.players[0];
+      const aim = { forward: 0, right: 0.5 };
+      let released = false;
+      let hit = false;
+      for (let i = 0; i < 3 / SIM_DT && duel.phase === 'rally' && !hit; i++) {
+        const plan = me.engagement?.plan;
+        if (plan && plan.tick - duel.tick <= 2) released = true;
+        duel.step([{ ...NEUTRAL_ARCADE, stick: aim, shot: released ? null : 'slice' }, NEUTRAL_ARCADE]);
+        hit = duel.shot?.player === 0;
+      }
+      expect(hit, `chiquita ${right}`).toBe(true);
+    }
   });
 
   it('les IA ne sont pas concernées : le défaut reste libre', () => {

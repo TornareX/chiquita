@@ -146,6 +146,20 @@ export interface RallyTuning {
   lateReach: number;
   /** Après le relâcher, la raquette reste active ce temps (s) : sans balle à portée, coup dans le vide. */
   swingWindow: number;
+  /**
+   * Sur une balle lente, la raquette tendue d'avance attend plus longtemps : `swingWindowSlow` s à `swingSlowSpeed` m/s
+   * et moins, `swingWindow` à `swingFastSpeed` et plus. Relâcher un peu tôt sur une chiquita ne fait plus passer à
+   * travers la balle (le coup reste jugé en avance).
+   */
+  swingWindowSlow: number;
+  swingSlowSpeed: number;
+  swingFastSpeed: number;
+  /**
+   * Pas d'ajustement : en placement manuel, stick gauche bloqué pendant la préparation, le joueur fait seul
+   * les derniers pas vers le point d'impact s'il est à moins de tant (m). Comme le split-step suivi d'un pas des pros :
+   * préparer tôt au filet ne fige plus le joueur à côté de la chiquita.
+   */
+  adjustStep: number;
   /** Frappe parfaite seulement si la balle passe à moins de cette distance du point idéal (m). */
   sweetSpot: number;
   /**
@@ -179,6 +193,8 @@ export interface RallyTuning {
    * juste avant le rebond, le moindre retard la faisait rater.
    */
   volleyLow: number;
+  /** Course assistée : coût d'une volée prise sous `lowVolley.height` (par mètre sous elle), pour la prendre plus haute. */
+  volleyLowCost: number;
   /**
    * Balle qui va jusqu'à la vitre : la course assistée ne la prend avant que si le point d'impact
    * laisse au moins cette place devant la vitre (m) ; plus près, le joueur la laisse passer.
@@ -311,11 +327,27 @@ export interface RallyTuning {
   /** Bajada : attaque depuis le fond sur la balle haute qui ressort de la vitre, à plat, profonde. */
   bajada: ShotTypeTuning;
   /**
-   * Volée coupée (X de volée) : aussi rapide que la volée normale, plus coupée, elle s'écrase au rebond.
+   * Volée coupée (geste préparé de volée) : la volée de pression des pros, ~70 km/h, profonde et coupée. Elle gagne
+   * rarement le point d'elle-même : elle fait remettre une balle plus faible, jusqu'à la balle à conclure, ou le lob.
    * L'IA la choisit sur une balle flottante (verte, prise au-dessus de `cutLow`).
    */
   cut: ShotTypeTuning;
   cutLow: number;
+  /**
+   * Volée de définition : le même geste, frappé parfait sur une balle offerte (verte, prise au-dessus de `punch.low`) :
+   * rapide, coupée et en angle, elle conclut. C'est la balle reçue qui ouvre ce coup, pas le geste.
+   */
+  punch: ShotTypeTuning;
+  punchLow: number;
+  /**
+   * Volée basse : préparée, prise sous `lowVolleyHeight` (sous la bande du filet), de volée ou au pied près du filet. Il
+   * faut remonter la balle : lente, plus haute sur le filet, profonde. Contre une bonne chiquita, on garde le filet sans
+   * pouvoir attaquer.
+   */
+  lowVolley: ShotTypeTuning;
+  lowVolleyHeight: number;
+  /** Après le rebond, la balle prise sous `lowVolleyHeight` à moins de tant du filet (m) se joue aussi en volée basse. */
+  lowVolleyNet: number;
   /** Chiquita (X stick vers soi, après rebond) : lente et basse, aux pieds du joueur au filet. */
   chiquita: ShotTypeTuning;
   /** Contre-vitre (contrapared) : la balle qui a passé le joueur se renvoie contre sa propre vitre du fond. */
@@ -592,6 +624,10 @@ export const REALISTIC: PhysicsProfile = {
     lateWindow: 0.12,
     lateReach: 1.6,
     swingWindow: 0.15,
+    swingWindowSlow: 0.32, // [à calibrer en jouant]
+    swingSlowSpeed: 11,
+    swingFastSpeed: 20,
+    adjustStep: 1.3, // [à calibrer en jouant]
     sweetSpot: 0.45,
     lateDriftLateral: 2.5,
     lateDriftDepth: 4.5,
@@ -606,6 +642,7 @@ export const REALISTIC: PhysicsProfile = {
     recoverTime: 0.3,
     volleyZone: 4.5,
     volleyLow: 0.6, // [à calibrer en jouant]
+    volleyLowCost: 3,
     glassRoom: 1.8,
     magnetRadius: 1.5,
     magnetNear: 0.6,
@@ -785,7 +822,23 @@ export const REALISTIC: PhysicsProfile = {
       spin: -0.1,
     },
     cut: {
-      // Comme la volée normale (coup normal × `volleySpeed`) : au padel, la volée se joue coupée, aussi fort.
+      // Volée de pression : ~70 km/h (75 parfaite). À 26-30 m/s (~100 km/h), elle gagnait un point sur deux sur une
+      // simple balle de défense, et la volée bloquée aucun : rien entre les deux.
+      speed: 19.5,
+      speedPerfect: 21,
+      clearance: 0.2,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 4,
+      depthNeutral: 7.5,
+      depthLong: 8.8,
+      // Coupée : elle reste basse après la vitre du fond, sans s'écraser au rebond.
+      spin: -0.3,
+      spinPerfect: -0.4,
+    },
+    cutLow: 0.9,
+    punch: {
+      // L'ancienne volée coupée : rapide, en angle, elle s'écrase au rebond.
       speed: 26,
       speedPerfect: 30,
       clearance: 0.12,
@@ -794,11 +847,24 @@ export const REALISTIC: PhysicsProfile = {
       depthShort: 3.5,
       depthNeutral: 6.5,
       depthLong: 8.5,
-      // Plus coupée que la volée normale (-0,25) : rebond bas. À -0,6 (-0,95 parfaite), elle tuait un point sur deux.
       spin: -0.4,
       spinPerfect: -0.6,
     },
-    cutLow: 0.9,
+    punchLow: 1.05, // au-dessus de la bande du filet (0,88 m) : on frappe vers le bas [à calibrer en jouant]
+    lowVolley: {
+      // Remontée : ~45 km/h, elle passe plus haut sur le filet et va au fond, pour garder le filet.
+      speed: 13,
+      speedPerfect: 14.5,
+      clearance: 0.4,
+      flightTime: 0,
+      flightTimePerfect: 0,
+      depthShort: 4.5,
+      depthNeutral: 7,
+      depthLong: 8.5,
+      spin: -0.3,
+    },
+    lowVolleyHeight: 0.75, // sous la bande du filet [à calibrer en jouant]
+    lowVolleyNet: 3,
     chiquita: {
       // Rasante : à 7 m/s elle devait monter à 2,7 m pour passer ; à 11 m/s elle passe juste au-dessus du filet.
       speed: 11,
