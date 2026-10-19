@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyYawTarget, computePose, FOLLOW_TIME, hammerFace, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, hammerFace, SWING_IN, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
 import { NEUTRAL_ARCADE } from '../../src/sim/commands';
 import { Duel, type HighFloor } from '../../src/sim/duel';
 import { vec3 } from '../../src/sim/vec3';
@@ -35,16 +35,17 @@ describe('poses du personnage', () => {
 
   it("montre l'image d'impact au pas du contact, puis la fin du geste, puis revient en attente", () => {
     const at = (seconds: number) => computePose({ ...still, strike: { family: 'fore', seconds } });
-    const impact = at(0);
+    // La frappe part au contact ; l'image d'impact arrive au bout du geste vers l'avant, très court.
+    const impact = at(SWING_IN);
     const prepared = computePose({ ...still, prep: { family: 'fore', seconds: 1 } });
     // À l'impact, la raquette est devant le joueur et le buste presque de face ; armée, elle était derrière.
     expect(impact.racket[2]).toBeGreaterThan(0.4);
     expect(prepared.racket[2]).toBeLessThan(0);
     expect(Math.abs(impact.twist)).toBeLessThan(0.3);
     // Fin du geste : le buste a tourné de l'autre côté.
-    expect(at(FOLLOW_TIME).twist).toBeGreaterThan(0.5);
+    expect(at(SWING_IN + FOLLOW_TIME).twist).toBeGreaterThan(0.5);
     // Ensuite, retour à la pose d'attente.
-    expect(at(FOLLOW_TIME + RECOVER_TIME + 0.01)).toEqual(computePose(still));
+    expect(at(SWING_IN + FOLLOW_TIME + RECOVER_TIME + 0.01)).toEqual(computePose(still));
   });
 
   it('arme le coup au-dessus de la tête bras levé, et le revers de l’autre côté du coup droit', () => {
@@ -119,9 +120,9 @@ describe('volées (images de Xavier)', () => {
   const phases = (family: 'voleeFore' | 'voleeBack') => [
     computePose({ ...still, prep: { family, seconds: 0.15 } }),
     computePose({ ...still, prep: { family, seconds: 1 } }),
-    computePose({ ...still, strike: { family, seconds: 0 } }),
-    computePose({ ...still, strike: { family, seconds: FOLLOW_TIME / 2 } }),
-    computePose({ ...still, strike: { family, seconds: FOLLOW_TIME } }),
+    computePose({ ...still, strike: { family, seconds: SWING_IN } }),
+    computePose({ ...still, strike: { family, seconds: SWING_IN + FOLLOW_TIME / 2 } }),
+    computePose({ ...still, strike: { family, seconds: SWING_IN + FOLLOW_TIME } }),
   ];
 
   it('la tête de raquette reste au-dessus du poignet, de la préparation à la fin du geste', () => {
@@ -138,15 +139,15 @@ describe('volées (images de Xavier)', () => {
 
   it('à l’impact, pas en avant avec la jambe opposée au coup', () => {
     // Coup droit (droitier) : la jambe gauche avance ; revers : la droite. Balancier négatif = vers l'avant.
-    const fore = computePose({ ...still, strike: { family: 'voleeFore', seconds: 0 } });
+    const fore = computePose({ ...still, strike: { family: 'voleeFore', seconds: SWING_IN } });
     expect(fore.legL.swing).toBeLessThan(-0.3);
     expect(fore.legL.swing).toBeLessThan(fore.legR.swing);
-    const back = computePose({ ...still, strike: { family: 'voleeBack', seconds: 0 } });
+    const back = computePose({ ...still, strike: { family: 'voleeBack', seconds: SWING_IN } });
     expect(back.legR.swing).toBeLessThan(-0.3);
     expect(back.legR.swing).toBeLessThan(back.legL.swing);
     // Pas de pas en préparation ni au fond de court.
     expect(computePose({ ...still, prep: { family: 'voleeFore', seconds: 1 } }).legL.swing).toBeCloseTo(0, 9);
-    expect(computePose({ ...still, strike: { family: 'fore', seconds: 0 } }).legL.swing).toBeCloseTo(0, 9);
+    expect(computePose({ ...still, strike: { family: 'fore', seconds: SWING_IN } }).legL.swing).toBeCloseTo(0, 9);
   });
 
   it('balle prise avant le rebond : geste de volée, du côté de la balle', () => {
@@ -181,10 +182,10 @@ describe('bandeja et víbora (images de Xavier)', () => {
   });
 
   it('impact sur le côté, devant, puis fin du geste à gauche, à hauteur de hanche, jambe droite devant', () => {
-    const impact = computePose({ ...still, strike: { family: 'bandeja', seconds: 0 } });
+    const impact = computePose({ ...still, strike: { family: 'bandeja', seconds: SWING_IN } });
     expect(impact.racket[0]).toBeLessThan(-0.5);
     expect(impact.racket[2]).toBeGreaterThan(0.4);
-    const follow = computePose({ ...still, strike: { family: 'bandeja', seconds: FOLLOW_TIME } });
+    const follow = computePose({ ...still, strike: { family: 'bandeja', seconds: SWING_IN + FOLLOW_TIME } });
     expect(follow.twist).toBeGreaterThan(0.8);
     expect(follow.armR[0]).toBeGreaterThan(0.5);
     expect(follow.armR[1]).toBeLessThan(0);
@@ -204,19 +205,19 @@ describe('smash (images de Xavier)', () => {
   });
 
   it('impact en l’air, bras tendu au plus haut ; il retombe pendant la fin du geste', () => {
-    const impact = computePose({ ...still, strike: { family: 'overhead', seconds: 0 } });
+    const impact = computePose({ ...still, strike: { family: 'overhead', seconds: SWING_IN } });
     expect(impact.jump).toBeGreaterThan(0.2);
     expect(impact.armR[1]).toBeGreaterThan(0.95);
     expect(impact.racket[1]).toBeGreaterThan(0.8);
-    const half = computePose({ ...still, strike: { family: 'overhead', seconds: FOLLOW_TIME / 2 } });
+    const half = computePose({ ...still, strike: { family: 'overhead', seconds: SWING_IN + FOLLOW_TIME / 2 } });
     expect(half.jump).toBeLessThan(impact.jump);
-    expect(computePose({ ...still, strike: { family: 'overhead', seconds: FOLLOW_TIME } }).jump).toBeCloseTo(0, 9);
+    expect(computePose({ ...still, strike: { family: 'overhead', seconds: SWING_IN + FOLLOW_TIME } }).jump).toBeCloseTo(0, 9);
     // Les autres coups ne sautent pas.
-    expect(computePose({ ...still, strike: { family: 'bandeja', seconds: 0 } }).jump).toBe(0);
+    expect(computePose({ ...still, strike: { family: 'bandeja', seconds: SWING_IN } }).jump).toBe(0);
   });
 
   it('fin du geste : corps plié vers l’avant, raquette en bas à gauche, jambe droite lancée devant, tendue', () => {
-    const follow = computePose({ ...still, strike: { family: 'overhead', seconds: FOLLOW_TIME } });
+    const follow = computePose({ ...still, strike: { family: 'overhead', seconds: SWING_IN + FOLLOW_TIME } });
     expect(follow.lean).toBeGreaterThan(0.4);
     expect(follow.racket[0]).toBeGreaterThan(0.3);
     expect(follow.racket[1]).toBeLessThan(-0.5);
@@ -231,10 +232,10 @@ describe('service à la cuillère (images de Xavier)', () => {
     expect(prep.racket[1]).toBeGreaterThan(0.8);
     expect(prep.armL[2]).toBeGreaterThan(0.6);
     expect(prep.twist).toBeLessThan(-0.8);
-    const impact = computePose({ ...still, strike: { family: 'serve', seconds: 0 } });
+    const impact = computePose({ ...still, strike: { family: 'serve', seconds: SWING_IN } });
     expect(impact.armR[1]).toBeLessThan(-0.6);
     expect(impact.racket[2]).toBeGreaterThan(0.4);
-    const follow = computePose({ ...still, strike: { family: 'serve', seconds: FOLLOW_TIME } });
+    const follow = computePose({ ...still, strike: { family: 'serve', seconds: SWING_IN + FOLLOW_TIME } });
     expect(follow.racket[0]).toBeGreaterThan(0.2);
     expect(follow.racket[2]).toBeLessThan(-0.5);
     expect(follow.legR.swing).toBeLessThan(follow.legL.swing);

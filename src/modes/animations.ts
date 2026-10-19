@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import { CHARACTERS, createCharacter, type CharacterRig } from '../render/character';
+import { CHARACTERS, createCharacter, SWEET_SPOT, type CharacterRig } from '../render/character';
 import { createCourt } from '../render/court';
 import { PARTNER_COLORS, TEAM_COLORS } from '../render/duelScene';
-import { bodyYawTarget, computePose, FOLLOW_TIME, RECOVER_TIME, STRIDE, SWING_FAMILIES, type SwingFamily } from '../render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, RECOVER_TIME, strikeReach, STRIDE, SWING_FAMILIES, SWING_IN, type SwingFamily } from '../render/pose';
 
 /**
  * Visionneur d'animations (`?mode=animations`) : un personnage seul, qui joue en boucle le geste choisi, sans
  * simulation. Pour juger et régler les poses de `src/render/pose.ts` sans avoir à jouer.
- * Paramètres d'URL (pour garder un lien) : `&coup=voleeFore`, `&vue=cote`, `&vitesse=0.25`, `&prep=0.3`, `&perso=2`.
+ * Paramètres d'URL (pour garder un lien) : `&coup=voleeFore`, `&vue=cote`, `&vitesse=0.25`, `&prep=0.3`, `&perso=2`,
+ * `&contact=basse` (balle à frapper ailleurs que là où la pose met le tamis : l'IK du bras la rejoint).
  */
 
 /** Noms affichés ; une famille ajoutée dans `pose.ts` sans nom ici apparaît sous son nom de code. */
@@ -35,8 +36,26 @@ const VIEWS = { face: 0, troisQuarts: -Math.PI / 4, cote: -Math.PI / 2, dos: Mat
 type View = keyof typeof VIEWS;
 const VIEW_NAMES: Record<View, string> = { face: 'Face', troisQuarts: '3/4 face', cote: 'Côté', dos: 'Dos' };
 
+/**
+ * Balle à frapper, par rapport au centre du tamis à l'image d'impact (repère du joueur, m) : `pose` la met où la pose
+ * l'attend ; les autres montrent l'IK du bras (et des jambes) qui va la chercher. `aucune` : la pose seule.
+ */
+const CONTACTS = {
+  aucune: null,
+  pose: [0, 0, 0],
+  basse: [0, -0.4, 0.1],
+  haute: [0, 0.3, 0],
+  loin: [-0.35, 0, 0.1],
+  tresLoin: [-0.7, -0.1, 0.2],
+  devant: [0, 0, 0.35],
+} as const;
+type Contact = keyof typeof CONTACTS;
+const CONTACT_NAMES: Record<Contact, string> = { aucune: 'Aucune (pose seule)', pose: 'Là où est la pose', basse: 'Plus basse', haute: 'Plus haute', loin: 'Plus loin du corps', tresLoin: 'Très loin (volée en extension)', devant: 'Plus devant' };
+
 /** Boucle d'un coup : préparation, frappe (fin du geste puis retour), puis un temps en attente avant de recommencer (s). */
 const HOLD = 0.5;
+
+const STILL = { inPlay: true, prep: null, strike: null, speed: 0, heading: 0, bodyYaw: 0, stride: 0, time: 0 };
 
 export function startAnimations(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
@@ -97,18 +116,26 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
     character: Math.min(3, Math.max(0, Number(params.get('perso') ?? 0) || 0)),
     stride: 0,
     yaw: 0,
+    contact: (params.get('contact') as Contact | null) ?? 'pose',
   };
+  if (!(state.contact in CONTACTS)) state.contact = 'pose';
+
+  // Balle à frapper (IK) : visible pendant le geste, au point que le tamis doit rejoindre.
+  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.033, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe6ff3a }));
+  ballMesh.visible = false;
+  scene.add(ballMesh);
+  const contactPoint = new THREE.Vector3();
   setCharacter(state.character);
 
   const clipLength = (): number =>
-    state.clip.kind === 'swing' ? state.prep + FOLLOW_TIME + RECOVER_TIME + HOLD : 2;
+    state.clip.kind === 'swing' ? state.prep + SWING_IN + FOLLOW_TIME + RECOVER_TIME + HOLD : 2;
   /** Phase affichée à l'instant `t` d'un coup. */
   const phaseAt = (t: number): string => {
     if (t < state.prep) return 'Préparation';
     const s = t - state.prep;
-    if (s < 0.02) return 'Impact';
-    if (s < FOLLOW_TIME) return 'Fin du geste';
-    if (s < FOLLOW_TIME + RECOVER_TIME) return 'Retour en attente';
+    if (s < SWING_IN + 0.02) return 'Impact';
+    if (s < SWING_IN + FOLLOW_TIME) return 'Fin du geste';
+    if (s < SWING_IN + FOLLOW_TIME + RECOVER_TIME) return 'Retour en attente';
     return 'Attente';
   };
 
@@ -199,6 +226,12 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
       ),
     );
   }
+  panel.append(heading('Balle à frapper (IK du bras)'));
+  for (const contact of Object.keys(CONTACTS) as Contact[]) {
+    const b = button(CONTACT_NAMES[contact], () => (state.contact = contact), () => state.contact === contact, `contact-${contact}`);
+    b.style.display = 'block';
+    panel.append(b);
+  }
   panel.append(heading('Personnage'));
   CHARACTERS.forEach((look, i) =>
     panel.append(
@@ -255,7 +288,7 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
       return computePose({
         inPlay: true,
         prep: striking ? null : { family: clip.family, seconds: t },
-        strike: striking ? { family: clip.family, seconds: t - state.prep } : null,
+        strike: striking ? { family: clip.family, seconds: t - state.prep, from: { family: clip.family, seconds: state.prep } } : null,
         speed: 0,
         heading: 0,
         bodyYaw: 0,
@@ -296,7 +329,21 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
     last = now;
     if (state.playing) state.time = (state.time + dt * state.speed) % clipLength();
     const t = state.time;
-    rig?.apply(poseAt(t, state.playing ? dt * state.speed : 0));
+    const pose = poseAt(t, state.playing ? dt * state.speed : 0);
+    const offset = state.clip.kind === 'swing' ? CONTACTS[state.contact] : null;
+    ballMesh.visible = offset !== null && t >= state.prep - 0.15 && t < state.prep + SWING_IN + 0.15;
+    if (rig && offset && state.clip.kind === 'swing') {
+      // Centre du tamis à l'image d'impact, pose seule, plus le décalage choisi.
+      rig.apply(computePose({ ...STILL, strike: { family: state.clip.family, seconds: SWING_IN } }));
+      holder.updateMatrixWorld(true);
+      rig.racketMount.localToWorld(contactPoint.set(0, SWEET_SPOT, 0));
+      // Côté revers, « plus loin du corps » est à sa gauche.
+      const side = /back/i.test(state.clip.family) ? -1 : 1;
+      contactPoint.add(new THREE.Vector3(offset[0] * side, offset[1], offset[2]));
+      ballMesh.position.copy(contactPoint);
+    }
+    const weight = offset && t >= state.prep ? strikeReach(t - state.prep) : 0;
+    rig?.apply(pose, weight > 0 ? { target: contactPoint, weight } : null);
     slider.value = String(Math.round((t / clipLength()) * 1000));
     phaseLabel.textContent =
       state.clip.kind === 'swing'

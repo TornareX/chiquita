@@ -9,7 +9,7 @@ import { createCourt } from './court';
 import { createEffectsView, effectsEnabled } from './effectsView';
 import { arenaEnabled, createArena } from './arena';
 import { stepCrowdReactions } from '../audio/recipes';
-import { CHARACTERS, createCharacter, type CharacterRig } from './character';
+import { CHARACTERS, createCharacter, type CharacterRig, type Reach } from './character';
 import { applyLook, enableShadows, exactColor, renderLook, setShadows, softwareRendering } from './look';
 import { loadModel, modelsEnabled } from './models';
 import { dressCharacter, toonLookEnabled, updateOutline } from './toonLook';
@@ -17,7 +17,7 @@ import { dressCourt, turfEnabled } from './turf';
 import { dressHall, hallEnabled } from './hall';
 import { createPostfx, linearGlass, postfxWanted } from './postfx';
 import type { RenderInfo } from '../ui/perfMeter';
-import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, STRIDE, strikeReach, SWING_IN, swingSide, waitReach, type PoseInput, type PrepState, type SwingFamily } from './pose';
 import { SlideDetector } from './effects';
 import { juiceFlags } from './juice';
 import { createSwingTrail, swingLook, type SwingTrail } from './swingTrail';
@@ -153,6 +153,8 @@ interface PlayerView {
     turn: number;
     /** Geste de frappe en cours (arc de raquette). */
     swinging: boolean;
+    /** Dernière préparation vue : le départ du geste vers l'avant à la frappe suivante. */
+    lastPrep: PrepState | null;
   };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
@@ -238,7 +240,7 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null, turn: 0, swinging: false };
+  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null, turn: 0, swinging: false, lastPrep: null };
   return { object, contactShadow, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null, trail: null, trailTick: -Infinity };
 }
 
@@ -518,9 +520,11 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   window.addEventListener('resize', resize);
   resize();
 
+  const reachTarget = new THREE.Vector3();
   /**
    * Pose du personnage, lue dans l'état de la simulation sans le modifier : préparation (de l'appui au
-   * relâcher), frappe (l'image d'impact tombe sur le pas du contact, `lastHitTick`), course et attente.
+   * relâcher), frappe (l'image d'impact arrive `SWING_IN` après le pas du contact, `lastHitTick`), course et attente.
+   * Autour de l'impact, l'IK du bras amène le tamis sur le point de contact de la simulation.
    */
   const animate = (view: PlayerView, player: DuelPlayer, pos: Vec3, alpha: number, frameTime: number): void => {
     // Tourné vers sa vitre (contre-vitre) : le repère du joueur fait demi-tour.
@@ -536,10 +540,12 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
     const engagement = player.engagement;
     const isServer = duel.players[duel.server] === player;
     const toss = duel.phase === 'toss' && isServer ? duel.toss : null;
-    let prep: { family: SwingFamily; seconds: number } | null = null;
+    let prep: PrepState | null = null;
+    // Relâché, la balle pas encore là (volée qui attend) : la raquette part vers le point de contact prévu.
+    let reach: Reach | null = null;
     if (toss && toss.releaseTick === null) {
       prep = { family: 'serve', seconds: (now - duel.phaseTick) * SIM_DT };
-    } else if (engagement && engagement.releaseTick === null) {
+    } else if (engagement) {
       const target = (view.anim.turn > 0.5 ? null : engagement.plan?.contact) ?? duel.ball?.pos ?? null;
       if (target) view.anim.side = swingSide(localX(target), view.anim.side);
       // Tourné vers sa vitre : une contre-vitre, coup au sol.
@@ -549,13 +555,20 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       // sauf le smash annoncé aux boutons (stick de déplacement vers l'avant à l'appui).
       view.anim.highFamily = !engagement.swing && duel.rematePrepared(duel.players.indexOf(player)) ? 'overhead' : 'bandeja';
       const family = view.anim.high ? view.anim.highFamily : lowFamily(view.anim.side, view.anim.volley);
-      prep = { family, seconds: (now - engagement.pressTick) * SIM_DT };
+      const released = engagement.releaseTick;
+      prep = { family, seconds: ((released ?? now) - engagement.pressTick) * SIM_DT };
+      if (released !== null) {
+        prep.released = (now - released) * SIM_DT;
+        const contact = engagement.plan?.contact;
+        if (contact && view.anim.turn <= 0.5) reach = { target: reachTarget.set(contact.x, contact.y, contact.z), weight: waitReach(prep.released) };
+      }
     }
+    if (prep) view.anim.lastPrep = prep;
 
     // Dernière frappe, ou coup dans le vide.
     const whiffed = player.lastWhiffTick > player.lastHitTick;
     const strikeTick = whiffed ? player.lastWhiffTick : player.lastHitTick;
-    let strike: { family: SwingFamily; seconds: number } | null = null;
+    let strike: PoseInput['strike'] = null;
     if (Number.isFinite(strikeTick)) {
       const hit = whiffed ? null : player.lastHit;
       const kind = whiffed ? player.lastWhiffKind : hit?.kind;
@@ -567,7 +580,10 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       const volley = hit ? hit.volley : view.anim.volley;
       const highFamily = hit ? overheadFamily(hit.overhead) : view.anim.highFamily;
       const family: SwingFamily = hit?.serve ? 'serve' : high ? highFamily : lowFamily(view.anim.side, volley);
-      strike = { family, seconds: (now - strikeTick) * SIM_DT };
+      const struck = { family, seconds: (now - strikeTick) * SIM_DT, from: view.anim.lastPrep };
+      strike = struck;
+      // Frappe : le centre du tamis rejoint le point de contact de la simulation à l'image d'impact.
+      if (hit && !prep) reach = { target: reachTarget.set(hit.contact.x, hit.contact.y, hit.contact.z), weight: strikeReach(struck.seconds) };
     }
 
     // Arc de raquette : un nouvel arc à chaque frappe (ou coup dans le vide), dessiné jusque dans l'accompagnement.
@@ -575,7 +591,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       view.trailTick = strikeTick;
       view.trail.start(swingLook(whiffed ? null : player.lastHit));
     }
-    view.anim.swinging = strike !== null && strike.seconds >= 0 && strike.seconds < FOLLOW_TIME * 0.75;
+    view.anim.swinging = strike !== null && strike.seconds >= 0 && strike.seconds < SWING_IN + FOLLOW_TIME * 0.75;
 
     // Course : vitesse et direction dans le repère du filet ; la foulée avance avec la distance parcourue.
     const speed = Math.hypot(player.vel.x, player.vel.z);
@@ -600,6 +616,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
         stride: view.anim.stride,
         time: now * SIM_DT,
       }),
+      reach,
     );
   };
 
