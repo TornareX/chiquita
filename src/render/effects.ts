@@ -104,6 +104,8 @@ export const EFFECT_COLORS = {
   /** Poussière du gazon (bleu clair du sol) et du sol autour du terrain. */
   turf: 0xa9c8ec,
   surround: 0x9aa1aa,
+  /** Sable de silice soulevé par une glissade : blanc cassé, il se lit sur le tapis bleu. */
+  sand: 0xe2dccb,
 } as const;
 
 /**
@@ -152,6 +154,54 @@ export function dustLook(speed: number): { count: number; strength: number } {
   return { count: Math.round(5 + 11 * strength), strength };
 }
 
+/**
+ * Gerbe de sable d'une glissade, en trois tailles selon `strength` (0..1) : quelques grains sur un petit freinage,
+ * une vraie gerbe sur un arrêt ou un demi-tour en pleine course. [à calibrer à la manette]
+ */
+export function slideLook(strength: number): { count: number; speed: number; lift: number; size: number; alpha: number } {
+  const s = clamp01(strength);
+  return { count: Math.round(4 + 10 * s), speed: 1.2 + 1.8 * s, lift: 0.5 + 0.6 * s, size: 0.8 + 0.6 * s, alpha: 0.45 + 0.35 * s };
+}
+
+/** Changement de vitesse au sol (m/s) sur `SLIDE_WINDOW` s à partir duquel le pied soulève du sable, et pleine gerbe. */
+export const SLIDE_MIN_CHANGE = 3.2;
+const SLIDE_FULL_CHANGE = 7;
+/** Fenêtre de mesure (s), vitesse minimale avant ou après (m/s), et pause entre deux gerbes d'un même joueur (s). */
+const SLIDE_WINDOW = 0.18;
+const SLIDE_MIN_SPEED = 3;
+const SLIDE_GAP = 0.18;
+
+/**
+ * Repère les glissades d'après la vitesse au sol des joueurs, pas après pas : freinage sec ou changement de sens en
+ * course (un simple départ ne soulève rien). Lit la vitesse sans rien changer à la simulation. Retourne la gerbe à
+ * lancer, ou `null`.
+ */
+export class SlideDetector {
+  private readonly history: { x: number; z: number }[][] = [];
+  private readonly quiet: number[] = [];
+
+  update(index: number, vel: { x: number; z: number }, dt: number): { dx: number; dz: number; strength: number } | null {
+    const lag = Math.max(1, Math.round(SLIDE_WINDOW / dt));
+    const past = (this.history[index] ??= []);
+    past.push({ x: vel.x, z: vel.z });
+    if (past.length > lag + 1) past.shift();
+    const quiet = (this.quiet[index] ?? SLIDE_GAP) + dt;
+    this.quiet[index] = quiet;
+    if (quiet < SLIDE_GAP || past.length <= lag) return null;
+    const old = past[0]!;
+    const cx = vel.x - old.x;
+    const cz = vel.z - old.z;
+    const change = Math.hypot(cx, cz);
+    const fast = Math.max(Math.hypot(old.x, old.z), Math.hypot(vel.x, vel.z));
+    if (change < SLIDE_MIN_CHANGE || fast < SLIDE_MIN_SPEED) return null;
+    // Freinage ou virage seulement : le changement va contre la vitesse d'avant.
+    if (cx * old.x + cz * old.z >= 0) return null;
+    this.quiet[index] = 0;
+    // Le sable part à l'opposé du changement de vitesse : devant soi au freinage, vers l'extérieur du virage.
+    return { dx: -cx / change, dz: -cz / change, strength: clamp01((change - SLIDE_MIN_CHANGE) / (SLIDE_FULL_CHANGE - SLIDE_MIN_CHANGE)) };
+  }
+}
+
 /** Grillage : force de la vibration selon la vitesse d'impact (m/s). */
 export function meshStrength(speed: number): number {
   return Math.max(0.25, clamp01(speed / 14));
@@ -188,7 +238,7 @@ export class Effects {
   banner: string | null = null;
   bannerAge = Infinity;
   /** Effets lancés depuis le début, par sorte (tests, mode debug). */
-  readonly spawned: Record<EffectKind | 'dust' | 'banner', number> = { impact: 0, glass: 0, mesh: 0, exit: 0, dust: 0, banner: 0 };
+  readonly spawned: Record<EffectKind | 'dust' | 'slide' | 'banner', number> = { impact: 0, glass: 0, mesh: 0, exit: 0, dust: 0, slide: 0, banner: 0 };
   /** Ralenti des effets seuls (captures d'écran) ; 1 en jeu. */
   timeScale = 1;
 
@@ -335,6 +385,34 @@ export class Effects {
         gravity: 2.5,
         drag: 3.5,
         alpha: 0.6 + 0.35 * strength,
+      });
+    }
+  }
+
+  /**
+   * Gerbe de sable sous les pieds d'un joueur qui freine, repart ou change de sens (étape V7) : projetée au ras du sol
+   * dans la direction `(dx, dz)` (opposée au changement de vitesse), proportionnée à `strength` (0..1).
+   */
+  slide(x: number, z: number, dx: number, dz: number, strength: number): void {
+    const look = slideLook(strength);
+    this.spawned.slide++;
+    const inside = Math.abs(x) <= HALF_WIDTH && Math.abs(z) <= HALF_LENGTH;
+    const color = inside ? EFFECT_COLORS.sand : EFFECT_COLORS.surround;
+    for (let i = 0; i < look.count; i++) {
+      // Éventail de ±35° autour de la direction, un peu sur le côté du pied.
+      const spread = (this.random() - 0.5) * 1.2;
+      const c = Math.cos(spread);
+      const s = Math.sin(spread);
+      const ux = dx * c - dz * s;
+      const uz = dx * s + dz * c;
+      const speed = look.speed * (0.5 + 0.7 * this.random());
+      this.particle(x + (this.random() - 0.5) * 0.25, 0.03, z + (this.random() - 0.5) * 0.25, ux * speed, (0.4 + 0.8 * this.random()) * look.lift, uz * speed, {
+        life: 0.35 + 0.35 * this.random(),
+        size: (0.07 + 0.07 * this.random()) * look.size,
+        color,
+        gravity: 3,
+        drag: 4.5,
+        alpha: look.alpha,
       });
     }
   }

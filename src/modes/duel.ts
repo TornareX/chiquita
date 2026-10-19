@@ -30,6 +30,8 @@ import {
 } from '../ui/duelSettings';
 import { loadFeel } from '../ui/feelStorage';
 import { applyFeel } from '../sim/feel';
+import { hitstopMs, juiceFlags } from '../render/juice';
+import { createReplayBadge, REPLAY_DELAY, ReplayRecorder, replayWorthy, type Replay } from './replay';
 
 /** Bouton Start (Menu) de la disposition standard : ouvre et ferme les réglages. */
 const START_BUTTON = 9;
@@ -67,6 +69,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   duel.highFloor = highFloorFromUrl();
   // Sensations réglées dans le labo, si on a choisi de les garder en match.
   const feel = loadFeel();
+  const juice = juiceFlags();
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
@@ -118,7 +121,15 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       saveSettings(settings);
     },
   );
-  const menu = createSettingsMenu(settings, apply, () => padTest.open());
+  const menu = createSettingsMenu(
+    settings,
+    (s, restart) => {
+      apply(s, restart);
+      // Nouvelle partie : l'historique du ralenti ne la rejoue plus.
+      if (restart) recorder?.clear();
+    },
+    () => padTest.open(),
+  );
   /**
    * Frappe au geste du stick droit, une par manette puis une par côté du clavier (touches, et souris pour le bleu) ;
    * et celle tenue par chaque joueur.
@@ -172,16 +183,37 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     return duel.players.map((_, i) => read(i));
   };
 
-  /** Micro-pause sur une frappe parfaite : fin de la pause, en temps réel (ms). */
+  /** Micro-pause sur une frappe forte (`hitstopMs`) : fin de la pause, en temps réel (ms). */
   let hitstopUntil = 0;
   // Banc d'essai du rendu : même graine, même pas de simulation, donc la même image à comparer d'une version à l'autre.
   const freezeSeconds = Number(params.get('figer'));
   const freezeTick = freezeSeconds > 0 ? Math.round(freezeSeconds / SIM_DT) : null;
   const frozen = (): boolean => freezeTick !== null && duel.tick >= freezeTick;
+  // Ralenti du coup gagnant entre les points (étape V7) ; jamais sur le banc d'essai figé.
+  const recorder = juice.replay !== 'off' && freezeTick === null ? new ReplayRecorder() : null;
+  const badge = recorder ? createReplayBadge() : null;
+  /** Point qui attend son ralenti (pas de la fin du point), et ralenti en cours. */
+  let replayPending: number | null = null;
+  let replay: Replay | null = null;
+  let replayAlpha = 0;
+  const replayDue = (): boolean => replayPending !== null && duel.tick - replayPending >= REPLAY_DELAY / SIM_DT;
+  /** Bouton tenu à l'image précédente : un nouvel appui (manette, clavier, souris) passe le ralenti. */
+  let skipHeld = true;
+  let skipPressed = false;
+  for (const type of ['keydown', 'pointerdown'] as const) {
+    window.addEventListener(type, (event) => {
+      if (!(event instanceof KeyboardEvent && event.repeat)) skipPressed = true;
+    });
+  }
   const loop = new FixedStepLoop(SIM_DT, () => {
     if (frozen()) return;
-    duel.step(sample());
+    // Ralenti dû (le public a eu le temps de réagir) : la partie s'arrête là, il démarre à l'image suivante.
+    if (replay || replayDue()) return;
+    const commands = sample();
+    recorder?.record(duel, commands);
+    duel.step(commands);
     view.afterStep();
+    if (recorder && duel.result && replayWorthy(duel, juice.replay === 'all' ? 'all' : 'big')) replayPending = duel.tick;
     inputs.step(duel, states);
     for (const contact of duel.contacts) sounds.contact(contact);
     duel.players.forEach((player, i) => {
@@ -204,10 +236,9 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const quality = shot.perfect ? 1 : Math.max(0.25, 0.85 - (Math.abs(shot.timing) / 0.12) * 0.6);
       sounds.shot({ ...shot, quality });
       sounds.grunt(shot.contact, shotPower(shot), VOICES[shot.player % VOICES.length]!);
-      if (shot.perfect) {
-        hitstopUntil = performance.now() + 40; // [à calibrer VT4]
-        view.shake(0.5);
-      }
+      const hitstop = hitstopMs(shot, juice.hitstop);
+      if (hitstop > 0) hitstopUntil = performance.now() + hitstop;
+      if (shot.perfect) view.shake(0.5);
       // Le remate secoue la caméra, même sans frappe parfaite (GAME_DESIGN.md §6). [à calibrer]
       if (shot.overhead === 'remate') view.shake(shot.perfect ? 1 : 0.6);
     }
@@ -227,10 +258,34 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     const start = connectedGamepads().some((pad) => pad.buttons[START_BUTTON]?.pressed ?? false);
     if (start && !startHeld && !padTest.isOpen) menu.toggle();
     startHeld = start;
+    // Ralenti du coup gagnant : la partie en cours attend ; un appui le passe.
+    const anyButton = connectedGamepads().some((pad) => pad.buttons.some((b) => b.pressed));
+    if (recorder && replayDue() && !replay) {
+      replay = recorder.replay(duel);
+      replayPending = null;
+      if (replay) {
+        view.setSource(replay.duel, false);
+        badge?.show(true);
+        skipHeld = anyButton;
+        skipPressed = false;
+      }
+    }
+    if (replay && !menu.isOpen && !padTest.isOpen) {
+      replayAlpha = replay.advance(frameTime, () => view.afterStep());
+      if (replay.done || skipPressed || (anyButton && !skipHeld)) {
+        replay = null;
+        view.setSource(duel, true);
+        badge?.show(false);
+      }
+    }
+    skipHeld = anyButton;
+    skipPressed = false;
+    const replaying = replay !== null;
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
-    if (!menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
+    if (!replaying && !menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
     const renderStart = performance.now();
-    view.render(frozen() ? 0 : alpha, frameTime, now < hitstopUntil || frozen());
+    if (replay) view.render(replayAlpha, frameTime * replay.speed, menu.isOpen || padTest.isOpen);
+    else view.render(frozen() ? 0 : alpha, frameTime, now < hitstopUntil || frozen());
     perf?.frame(frameTime, performance.now() - renderStart, view.info());
     mood.update(frameTime);
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.

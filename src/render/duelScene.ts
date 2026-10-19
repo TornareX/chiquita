@@ -17,7 +17,11 @@ import { dressCourt, turfEnabled } from './turf';
 import { dressHall, hallEnabled } from './hall';
 import { createPostfx, linearGlass, postfxWanted } from './postfx';
 import type { RenderInfo } from '../ui/perfMeter';
-import { bodyYawTarget, computePose, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, STRIDE, swingSide, type SwingFamily } from './pose';
+import { SlideDetector } from './effects';
+import { juiceFlags } from './juice';
+import { createSwingTrail, swingLook, type SwingTrail } from './swingTrail';
+import { WALLS } from '../sim/court';
 
 export interface DuelView {
   /** `frozen` : micro-pause en cours, les effets restent figés. */
@@ -30,6 +34,11 @@ export interface DuelView {
   setTarget(zone: { x0: number; x1: number; z0: number; z1: number } | null): void;
   /** Appels de dessin et triangles de la dernière image (banc d'essai du rendu). */
   info(): RenderInfo;
+  /**
+   * Partie dessinée : la partie en cours, ou sa copie rejouée au ralenti (`replay.ts`). Changer de partie remet à zéro
+   * ce qui suit la précédente (arcs de raquette, foulée) ; `crowd` : le public réagit aux points de cette partie.
+   */
+  setSource(source: Duel, crowd: boolean): void;
 }
 
 /** Lumières du rendu soigné (`look.ts`). [à calibrer en jouant] */
@@ -142,6 +151,8 @@ interface PlayerView {
     last: { x: number; z: number } | null;
     /** Demi-tour vers sa vitre du fond (contre-vitre), de 0 (face au filet) à 1. */
     turn: number;
+    /** Geste de frappe en cours (arc de raquette). */
+    swinging: boolean;
   };
   /**
    * Anneau au sol, visible tant que le coup est préparé : il se resserre jusqu'au moment d'impact,
@@ -155,6 +166,9 @@ interface PlayerView {
   /** Bulle d'annonce au-dessus de la tête (« ¡Mía! »), et l'annonce qu'elle affiche. */
   bubble: THREE.Sprite;
   bubbleKind: CallKind | null;
+  /** Arc de raquette (étape V7), et le pas de la frappe qu'il dessine. */
+  trail: SwingTrail | null;
+  trailTick: number;
 }
 
 /** Bulle d'annonce : texte blanc sur fond sombre, dessinée dans une texture, toujours face à la caméra. */
@@ -224,8 +238,8 @@ function createPlayerView(color: number, index: number, height: number): PlayerV
   );
   standMarker.rotation.x = -Math.PI / 2;
   const bubble = createBubble();
-  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null, turn: 0 };
-  return { object, contactShadow, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null };
+  const anim: PlayerView['anim'] = { yaw: 0, speed: 0, stride: 0, side: 'fore', high: false, highFamily: 'bandeja', volley: false, last: null, turn: 0, swinging: false };
+  return { object, contactShadow, rig, anim, timingRing, timingMaterial, standMarker, color, bubble, bubbleKind: null, trail: null, trailTick: -Infinity };
 }
 
 /** Agrandissement à appliquer à un objet de diamètre `size` à cette position pour le voir à `BALL_MIN_SCREEN`. */
@@ -235,11 +249,20 @@ function minScreenScale(camera: THREE.PerspectiveCamera, x: number, y: number, z
   return Math.max(1, (BALL_MIN_SCREEN * visibleHeight) / size);
 }
 
+/**
+ * Écrasement de la balle (étape V7) : aplatie le long de la normale du choc, élargie autour, pendant `SQUASH_TIME` s.
+ * Un choc fort l'écrase jusqu'à `SQUASH_MAX`. [à calibrer à la manette]
+ */
+const SQUASH_TIME = 0.06;
+const SQUASH_MAX = 0.38;
+
 /** Balle, ombre bien marquée, trait de hauteur et traînée : les repères de profondeur et de vitesse vus de loin. */
 function createBallView(): {
   object: THREE.Group;
-  update(pos: Vec3 | null, vel: Vec3 | null, camera: THREE.PerspectiveCamera): void;
+  update(pos: Vec3 | null, vel: Vec3 | null, camera: THREE.PerspectiveCamera, dt: number): void;
   setModel(model: THREE.Object3D): void;
+  /** Écrase la balle le long de `normal` ; `amount` de 0 à 1. */
+  squash(normal: { x: number; y: number; z: number }, amount: number): void;
 } {
   const object = new THREE.Group();
   const sphere = new THREE.Group();
@@ -273,18 +296,37 @@ function createBallView(): {
   const up = new THREE.Vector3(0, 1, 0);
   const direction = new THREE.Vector3();
   object.add(sphere, shadow, heightLine, trail);
+  const squashAxis = new THREE.Vector3(0, 1, 0);
+  let squashAmount = 0;
+  let squashAge = Infinity;
   return {
     object,
+    squash(normal, amount): void {
+      const length = Math.hypot(normal.x, normal.y, normal.z);
+      if (length < 1e-6 || amount <= 0) return;
+      squashAxis.set(normal.x / length, normal.y / length, normal.z / length);
+      squashAmount = Math.min(1, amount) * SQUASH_MAX;
+      squashAge = 0;
+    },
     setModel(model: THREE.Object3D): void {
       sphere.remove(simple);
       sphere.add(model);
     },
-    update(pos: Vec3 | null, vel: Vec3 | null, camera: THREE.PerspectiveCamera): void {
+    update(pos: Vec3 | null, vel: Vec3 | null, camera: THREE.PerspectiveCamera, dt: number): void {
       object.visible = pos !== null;
+      squashAge += dt;
       if (!pos) return;
       sphere.position.set(pos.x, pos.y, pos.z);
       const scale = minScreenScale(camera, pos.x, pos.y, pos.z, 2 * BALL_RADIUS);
-      sphere.scale.setScalar(scale);
+      // Écrasement qui se relâche en revenant à la sphère ; volume à peu près gardé (élargie de la moitié).
+      const squash = squashAge < SQUASH_TIME ? squashAmount * (1 - squashAge / SQUASH_TIME) : 0;
+      if (squash > 0) {
+        sphere.quaternion.setFromUnitVectors(up, squashAxis);
+        sphere.scale.set(scale * (1 + squash / 2), scale * (1 - squash), scale * (1 + squash / 2));
+      } else {
+        sphere.quaternion.identity();
+        sphere.scale.setScalar(scale);
+      }
       // Taille constante quelle que soit la hauteur : c'est sa position qui compte, pas son flou.
       const s = minScreenScale(camera, pos.x, 0, pos.z, 2 * SHADOW_RADIUS);
       shadow.scale.set(s, s, s);
@@ -307,7 +349,13 @@ function createBallView(): {
   };
 }
 
-export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView {
+export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelView {
+  /** Partie dessinée : celle en cours, ou sa copie rejouée au ralenti. */
+  let duel = source;
+  /** Le public réagit aux points (pas pendant un ralenti : il l'a déjà fait). */
+  let crowd = true;
+  const juice = juiceFlags();
+  const slides = new SlideDetector();
   const look = renderLook();
   // Avec le post-traitement, l'anticrénelage est un SMAA en fin de chaîne : le MSAA du moteur gênerait l'occlusion.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !postfxWanted(look) });
@@ -371,6 +419,11 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   const effects = effectsEnabled() ? createEffectsView(scene, NEAR_CLIP_PLANES) : null;
   if (effects && (import.meta.env.DEV || new URLSearchParams(location.search).has('debug'))) window.__effects = effects.effects;
   const drawingSize = new THREE.Vector2();
+  const trailTip = new THREE.Vector3();
+  const trailThroat = new THREE.Vector3();
+  const trailPivot = new THREE.Vector3();
+  /** Temps écoulé pour l'arc de raquette à cette image : 0 pendant la micro-pause (l'arc reste figé). */
+  let trailDt = 0;
   /** Un joueur dessiné par joueur simulé : créés au besoin (le format peut passer du simple au double). */
   const players: PlayerView[] = [];
   const syncPlayers = (): void => {
@@ -384,6 +437,10 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
         setShadows(view.rig.object, false);
         view.contactShadow.opacity = CONTACT_SHADOW_OPACITY;
       }
+      if (juice.swingArc) {
+        view.trail = createSwingTrail();
+        scene.add(view.trail.object);
+      }
       scene.add(view.object, view.standMarker, view.bubble);
       players.push(view);
     }
@@ -391,6 +448,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       const active = i < duel.players.length;
       view.object.visible = active;
       if (!active) view.standMarker.visible = view.bubble.visible = false;
+      if (!active && view.trail) view.trail.object.visible = false;
     });
   };
   syncPlayers();
@@ -512,6 +570,13 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       strike = { family, seconds: (now - strikeTick) * SIM_DT };
     }
 
+    // Arc de raquette : un nouvel arc à chaque frappe (ou coup dans le vide), dessiné jusque dans l'accompagnement.
+    if (view.trail && Number.isFinite(strikeTick) && strikeTick !== view.trailTick) {
+      view.trailTick = strikeTick;
+      view.trail.start(swingLook(whiffed ? null : player.lastHit));
+    }
+    view.anim.swinging = strike !== null && strike.seconds >= 0 && strike.seconds < FOLLOW_TIME * 0.75;
+
     // Course : vitesse et direction dans le repère du filet ; la foulée avance avec la distance parcourue.
     const speed = Math.hypot(player.vel.x, player.vel.z);
     const heading = Math.atan2(player.vel.x * f * m, player.vel.z * f);
@@ -568,6 +633,14 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
     view.object.rotation.y = (player.side < 0 ? 0 : Math.PI) + view.anim.turn * Math.PI;
     view.rig.object.scale.x = player.hand === 'left' ? -1 : 1;
     animate(view, player, pos, alpha, frameTime);
+    if (view.trail) {
+      // Haut et gorge du tamis, et l'épaule (à peu près) : le centre de l'arc.
+      view.object.updateMatrixWorld(true);
+      view.rig.racketMount.localToWorld(trailTip.set(0, 0.38, 0));
+      view.rig.racketMount.localToWorld(trailThroat.set(0, 0.17, 0));
+      trailPivot.set(pos.x, 1.35 * (player.height / PLAYER_HEIGHT), pos.z);
+      view.trail.update(trailDt, trailTip, trailThroat, trailPivot, view.anim.swinging);
+    }
 
     // Coup préparé, bouton maintenu : en échange, ou balle lâchée au service.
     const engagement = player.engagement;
@@ -631,7 +704,23 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
   return {
     afterStep(): void {
       effects?.effects.fromStep(duel);
-      if (arena) {
+      if (juice.squash) {
+        // La balle s'écrase dans le sens de son départ à la frappe, contre la surface au rebond.
+        const { shot, ball: simBall } = duel;
+        if (shot && simBall) ball.squash(simBall.vel, shot.perfect || shot.overhead === 'remate' ? 0.9 : 0.55);
+        for (const contact of duel.contacts) {
+          const amount = Math.min(1, contact.speed / 14);
+          if (contact.surface === 'ground') ball.squash({ x: 0, y: 1, z: 0 }, amount);
+          else if (contact.surface === 'glass' && contact.wall) ball.squash(WALLS[contact.wall].normal, amount);
+        }
+      }
+      if (effects && juice.sand) {
+        duel.players.forEach((player, i) => {
+          const slide = slides.update(i, player.vel, SIM_DT);
+          if (slide) effects.effects.slide(player.pos.x, player.pos.z, slide.dx, slide.dz, slide.strength);
+        });
+      }
+      if (arena && crowd) {
         for (const reaction of stepCrowdReactions(duel)) arena.react(reaction);
         if (duel.result?.reason === 'por-tres' || duel.result?.reason === 'por-cuatro') arena.porTres();
       }
@@ -652,8 +741,16 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       return { drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     },
 
+    setSource(next: Duel, crowdReacts: boolean): void {
+      crowd = crowdReacts;
+      if (next === duel) return;
+      duel = next;
+      for (const view of players) view.anim.last = null;
+    },
+
     render(alpha: number, frameTime: number, frozen = false): void {
       syncPlayers();
+      trailDt = frozen ? 0 : frameTime;
       arena?.update(frozen ? 0 : frameTime);
       const near = duel.players[0];
       // Caméra partagée : elle suit à peine l'équipe proche (en double, le milieu de la paire bleue).
@@ -683,7 +780,7 @@ export function createDuelView(canvas: HTMLCanvasElement, duel: Duel): DuelView 
       let pos: Vec3 | null = null;
       if (simBall && prevBallPos) pos = lerp(prevBallPos, simBall.pos, alpha);
       else if (duel.phase === 'serve') pos = duel.servePosition();
-      ball.update(pos, simBall && prevBallPos ? simBall.vel : null, camera);
+      ball.update(pos, simBall && prevBallPos ? simBall.vel : null, camera, frozen ? 0 : frameTime);
 
       wallMarker.visible = false;
       for (const [i, player] of duel.players.entries()) {

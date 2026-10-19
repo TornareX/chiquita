@@ -328,6 +328,41 @@ npx playwright test tests/e2e/rendu.spec.ts
 
 À juger en jeu (`?postfx=0` pour comparer).
 
+**V7 — juice** (19/10/2026 ; `src/render/juice.ts`, `swingTrail.ts`, `effects.ts`, `src/modes/replay.ts`) :
+- **Gerbe de sable** aux glissades (`SlideDetector`, `Effects.slide`) : lue sur la vitesse au sol des joueurs, sans
+  toucher à la simulation. Freinage sec ou changement de sens en course (changement de vitesse ≥ 3,2 m/s en 0,18 s,
+  contre la vitesse d'avant) ; un simple départ ne soulève rien. Grains de silice blanc cassé (0xe2dccb) projetés au ras
+  du sol, devant le joueur au freinage ; trois tailles selon la force ; une gerbe au plus toutes les 0,18 s par joueur.
+  En IA contre IA (fort), ~0,8 gerbe par seconde d'échange pour deux joueurs : à juger (trop fréquent ?).
+- **Arc de raquette** (`swingTrail.ts`) : ruban additif balayé par le tamis, de l'armé à la fin de l'accompagnement.
+  Le geste du personnage passe de l'armé à l'impact en une image : entre deux positions du tamis, le ruban suit un arc
+  de cercle autour de l'épaule au lieu d'une corde droite. Discret sur un coup normal, doré sur une frappe parfaite,
+  plus long sur un smash, pâle sur un coup dans le vide. Figé pendant la micro-pause.
+- **Écrasement de la balle** : aplatie de 38 % au plus le long de la normale du choc (sol, vitre, ou sens du départ à
+  la frappe), élargie autour, pendant 60 ms.
+- **Micro-pause (hit-stop)** réglable (`hitstopMs`) : frappe parfaite 40 ms (inchangé), **smash 50 ms, smash parfait
+  85 ms** (nouveau : avant, le smash n'en avait pas). Rien sur un coup ordinaire. `?hitstop=0` la coupe,
+  `?hitstop=1.5` l'allonge. Touche au timing : à juger à la manette en priorité.
+- **Ralenti du coup gagnant** (`replay.ts`) : la simulation est déterministe, donc on garde une copie de la partie
+  tous les 30 pas (0,125 s) et les commandes de chaque pas sur 6 s ; après le point, on rejoue dans une copie à part
+  depuis 0,45 s avant le coup gagnant, à 0,28× jusqu'à 0,35 s après la frappe puis à 0,6×, jusqu'à 0,35 s après la fin
+  du point. Il démarre 0,5 s après le point (le public réagit d'abord) ; la partie en cours attend, puis reprend sa
+  pause d'entre-points. Bandeau « RALENTI » ; un appui (manette, clavier, souris) le passe. Par défaut seulement sur
+  les grands points (por tres, smash gagnant, long échange : réaction du public ≥ 0,6) ; `?ralenti=tous` après chaque
+  coup gagnant, `?ralenti=0` jamais. Test unitaire : le ralenti retombe exactement sur la balle et le résultat du point.
+- Piège trouvé : la copie de la partie ne reprend pas une méthode posée sur l'objet lui-même (le test des effets remplace
+  `duel.step`) : liée à l'original, elle faisait avancer la vraie partie et le ralenti tournait sans fin.
+- Coût : 60 i/s tenus (RTX 4070), ~2 ms de rendu en vue de jeu, ~2,6 ms en double ; l'arc ajoute un appel de dessin
+  par joueur, seulement pendant le geste. Une copie de la partie tous les 30 pas, non mesurée sur une petite machine.
+- `places.spec` (une manette réelle branchée change le texte attendu) et `tutorial.spec` (coup normal) échouent aussi
+  sans V7 : antérieurs, pas traités ici.
+- Pas fait : flou de profondeur pendant le ralenti (prévu au plan) ; écrasement à la réception des sauts.
+- `?juice=0` coupe tout V7 ; `?poussiere=0`, `?arc=0`, `?ecrasement=0` un par un.
+- Captures : `screenshots/60-juice-arc.png` (gros plan figé juste après une frappe), `61-ralenti.png`. Tests :
+  `tests/render/juice.test.ts`, `tests/e2e/juice.spec.ts`.
+
+À juger à la manette (règle « gameplay d'abord »), surtout la micro-pause du smash et la fréquence des ralentis.
+
 ## 5. Risques
 
 - **Lisibilité** : le principal risque. Halo, occlusion ou étalonnage qui noient la balle jaune
