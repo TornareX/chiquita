@@ -316,6 +316,15 @@ npx playwright test tests/e2e/rendu.spec.ts
   du compilateur Direct3D sur les shaders de N8AO/SMAA (précision, dérivée dans une boucle) sont sans effet.
 - `RENDU_SANS_VSYNC=1` : le banc mesure sans plafond à 60 i/s. `comparaison-v6-*.png` (V5 | V6).
 - Pas fait : étalonnage par LUT (contraste et courbe suffisent pour l'instant).
+- **Flashs blancs** (signalés par Xavier, 19/10/2026) : de temps en temps, une image entièrement blanche.
+  Reproduit en IA contre IA (graine 3, vers 88 s : 2 images à 250/255 de clarté contre ~55 d'habitude), puis isolé
+  variante par variante : présent sans occlusion et sans effets d'impact, absent sans post-traitement et **sans
+  bloom**. Cause : un pixel infini ou NaN, venu d'un matériau sous un angle rare, que le flou du bloom étale sur
+  tout l'écran. Correction : une passe de nettoyage avant le bloom (`sanitizePass`), qui plafonne à 64 et ramène
+  à 0 au moins ; sous Direct3D, `min` et `max` écartent les NaN, alors que `isnan` peut disparaître à la
+  compilation (un marquage en magenta n'a donc rien montré, et le matériau fautif n'est pas identifié). Vérifié :
+  0 flash sur la même partie de 95 s, ni sur 150 s de double. Test de non-régression `renduFlash.spec.ts`
+  (95 s, lancé avec `RENDU_FLASH=1`).
 
 À juger en jeu (`?postfx=0` pour comparer).
 

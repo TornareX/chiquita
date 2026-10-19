@@ -6,6 +6,7 @@ import {
   EffectPass,
   HueSaturationEffect,
   RenderPass,
+  ShaderPass,
   SMAAEffect,
   SMAAPreset,
   ToneMappingEffect,
@@ -45,6 +46,37 @@ const VIGNETTE_DARKNESS = 0.35;
  * opacité égale, une vitre y paraît bien plus claire (laiteuse). On compense. [à calibrer]
  */
 const GLASS_OPACITY = 0.4;
+
+/**
+ * Nettoyage avant le bloom : un seul pixel infini ou « pas un nombre » (NaN) dans l'image, venu d'un matériau sous un
+ * angle rare, et le flou du bloom l'étale sur tout l'écran pendant une image (flash blanc, reproduit en partie IA
+ * contre IA). Les valeurs sont plafonnées et ramenées à 0 au moins : sous Direct3D, `min` et `max` écartent les NaN
+ * (isnan, lui, peut disparaître à la compilation).
+ */
+const SANITIZE_MAX = 64;
+
+function sanitizePass(): ShaderPass {
+  const material = new THREE.ShaderMaterial({
+    uniforms: { inputBuffer: { value: null } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = position.xy * 0.5 + 0.5;
+        gl_Position = vec4(position.xy, 1.0, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D inputBuffer;
+      varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(inputBuffer, vUv);
+        if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
+        gl_FragColor = vec4(max(min(c.rgb, vec3(${SANITIZE_MAX.toFixed(1)})), vec3(0.0)), c.a);
+      }`,
+    depthWrite: false,
+    depthTest: false,
+  });
+  return new ShaderPass(material, 'inputBuffer');
+}
 
 /** Courbe de tons du moteur → la même dans le compositeur. */
 const TONE_MODES: Partial<Record<THREE.ToneMapping, ToneMappingMode>> = {
@@ -107,6 +139,7 @@ export function createPostfx(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     gammaCorrection: false,
   });
   composer.addPass(ao);
+  composer.addPass(sanitizePass());
 
   composer.addPass(
     new EffectPass(

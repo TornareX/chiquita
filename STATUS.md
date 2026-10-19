@@ -902,3 +902,10 @@ pmndrs/postprocessing + N8AO : occlusion aux contacts, bloom sur les projecteurs
 courbe Neutral dans le compositeur, vignette douce, SMAA ; vitres compensées (mélange linéaire). +0,45 ms par image
 sur RTX 4070 ; coupure automatique sous 45 i/s, en rendu logiciel et par `?postfx=0`. Typecheck OK, 537 tests
 unitaires OK, e2e 30/30 en un seul worker, build OK. **Pas encore joué.**
+
+## Correctif V6 : flashs blancs (19/10/2026)
+
+De temps en temps, une image entièrement blanche : un pixel invalide (NaN ou infini) étalé par le bloom. Reproduit et
+isolé en IA contre IA (le bloom seul en cause), corrigé par une passe de nettoyage avant le bloom. 0 flash sur 95 s
+(même partie) et 150 s de double. Test `renduFlash.spec.ts` à la demande (`RENDU_FLASH=1`). 537 tests unitaires
+OK, e2e 30/30. **Pas encore rejoué à la manette.**
