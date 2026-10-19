@@ -258,6 +258,19 @@ export interface RallyTuning {
   /** Bandeja sans direction : écart au centre de la cible, vers le coin, le long de la ligne (m). */
   bandejaLateral: number;
   /**
+   * Bandeja et víbora au stick (« facile à jouer, dur à maîtriser ») : sans direction, le coup sûr ; stick vers l'avant
+   * ou l'arrière seulement (au-delà de `overheadCentreStick`), au centre (víbora à `viboraCentre` m de l'axe).
+   * Le stick vers l'avant frappe plus fort, vers l'arrière plus doux : vitesse × (1 ± `overheadPower`).
+   * Frappe pas propre (hors de la bande des yeux, ou décentrée) sur une cible ambitieuse : la balle file au-delà, de
+   * `overheadSlop` m sur le côté (víbora près de la ligne) et `overheadSlopDepth` m en longueur (au fond) au plus,
+   * × la puissance : visée près des lignes et frappée fort, elle finit dans la vitre de volée.
+   */
+  overheadCentreStick: number;
+  viboraCentre: number;
+  overheadPower: number;
+  overheadSlop: number;
+  overheadSlopDepth: number;
+  /**
    * Hauteur de frappe de la bandeja et de la víbora : idéale à hauteur des yeux du joueur (sa taille moins
    * `eyesBelowHead`), ± `overheadBand` (m), devant et sur le côté. La course assistée place le joueur
    * pour cette hauteur ; pour le remate (stick vers l'avant à l'appui, près du filet), plus haut, bras
@@ -372,6 +385,27 @@ export interface PressureTuning {
   cutRush: number;
   /** Au-dessus de la tête, l'erreur est multipliée par ce facteur (balle haute = balle d'attaque). */
   overheadFactor: number;
+  /**
+   * Volée contre une balle lourde (smash, volée appuyée) : son poids va de 0 à `paceEasy` m/s à 1 à `paceHard`.
+   * Le relâcher compte alors autant que le passage de la balle : raquette partie plus de `volleySweep` s trop tôt,
+   * c'est une frappe en avance (on ne bloque pas un smash en tendant la raquette d'avance).
+   * La sous-fenêtre parfaite rétrécit en plus de `paceShrink` (fraction) au poids maximal. Hors d'elle, le contrôle
+   * se perd (`miscue`, de 0 à 1, × le poids) : pleinement à `miscueSpan` s hors de la fenêtre, ou à `miscueMiss` m
+   * hors du point idéal. En avance, la balle part plus long de `miscueLong` m au plus (dans la vitre adverse de
+   * volée) ; à l'heure ou en retard, elle perd `miscueDip` m/s de vitesse verticale au plus (filet). Juste à côté de
+   * la fenêtre, elle passe encore, mais faible. Une balle douce ne change pas : facile à jouer, dure à maîtriser.
+   */
+  paceEasy: number;
+  paceHard: number;
+  volleySweep: number;
+  paceShrink: number;
+  /** Balle rouge (pression de `redFrom` à `redFull`) : même perte de contrôle hors de la sous-fenêtre parfaite, × son poids. */
+  redFrom: number;
+  redFull: number;
+  miscueSpan: number;
+  miscueMiss: number;
+  miscueLong: number;
+  miscueDip: number;
 }
 
 /**
@@ -608,6 +642,11 @@ export const REALISTIC: PhysicsProfile = {
     remateWidthLoose: 1.1,
     viboraLateral: 4.3,
     bandejaLateral: 3,
+    overheadCentreStick: 0.3,
+    viboraCentre: 1.5,
+    overheadPower: 0.25, // [à calibrer en jouant]
+    overheadSlop: 2,
+    overheadSlopDepth: 2.5,
     eyesBelowHead: 0.12, // 1,68 m pour un joueur de 1,80 m
     overheadBand: 0.12, // ±12 cm : la balle qui redescend y passe en ~1/20 s [à calibrer en jouant]
     overheadHighSpin: 1,
@@ -650,6 +689,17 @@ export const REALISTIC: PhysicsProfile = {
       netDip: 3,
       cutRush: 1.5, // [à calibrer en jouant]
       overheadFactor: 0.5,
+      // Bloquer un smash au filet : possible avec une frappe parfaite, une faute sinon (16 m/s et moins : rien ne change).
+      paceEasy: 15, // [à calibrer en jouant]
+      paceHard: 26,
+      volleySweep: 0.02,
+      paceShrink: 0.35, // fenêtre parfaite ~40 ms sur un smash, ~85 ms sur une volée douce
+      redFrom: 0.6, // [à calibrer en jouant]
+      redFull: 0.9,
+      miscueSpan: 0.04,
+      miscueMiss: 0.5,
+      miscueLong: 5,
+      miscueDip: 7,
     },
     lobPerfectDepth: 0.5,
     normal: {
@@ -880,10 +930,12 @@ export const ARCADE: PhysicsProfile = {
       depthLong: 8.8,
     },
     // Au-dessus de la tête, vitesses de coups arcade (normal ×0,775) sauf le remate, qui garde ses 120-130 km/h.
-    bandeja: { ...REALISTIC.rally.bandeja, speed: 16, speedPerfect: 16 }, // [à calibrer en jouant]
+    // Bandeja courte (stick vers l'arrière) dans le carré de service : elle oblige le défenseur à avancer.
+    bandeja: { ...REALISTIC.rally.bandeja, speed: 16, speedPerfect: 16, depthShort: 5.5 }, // [à calibrer en jouant]
     // Víbora : fort effet latéral, à peine coupée : elle file dans la vitre latérale et en ressort basse
     // (avec du lift, elle remontait la vitre jusqu'à 2,5 m). [à calibrer en jouant]
-    vibora: { ...REALISTIC.rally.vibora, speed: 20, speedPerfect: 23, spin: -0.15, sideSpin: 0.25 },
+    // Courte (stick vers l'arrière), elle ressort de la vitre latérale vers le filet ; longue, elle va au coin.
+    vibora: { ...REALISTIC.rally.vibora, speed: 20, speedPerfect: 23, spin: -0.15, sideSpin: 0.25, depthShort: 5 },
   },
   gravity: 8, // [à calibrer VT4 : temps de vol typiques] balle plus « flottante »
   magnusScale: 0.7, // [à calibrer VT4]
