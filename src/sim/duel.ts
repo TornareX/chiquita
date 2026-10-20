@@ -27,7 +27,7 @@ import {
   type Wing,
 } from './shots';
 import { predictBall } from './predict';
-import { ballPressure, shotError } from './pressure';
+import { ballColor, ballPressure, shotError } from './pressure';
 import { add, addScaled, length, scale, vec3, type Vec3 } from './vec3';
 import { DOOR_MID, inCourt, moveWithin, outsideCourt, pathDistance, waypoint } from './walkable';
 
@@ -187,6 +187,8 @@ export interface DuelShot {
   wing: Wing;
   /** Contre-vitre : frappée contre sa propre vitre du fond. */
   counterWall?: boolean;
+  /** Volée d'une balle lourde mal contrôlée, de 0 à 1 : elle file dans la vitre adverse ou dans le filet. */
+  miscue?: number;
 }
 
 /**
@@ -222,20 +224,39 @@ interface HitExtra {
   wing?: Wing;
   /** Trajectoire déjà calculée (contre-vitre, lob imposé du labo), à la place de celle tirée de la cible. */
   solved?: SolvedShot;
+  /** Volée d'une balle lourde : contrôle perdu, de 0 à 1 (`volleyMiscue`), et vitesse verticale retirée (m/s, filet). */
+  miscue?: number;
+  dip?: number;
+  /** Bandeja et víbora : vitesse dosée au stick (multiplicateur). */
+  power?: number;
   /** Contre-vitre. */
   counterWall?: boolean;
 }
 
 /**
  * Toucher d'un coup, choisi par la situation et le stick (comme les variantes au-dessus de la tête) :
- * - `cut` : volée coupée, X de volée : aussi rapide que la volée normale, plus coupée, elle reste basse
- *   au rebond. Elle demande du temps : sur une balle pressée (rapide, basse, sans préparation), elle rate
+ * - `cut` : volée coupée, X de volée : la volée de pression, profonde et coupée, qui fait remettre une balle plus
+ *   faible. Elle demande du temps : sur une balle pressée (rapide, basse, sans préparation), elle rate
  *   plus souvent que la volée normale (`pressure.cutRush`) ;
+ * - `punch` : volée de définition, le même geste frappé parfait sur une balle offerte (verte, haute) : elle conclut ;
+ * - `low` : volée basse, préparée sous la bande du filet (de volée, ou au pied près du filet) : il faut remonter la
+ *   balle, lente et profonde ;
  * - `chiquita` : X stick vers soi, balle après rebond : lente et basse, elle plonge aux pieds du joueur
  *   au filet, qui doit remonter la balle ;
  * - `block` : coup normal ou coupé armé trop tard (moins de `blockPrep` s) : on ne fait que bloquer.
  */
-export type ShotStyle = 'cut' | 'chiquita' | 'block';
+export type ShotStyle = 'cut' | 'punch' | 'low' | 'chiquita' | 'block';
+
+/** Réglages de chaque toucher qui a les siens (les autres gardent ceux du coup). */
+export const STYLE_TUNING: Partial<Record<ShotStyle, ShotTuningKey>> = { cut: 'cut', punch: 'punch', low: 'lowVolley', chiquita: 'chiquita' };
+
+/** Balle au contact, pour choisir le toucher : hauteur (m), pression (0 à 1), frappe parfaite, joueur près du filet. */
+export interface StyleBall {
+  height: number;
+  pressure: number;
+  perfect: boolean;
+  nearNet: boolean;
+}
 
 export function shotStyle(
   kind: ShotKind,
@@ -245,13 +266,63 @@ export function shotStyle(
   prepared: number,
   profile: PhysicsProfile,
   touch = false,
+  ball?: StyleBall,
 ): ShotStyle | null {
   const r = profile.rally;
   if (outside || (kind !== 'slice' && kind !== 'normal')) return null;
   if (prepared < r.blockPrep) return 'block';
-  if (kind === 'slice' && volley) return 'cut';
-  if (kind === 'slice' && (touch || stick.forward <= -r.overheadStick)) return 'chiquita';
+  const chiquita = !volley && kind === 'slice' && (touch || stick.forward <= -r.overheadStick);
+  // Sous la bande du filet, au filet : on remonte la balle, quel que soit le geste (sauf la chiquita).
+  if (ball && !chiquita && ball.height < r.lowVolleyHeight && (volley || ball.nearNet)) return 'low';
+  if (kind === 'slice' && volley) {
+    const offered = ball !== undefined && ball.perfect && ball.height >= r.punchLow && ballColor(ball.pressure) === 'verte';
+    return offered ? 'punch' : 'cut';
+  }
+  if (chiquita) return 'chiquita';
   return null;
+}
+
+/** Temps (s) pendant lequel la raquette relâchée attend une balle qui arrive à `speed` m/s : plus long sur une balle lente. */
+export function swingWindow(speed: number, profile: PhysicsProfile): number {
+  const r = profile.rally;
+  const fast = Math.min(1, Math.max(0, (speed - r.swingSlowSpeed) / (r.swingFastSpeed - r.swingSlowSpeed)));
+  return r.swingWindowSlow + (r.swingWindow - r.swingWindowSlow) * fast;
+}
+
+/** Poids d'une balle reçue de volée, de 0 (douce) à 1 (smash), d'après sa vitesse (m/s). */
+export function volleyPace(speed: number, profile: PhysicsProfile): number {
+  const p = profile.rally.pressure;
+  return Math.min(1, Math.max(0, (speed - p.paceEasy) / (p.paceHard - p.paceEasy))) * p.scale;
+}
+
+/** Poids d'une balle rouge pour le contrôle du coup, de 0 (sous `redFrom`) à 1 (à `redFull`). */
+export function redWeight(pressure: number, profile: PhysicsProfile): number {
+  const p = profile.rally.pressure;
+  return Math.min(1, Math.max(0, (pressure - p.redFrom) / (p.redFull - p.redFrom)));
+}
+
+/**
+ * Contrôle perdu sur une volée de balle lourde (ou une balle rouge), de 0 à 1 : `outside` s hors de la sous-fenêtre parfaite et `off` m au-delà
+ * du point idéal, pondérés par le poids de la balle.
+ */
+export function volleyMiscue(pace: number, outside: number, off: number, profile: PhysicsProfile): number {
+  const p = profile.rally.pressure;
+  return pace * Math.min(1, Math.max(0, outside / p.miscueSpan + off / p.miscueMiss));
+}
+
+/**
+ * Bandeja ou víbora frappée pas propre (`slop` : écart de hauteur, erreur, contact décentré) : la cible glisse au-delà,
+ * d'autant plus qu'elle était près de la ligne latérale ou du fond, et que le coup est fort. Une cible sage ne bouge
+ * presque pas : le coup sûr reste sûr.
+ */
+export function overheadSlip(target: Vec3, slop: number, power: number, profile: PhysicsProfile): Vec3 {
+  const r = profile.rally;
+  const k = Math.min(1, Math.max(0.15, slop)) * power;
+  const wide = Math.min(1, Math.max(0, (Math.abs(target.x) - 2.5) / (HALF_WIDTH - 0.35 - 2.5)));
+  const deep = Math.min(1, Math.max(0, (Math.abs(target.z) - 7.5) / (HALF_LENGTH_SAFE - 7.5)));
+  const x = target.x + Math.sign(target.x) * k * wide * r.overheadSlop;
+  const z = target.z + Math.sign(target.z) * k * deep * r.overheadSlopDepth;
+  return vec3(x, target.y, z);
 }
 
 /** Part de la vitesse du coup selon la préparation : `blockSpeed` sans préparation, pleine à `fullPrep` s. */
@@ -927,9 +998,19 @@ export class Duel {
       engagement !== null &&
       (engagement.counterWall !== undefined ||
         (!engagement.swing && cmd.stick.forward <= -r.counterWall.stick && this.counterWall(index)?.playable === true));
+    // Pas d'ajustement : en placement manuel, bloqué, le joueur fait seul les derniers pas vers le point
+    // d'impact. Préparer tôt (au filet, dès la frappe adverse) ne le fige plus à côté de la balle.
+    const adjusting =
+      preparing &&
+      engagement.manual &&
+      player.prepMove === 'bloque' &&
+      prepScale < 1 &&
+      target !== undefined &&
+      gap <= r.adjustStep &&
+      this.isReceiving(index);
     if (counterWall) {
       desired = vec3(0, 0, 0);
-    } else if (engagement && !engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))) {
+    } else if (engagement && (adjusting || (!engagement.manual && (!magnet || prepScale < 1 || (target && gap <= r.magnetRadius))))) {
       // Aimant : loin du point d'impact, c'est le stick qui déplace le joueur.
       // Vitesse qui permet encore de s'arrêter pile sur le point ; pour sortir ou rentrer, par la porte.
       const speed = Math.min(t.maxSpeed, Math.sqrt(2 * t.deceleration * gap));
@@ -1127,19 +1208,29 @@ export class Duel {
       flatDistance(ball.pos, player.pos) <= reach &&
       timing <= lateWindow;
     if (!playable) {
-      if ((this.tick - engagement.releaseTick) * SIM_DT >= r.swingWindow) this.whiff(index);
+      // Volée préparée, raquette partie en avance (la balle arrive) : sur une balle lente, elle l'attend plus longtemps.
+      // Pas le coup sec ni le coup au sol : relâchés trop tôt, ils restent dans le vide (on peut réarmer).
+      const armed = !(engagement.swing && !engagement.swing.prepared) && (engagement.releaseTick - engagement.pressTick) * SIM_DT >= r.blockPrep;
+      const waits = armed && this.bounces === 0 && Math.abs(player.pos.z) < r.volleyZone && timing < 0;
+      const wait = waits ? swingWindow(length(ball.vel), this.profile) : r.swingWindow;
+      if ((this.tick - engagement.releaseTick) * SIM_DT >= wait) this.whiff(index);
       return;
     }
     const volley = this.bounces === 0;
     const outside = outsideCourt(ball.pos);
     // Dehors, on renvoie la balle en lob par-dessus le mur ; B sur une balle basse : coup défensif, coupé.
     const kind: ShotKind = high && !outside ? 'overhead' : outside ? 'lob' : this.lowShotKind(engagement, volley);
+    // Volée contre une balle lourde : le relâcher se juge aussi. Raquette tendue d'avance, la balle arrive dessus
+    // quand elle veut, et c'était une frappe parfaite à coup sûr ; maintenant, c'est une frappe en avance.
+    const pace = volley && kind !== 'overhead' && !outside ? volleyPace(length(ball.vel), this.profile) : 0;
+    const waited = (this.tick - engagement.releaseTick) * SIM_DT - r.pressure.volleySweep;
+    const judged = timing - pace * Math.max(0, waited);
     // Balle verte, jaune ou rouge : sous pression, la sous-fenêtre parfaite rétrécit (réflexes).
     const pressure = this.pressureOf(index, kind, ball.pos.y, Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2), length(player.vel));
-    const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure;
-    const perfect = timing >= -r.perfectBefore * shrink && timing <= r.perfectAfter * shrink && miss <= r.sweetSpot;
+    const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure - r.pressure.paceShrink * pace;
+    const perfect = judged >= -r.perfectBefore * shrink && judged <= r.perfectAfter * shrink && miss <= r.sweetSpot;
     // Erreur du coup : pression, timing, et balle trop loin du point idéal.
-    let error = shotError(pressure, timing, miss, perfect, this.profile);
+    let error = shotError(pressure, judged, miss, perfect, this.profile);
     if (kind === 'overhead') {
       error *= r.pressure.overheadFactor;
       // Côté revers : revers par-dessus la tête, une bandeja sans force ; ni remate ni víbora.
@@ -1160,6 +1251,12 @@ export class Duel {
         aimed = vec3(aimed.x, aimed.y, -player.side * depth);
       }
       if (backhand) aimed = vec3(aimed.x, aimed.y, aimed.z + player.side * r.hand.backOverheadShort);
+      // Bandeja et víbora : le stick dose la puissance ; frappe pas propre sur une cible ambitieuse, elle file au-delà.
+      const placed = variant === 'bandeja' || variant === 'vibora';
+      const power = placed ? 1 + r.overheadPower * Math.max(-1, Math.min(1, player.stick.forward)) : 1;
+      // Prise trop haute, elle a déjà sa punition (elle rebondit haut, balle offerte) : elle compte moins.
+      const slop = (heightOff < 0 ? -heightOff : 0.3 * heightOff) + error + (miss > r.sweetSpot ? 0.15 : 0);
+      if (placed && !clean) aimed = overheadSlip(aimed, slop, power, this.profile);
       const target = byHeight ? aimed : lateDrift(aimed, player.side, timing, this.profile);
       this.hit(index, kind, ball.pos, target, clean, timing, volley, false, engagement.manual, {
         overhead: variant,
@@ -1167,27 +1264,43 @@ export class Duel {
         error,
         heightOff,
         wing,
+        power,
       });
       return;
     }
     // Toucher : volée coupée sur une balle flottante, chiquita (stick vers soi, ou geste lâché), ou blocage sans
     // préparation (au stick : le coup sec, sans tirer le stick vers soi).
     const prepared = engagement.swing && !engagement.swing.prepared ? 0 : (this.tick - engagement.pressTick) * SIM_DT;
-    const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile, engagement.swing?.end === 'letGo');
+    const nearNet = Math.abs(ball.pos.z) < r.lowVolleyNet;
+    const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile, engagement.swing?.end === 'letGo', {
+      height: ball.pos.y,
+      pressure,
+      perfect,
+      nearNet,
+    });
     // La volée coupée demande du temps : pressée, elle rate plus souvent (plus haute, plus longue).
     if (style === 'cut') error = Math.min(1, error * (1 + r.pressure.cutRush * pressure));
+    const styled = style ? STYLE_TUNING[style] : undefined;
     // Revers frappé (ni lob, ni toucher) : un peu moins sûr que le coup droit.
-    const struck = kind !== 'lob' && style !== 'cut' && style !== 'chiquita' && !outside;
+    const struck = kind !== 'lob' && !styled && !outside;
     if (wing === 'back' && struck) error = Math.min(1, error + r.hand.backhandError);
-    const tuning = style === 'cut' || style === 'chiquita' ? style : kind;
+    const tuning = styled ?? kind;
     const bonus = (engagement.manual ? r.manualAimBonus : 1) * (volley ? r.volleyWidth : 1) * (style === 'block' ? r.blockWidth : 1);
     let aimed = aimTarget(tuning, player.side, player.stick, perfect, this.profile, bonus);
     // Lob sur une balle rouge, ou relâché trop tôt : il raccourcit, et devient une balle de smash.
     if (kind === 'lob' && error > 0) aimed = vec3(aimed.x, aimed.y, aimed.z + player.side * error * r.pressure.lobShort);
     // Coup mal frappé ou sous pression : il part long (vers la vitre adverse, la faute de fond de court).
     else if (!outside && error > 0) aimed = vec3(aimed.x, aimed.y, aimed.z - player.side * error * r.pressure.long);
+    // Balle lourde ou rouge mal contrôlée : en avance, la raquette ouverte l'envoie dans la vitre ; sinon, dans le filet.
+    const outsideWindow = Math.max(0, -judged - r.perfectBefore * shrink, judged - r.perfectAfter * shrink);
+    // Balle rouge (basse, rapide, sans temps) : comme la balle lourde de volée, seule une frappe propre est sûre.
+    const red = kind === 'lob' || outside ? 0 : redWeight(pressure, this.profile);
+    const miscue = volleyMiscue(Math.max(pace, red), outsideWindow, Math.max(0, miss - r.sweetSpot), this.profile);
+    const early = miscue > 0 && judged < 0;
+    if (early) aimed = vec3(aimed.x, aimed.y, aimed.z - player.side * miscue * r.pressure.miscueLong);
+    const dip = miscue > 0 && !early ? miscue * r.pressure.miscueDip : 0;
     const target = lateDrift(aimed, player.side, timing, this.profile);
-    this.hit(index, kind, ball.pos, target, perfect, timing, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing });
+    this.hit(index, kind, ball.pos, target, perfect, judged, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing, miscue, dip });
   }
 
   /**
@@ -1463,13 +1576,14 @@ export class Duel {
     const player = this.players[index]!;
     const r = this.profile.rally;
     const { overhead = null, outside = false, pressure = 0, error = 0, style = null, prepared = Infinity, heightOff = 0, wing = 'fore', solved: given } = extra;
-    const tuning: ShotTuningKey = overhead ?? (style === 'cut' || style === 'chiquita' ? style : kind === 'overhead' ? 'bandeja' : kind);
-    const touch = style === 'cut' || style === 'chiquita';
+    const styled = style ? STYLE_TUNING[style] : undefined;
+    const tuning: ShotTuningKey = overhead ?? styled ?? (kind === 'overhead' ? 'bandeja' : kind);
+    const touch = styled !== undefined;
     const base = kind === 'lob' || overhead || touch ? 1 : volley ? r.volleySpeed : this.touchedGlass ? r.glassSpeed : 1;
     // Préparation : sans temps pour armer, on ne fait que bloquer ; armé assez tôt, le coup part plein.
     // Revers : moins fort que le coup droit ; par-dessus la tête, bien moins.
     const weak = overhead ? r.hand.backOverheadSpeed : touch || kind === 'lob' || outside ? 1 : r.hand.backhandSpeed;
-    const speedFactor = base * (wing === 'back' ? weak : 1) * (1 - r.pressure.speedLoss * error) * (touch || kind === 'lob' ? 1 : preparation(prepared, this.profile));
+    const speedFactor = (extra.power ?? 1) * base * (wing === 'back' ? weak : 1) * (1 - r.pressure.speedLoss * error) * (touch || kind === 'lob' ? 1 : preparation(prepared, this.profile));
     // Au padel, la volée se joue coupée : la balle reste basse, même après la vitre.
     const spin = volley && kind === 'normal' && !touch ? r.volleySpin : null;
     const spinScale = 1 - Math.max(0, heightOff) * r.overheadHighSpin;
@@ -1479,7 +1593,7 @@ export class Duel {
     // balle ramassée aux pieds et mal frappée.
     const p = r.pressure;
     const scooped = !extra.counterWall && !overhead && kind !== 'lob' && contact.y < p.netLow ? Math.max(0, (error - 0.5) / 0.5) * p.netDip : 0;
-    const dip = Math.max(0, -heightOff) * r.overheadLowDip + scooped;
+    const dip = Math.max(0, -heightOff) * r.overheadLowDip + scooped + (extra.dip ?? 0);
     ball.vel = dip > 0 ? vec3(solved.vel.x, solved.vel.y - dip, solved.vel.z) : solved.vel;
     ball.spin = solved.spin;
     // Renvoyée de dehors, la balle rentre par-dessus le mur : les murs ne la gênent qu'une fois rentrée.
@@ -1515,6 +1629,7 @@ export class Duel {
       heightOff,
       wing,
       ...(extra.counterWall ? { counterWall: true } : {}),
+      ...(extra.miscue ? { miscue: extra.miscue } : {}),
     };
   }
 

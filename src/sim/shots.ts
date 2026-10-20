@@ -36,7 +36,7 @@ export function forehandFor(side: CourtSide, hand: Hand): Vec3 {
 }
 
 /** Réglages d'un coup : un bouton (sauf B, qui se décline) ou une variante du coup au-dessus de la tête. */
-export type ShotTuningKey = Exclude<ShotKind, 'overhead'> | OverheadKind | 'cut' | 'chiquita';
+export type ShotTuningKey = Exclude<ShotKind, 'overhead'> | OverheadKind | 'cut' | 'punch' | 'lowVolley' | 'chiquita';
 
 export function shotTuning(kind: ShotTuningKey, profile: PhysicsProfile): ShotTypeTuning {
   return profile.rally[kind];
@@ -102,8 +102,8 @@ export function overheadKind(
 
 /**
  * Point de chute d'un coup au-dessus de la tête. Bandeja : profonde, vers le coin le long de la ligne,
- * ou au stick comme un coup normal. Bajada : profonde, au stick.
- * Víbora : contre la vitre latérale du côté du stick, au fond. Remate : parfait, court et dirigé au
+ * au centre (stick vers l'avant ou l'arrière seulement), ou au stick comme un coup normal. Bajada : profonde, au stick.
+ * Víbora : contre la vitre latérale du côté du stick, plus ou moins profonde selon le stick, ou au centre. Remate : parfait, court et dirigé au
  * stick (il rebondit haut et peut sortir du terrain : por tres de côté, por cuatro dans l'axe, surtout claqué
  * tout près du filet sur une balle flottante) ;
  * sinon plus long, il reste dans le terrain et revient de la vitre.
@@ -123,16 +123,24 @@ export function overheadTarget(
   const t = shotTuning(kind, profile);
   const toRight = rightFor(side).x;
   const limit = HALF_WIDTH - 0.6;
-  if (kind === 'bandeja' && Math.abs(aim.right) < 0.2) {
-    // Bandeja sans direction : profonde, vers le coin de la vitre latérale, le long de la ligne ; jamais au centre.
+  const contactSide = contactX >= 0 ? 1 : -1;
+  // Stick vers l'avant ou l'arrière seulement : au centre, entre les deux défenseurs (« al centro »).
+  const centre = Math.abs(aim.right) < 0.2 && Math.abs(aim.forward) >= r.overheadCentreStick;
+  if (kind === 'bandeja' && Math.abs(aim.right) < 0.2 && !centre) {
+    // Bandeja sans direction : profonde, vers le coin de la vitre latérale, le long de la ligne : le coup sûr.
     const target = aimTarget(kind, side, aim, perfect, profile);
-    return vec3((contactX >= 0 ? 1 : -1) * r.bandejaLateral, target.y, target.z);
+    return vec3(contactSide * r.bandejaLateral, target.y, target.z);
   }
   if (kind === 'bandeja' || kind === 'bajada' || kind === 'feinte') return aimTarget(kind, side, aim, perfect, profile);
   if (kind === 'vibora') {
-    // Rebond vers 7 m, près du côté : la balle file dans la vitre latérale et y meurt basse.
-    const lateral = Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0));
-    return vec3(Math.sign(aim.right || 1) * lateral * toRight, BALL_RADIUS, -side * t.depthNeutral);
+    // Contre la vitre latérale, du côté du stick (sans direction, le long de la ligne) : elle y meurt basse. Le stick
+    // vers l'arrière la raccourcit (angle fermé, elle ressort de la vitre vers le filet), vers l'avant l'allonge
+    // jusqu'au coin des deux vitres ; tout droit, au centre, où l'effet latéral l'écarte du défenseur.
+    const forward = clamp(aim.forward, -1, 1);
+    const depth = forward >= 0 ? mix(t.depthNeutral, t.depthLong, forward) : mix(t.depthNeutral, t.depthShort, -forward);
+    const lateral = centre ? r.viboraCentre : Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0));
+    const x = Math.abs(aim.right) >= 0.2 ? Math.sign(aim.right) * toRight : contactSide;
+    return vec3(x * lateral, BALL_RADIUS, -side * depth);
   }
   const depth = !perfect ? t.depthNeutral : contactDepth <= r.remateNearZone ? r.remateKillNear : r.remateKillDepth;
   const x = clamp(clamp(aim.right, -1, 1) * (perfect ? r.remateWidth : r.remateWidthLoose) * toRight, -limit, limit);

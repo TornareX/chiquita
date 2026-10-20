@@ -82,7 +82,9 @@ export function describeShot(shot: DuelShot, profile: PhysicsProfile): { text: s
   else if (shot.counterWall) name = 'contre-vitre';
   else if (shot.outside) name = 'salida de pista';
   else if (shot.overhead) name = OVERHEAD_NAMES[shot.overhead];
+  else if (shot.style === 'punch') name = 'volée de définition';
   else if (shot.style === 'cut') name = 'volée coupée';
+  else if (shot.style === 'low') name = shot.volley ? 'volée basse' : 'balle remontée';
   else if (shot.style === 'chiquita') name = 'chiquita';
   else if (shot.volley) name = shot.kind === 'normal' ? 'volée' : `volée (${SHOT_NAMES[shot.kind]})`;
   else name = SHOT_NAMES[shot.kind];

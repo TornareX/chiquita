@@ -103,6 +103,9 @@ const OVERHEADS: Record<OverheadKind, string> = {
   bajada: 'bajada',
 };
 
+/** Perte de contrôle à partir de laquelle le retour dit « trop tôt » ou « trop tard » (`DuelShot.miscue`). */
+const MISCUE_SHOWN = 0.3;
+
 /**
  * Nom du coup à afficher, ou `null` pour un coup ordinaire sans frappe parfaite. Hors mode détaillé, seuls les
  * coups marquants : en pleine volée-volée, un nom par frappe ferait défiler du texte au milieu du jeu.
@@ -110,10 +113,14 @@ const OVERHEADS: Record<OverheadKind, string> = {
 function shotLabel(shot: DuelShot, detailed: boolean): string | null {
   // La contre-vitre est toujours marquante : un sauvetage.
   if (shot.counterWall) return shot.perfect ? 'contre-vitre parfaite !' : 'contre-vitre !';
+  // Balle lourde (smash bloqué) ou rouge, mal contrôlée : on dit pourquoi, c'est ce qui apprend le timing.
+  if ((shot.miscue ?? 0) >= MISCUE_SHOWN) return `${shot.volley ? 'balle lourde' : 'balle rouge'} : trop ${shot.timing < 0 ? 'tôt' : 'tard'} !`;
   if (!detailed && !shot.perfect && !shot.outside) return null;
   if (shot.outside) return 'salida de pista !';
   if (shot.overhead) return OVERHEADS[shot.overhead] + (shot.perfect ? ' parfaite !' : '');
+  if (shot.style === 'punch') return 'volée de définition !';
   if (shot.style === 'cut') return shot.perfect ? 'volée coupée parfaite !' : 'volée coupée';
+  if (shot.style === 'low') return 'volée basse';
   if (shot.style === 'chiquita') return 'chiquita';
   if (shot.style === 'block') return 'bloquée';
   return shot.perfect ? 'parfait !' : null;

@@ -140,7 +140,9 @@ export function planIntercept(
     // Au-dessus de la tête, la hauteur compte double : la balle prise haute ouvre le remate.
     // Balle haute : à hauteur des yeux (bandeja, víbora) ; remate préparé près du filet : bras tendu, plus haut.
     const ideal = smash && Math.abs(p.z) <= r.remateZone ? r.overheadIdeal : overheadIdeal;
-    const height = overhead ? 2 * Math.abs(p.y - ideal) - (volley ? 0.5 : 0) : volley ? -1 : Math.abs(p.y - 0.95);
+    // Volée sous la bande du filet : possible, mais on la préfère plus haute (un pas en avant sur la chiquita).
+    const lowVolley = volley ? r.volleyLowCost * Math.max(0, r.lowVolleyHeight - p.y) : 0;
+    const height = overhead ? 2 * Math.abs(p.y - ideal) - (volley ? 0.5 : 0) : volley ? -1 + lowVolley : Math.abs(p.y - 0.95);
     const cost = height + 0.25 * time - (afterGlass ? r.glassBonus : 0) + nearWeight * distanceTo(stand);
     if (!best || cost < best.cost) best = { cost, intercept };
   }

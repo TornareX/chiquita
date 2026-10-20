@@ -53,6 +53,8 @@ export interface LegPose {
 
 interface Key {
   twist: number;
+  /** Part de la rotation prise par les hanches (rad) : elles partent avant les épaules (chaîne cinétique). */
+  hipTwist: number;
   lean: number;
   crouch: number;
   armR: V3;
@@ -72,9 +74,12 @@ interface Key {
 
 const FORWARD: V3 = [0, 0, 1];
 
-type Optional = 'face' | 'elbowR' | 'stepL' | 'stepR' | 'jump' | 'kick' | 'stance';
+/** Part de la rotation des épaules prise par les hanches. */
+const HIP_SHARE = 0.45;
+
+type Optional = 'face' | 'elbowR' | 'stepL' | 'stepR' | 'jump' | 'kick' | 'stance' | 'hipTwist';
 function key(k: Omit<Key, Optional> & Partial<Pick<Key, Optional>>): Key {
-  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, jump: 0, kick: 0, stance: 0, ...k };
+  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, jump: 0, kick: 0, stance: 0, hipTwist: k.twist * HIP_SHARE, ...k };
 }
 
 /**
@@ -148,10 +153,18 @@ export const SWING_FAMILIES = Object.keys(SWINGS) as SwingFamily[];
 
 export const FOLLOW_TIME = 0.28;
 export const RECOVER_TIME = 0.3;
+/**
+ * Montée de la raquette vers l'impact (s). La frappe part au pas du contact (au relâcher) : le geste vers l'avant
+ * ne peut pas commencer avant, il se joue donc très vite juste après, et l'image d'impact arrive au bout de ce temps.
+ */
+export const SWING_IN = 0.06;
+/** Après l'image d'impact, temps pendant lequel la main reste attirée par le point de contact (IK du bras, s). */
+const REACH_RELEASE = 0.12;
+/** Relâché, la balle pas encore là (volée qui attend) : la raquette part vers l'impact jusqu'à cette part, en ce temps (s). */
+const WAIT_REACH = 0.7;
+const WAIT_TIME = 0.12;
 /** Préparation : la raquette est à moitié armée en ~0,12 s, entièrement à 0,6 s (comme le bonus de vitesse, §13). */
 const PREP_FULL = 0.6;
-/** Part de la rotation des épaules prise par les hanches. */
-const HIP_SHARE = 0.45;
 /** Longueur d'une foulée complète (deux pas, m) à pleine course, et vitesse de course de référence (m/s). */
 export const STRIDE = 1.7;
 const RUN_SPEED = 5;
@@ -172,22 +185,75 @@ function mixDir(a: V3, b: V3, t: number): V3 {
   return normalize([mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)]);
 }
 
-function mixKey(a: Key, b: Key, t: number): Key {
+/** Segments du corps, du sol à la raquette : dans un vrai coup, chacun part après le précédent et va plus vite. */
+type Part = 'legs' | 'torso' | 'arm' | 'racket';
+
+/** Mélange de deux images clés, chaque segment avec son propre avancement (`t(part)`). */
+function chainMix(a: Key, b: Key, t: (part: Part) => number): Key {
+  const legs = t('legs');
+  const torso = t('torso');
+  const arm = t('arm');
+  const racket = t('racket');
   return {
-    twist: mix(a.twist, b.twist, t),
-    lean: mix(a.lean, b.lean, t),
-    crouch: mix(a.crouch, b.crouch, t),
-    armR: mixDir(a.armR, b.armR, t),
-    armL: mixDir(a.armL, b.armL, t),
-    elbowR: mix(a.elbowR, b.elbowR, t),
-    racket: mixDir(a.racket, b.racket, t),
-    face: mixDir(a.face, b.face, t),
-    stepL: mix(a.stepL, b.stepL, t),
-    stepR: mix(a.stepR, b.stepR, t),
-    jump: mix(a.jump, b.jump, t),
-    kick: mix(a.kick, b.kick, t),
-    stance: mix(a.stance, b.stance, t),
+    twist: mix(a.twist, b.twist, torso),
+    hipTwist: mix(a.hipTwist, b.hipTwist, legs),
+    lean: mix(a.lean, b.lean, torso),
+    crouch: mix(a.crouch, b.crouch, legs),
+    armR: mixDir(a.armR, b.armR, arm),
+    // Le bras libre accompagne le buste.
+    armL: mixDir(a.armL, b.armL, torso),
+    elbowR: mix(a.elbowR, b.elbowR, arm),
+    racket: mixDir(a.racket, b.racket, racket),
+    face: mixDir(a.face, b.face, racket),
+    stepL: mix(a.stepL, b.stepL, legs),
+    stepR: mix(a.stepR, b.stepR, legs),
+    jump: mix(a.jump, b.jump, legs),
+    kick: mix(a.kick, b.kick, legs),
+    stance: mix(a.stance, b.stance, legs),
   };
+}
+
+function mixKey(a: Key, b: Key, t: number): Key {
+  return chainMix(a, b, () => t);
+}
+
+/**
+ * Geste vers l'avant (de l'armé à l'impact) : les jambes et les hanches partent d'abord, puis le buste, le bras, et la
+ * raquette en dernier, qui rattrape tout le monde ; tous arrivent ensemble à l'impact, en accélérant (vitesse la plus
+ * grande au contact).
+ */
+const SWING_START: Record<Part, number> = { legs: 0, torso: 0.15, arm: 0.3, racket: 0.45 };
+/** Fin du geste : les hanches s'arrêtent d'abord, le buste ensuite, et la raquette s'enroule en dernier, en ralentissant. */
+const FOLLOW_END: Record<Part, number> = { legs: 0.55, torso: 0.7, arm: 0.88, racket: 1 };
+
+const easeIn = (t: number): number => t * t;
+const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
+
+/** Avancement de chaque segment dans le geste vers l'avant, quand l'ensemble en est à `t` (0 à 1). */
+const swingIn = (t: number) => (part: Part): number => easeIn(clamp((t - SWING_START[part]) / (1 - SWING_START[part]), 0, 1));
+
+/** Pose armée (ou en route vers l'impact, si le bouton est relâché et que la balle n'est pas encore là). */
+function preparedKey(base: Key, prep: PrepState): Key {
+  const keys = SWINGS[prep.family];
+  const armed = mixKey(base, keys.prep, smooth(prepAmount(prep.seconds)));
+  if (prep.released === undefined) return armed;
+  const t = smooth(clamp(prep.released / WAIT_TIME, 0, 1));
+  return chainMix(armed, keys.impact, (part) => WAIT_REACH * swingIn(t)(part));
+}
+
+/**
+ * Poids de l'IK du bras vers le point de contact (0 à 1), d'après le temps depuis la frappe (s) : il monte pendant le
+ * geste vers l'avant, est plein à l'image d'impact, puis se relâche pendant le début de la fin du geste.
+ */
+export function strikeReach(seconds: number): number {
+  if (seconds < 0) return 0;
+  if (seconds < SWING_IN) return smooth(seconds / SWING_IN);
+  return 1 - smooth(clamp((seconds - SWING_IN) / REACH_RELEASE, 0, 1));
+}
+
+/** Poids de l'IK quand le coup est relâché mais que la balle n'est pas encore là (volée qui attend). */
+export function waitReach(released: number): number {
+  return WAIT_REACH * smooth(clamp(released / WAIT_TIME, 0, 1));
 }
 
 /** Part de l'armé atteinte après `seconds` de préparation : vite au début, pleine à 0,6 s. */
@@ -206,13 +272,23 @@ export function swingSide(localX: number, previous: 'fore' | 'back'): 'fore' | '
   return previous;
 }
 
+/** Coup préparé : sa famille, le temps de préparation (s), et le temps depuis le relâcher si la balle n'est pas encore là (s). */
+export interface PrepState {
+  family: SwingFamily;
+  seconds: number;
+  released?: number;
+}
+
 export interface PoseInput {
   /** Dans l'échange (ou au service) : position d'attente ; sinon, au repos. */
   inPlay: boolean;
-  /** Coup préparé : sa famille et le temps depuis le début de la préparation (s). */
-  prep: { family: SwingFamily; seconds: number } | null;
-  /** Dernière frappe (ou coup dans le vide) : sa famille et le temps écoulé depuis (s). */
-  strike: { family: SwingFamily; seconds: number } | null;
+  /** Coup préparé : voir `PrepState`. */
+  prep: PrepState | null;
+  /**
+   * Dernière frappe (ou coup dans le vide) : sa famille, le temps écoulé depuis (s), et la préparation qu'il y avait
+   * juste avant (le départ du geste vers l'avant ; sans elle, l'armé complet).
+   */
+  strike: { family: SwingFamily; seconds: number; from?: PrepState | null } | null;
   /** Vitesse au sol (m/s), et direction du déplacement dans le repère du filet (+Z vers le filet). */
   speed: number;
   heading: number;
@@ -240,18 +316,18 @@ export function bodyYawTarget(speed: number, heading: number, striking: boolean)
 /** Pose complète du joueur pour cette image. */
 export function computePose(input: PoseInput): Pose {
   const base = input.inPlay ? READY : REST;
-  let upper = base;
-  if (input.prep) {
-    const keys = SWINGS[input.prep.family];
-    upper = mixKey(base, keys.prep, smooth(prepAmount(input.prep.seconds)));
-  }
+  let upper = input.prep ? preparedKey(base, input.prep) : base;
   const s = input.strike;
-  if (s && s.seconds >= 0 && s.seconds < FOLLOW_TIME + RECOVER_TIME) {
+  if (s && s.seconds >= 0 && s.seconds < SWING_IN + FOLLOW_TIME + RECOVER_TIME) {
     const keys = SWINGS[s.family];
-    upper =
-      s.seconds < FOLLOW_TIME
-        ? mixKey(keys.impact, keys.follow, smooth(s.seconds / FOLLOW_TIME))
-        : mixKey(keys.follow, upper, smooth((s.seconds - FOLLOW_TIME) / RECOVER_TIME));
+    if (s.seconds < SWING_IN) {
+      upper = chainMix(s.from ? preparedKey(base, s.from) : keys.prep, keys.impact, swingIn(s.seconds / SWING_IN));
+    } else if (s.seconds < SWING_IN + FOLLOW_TIME) {
+      const t = (s.seconds - SWING_IN) / FOLLOW_TIME;
+      upper = chainMix(keys.impact, keys.follow, (part) => easeOut(clamp(t / FOLLOW_END[part], 0, 1)));
+    } else {
+      upper = mixKey(keys.follow, upper, smooth((s.seconds - SWING_IN - FOLLOW_TIME) / RECOVER_TIME));
+    }
   }
 
   // Course : amplitude selon la vitesse, foulée dans la direction du déplacement vue du corps.
@@ -280,7 +356,7 @@ export function computePose(input: PoseInput): Pose {
     bob: mix(idleBob, runBob, gait),
     bodyYaw: input.bodyYaw,
     twist: upper.twist,
-    hipTwist: upper.twist * HIP_SHARE,
+    hipTwist: upper.hipTwist,
     lean: upper.lean + run * 0.16 * Math.max(0, fwd),
     armR: upper.armR,
     armL: moving && !input.prep && !s ? mixDir(upper.armL, [0.3, -0.75, -Math.sin(input.stride) * 0.6], run * gait) : upper.armL,

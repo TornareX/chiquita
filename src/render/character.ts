@@ -65,12 +65,31 @@ const capsule = (radius: number, length: number) => (pad: number) =>
   new THREE.CapsuleGeometry(radius + pad, length, 4, 10).translate(0, -length / 2 - radius, 0);
 const sphere = (radius: number) => (pad: number) => new THREE.SphereGeometry(radius + pad, 18, 12);
 
+/** Point que le centre du tamis doit rejoindre (repère monde), et à quel point (0 : la pose seule, 1 : sur le point). */
+export interface Reach {
+  target: THREE.Vector3;
+  weight: number;
+}
+
 export interface CharacterRig {
   object: THREE.Group;
   /** À ajouter au corps : la raquette, tenue dans la main droite, manche le long de +Y local. */
   racketMount: THREE.Group;
-  apply(pose: Pose): void;
+  /**
+   * Applique la pose. Avec `reach`, le bras droit (IK à deux segments) amène le centre du tamis vers le point visé,
+   * et le joueur fléchit les jambes si la balle est trop basse pour son bras.
+   */
+  apply(pose: Pose, reach?: Reach | null): void;
 }
+
+/** Centre du tamis, le long du manche depuis la main (m) : le point qui rencontre la balle. */
+export const SWEET_SPOT = 0.25;
+/** Déplacement maximal de la main par l'IK (m) : au-delà, la pose garde le dessus plutôt que de se tordre. */
+const MAX_REACH = 1;
+/** Flexion maximale ajoutée aux jambes pour une balle trop basse (m d'abaissement du bassin). */
+const MAX_DIP = 0.22;
+/** Inclinaison maximale ajoutée au buste vers une balle encore hors de portée (rad). */
+const MAX_BEND = 0.5;
 
 /** Raquette aux dimensions réglementaires (45,5 cm, tamis 26 × 29 cm) ; la main tient le manche à 6 cm du bout. */
 function createRacket(): THREE.Group {
@@ -230,30 +249,108 @@ export function createCharacter(look: CharacterLook, jersey: number, height = PL
   armR.end.add(racketMount);
 
   const handInv = new THREE.Quaternion();
+  // Genoux fléchis pour abaisser le bassin de `crouch`, pieds sous le corps, plus la foulée.
+  const applyLegs = (pose: Pose, crouch: number): void => {
+    hips.position.y = HIP_Y - crouch + pose.bob + pose.jump;
+    const bend = 2 * Math.acos(Math.min(1, Math.max(-1, 1 - crouch / (THIGH + SHIN))));
+    for (const [leg, lp] of [[legR, pose.legR], [legL, pose.legL]] as const) {
+      leg.root.rotation.set(-bend / 2 + lp.swing, 0, lp.spread);
+      leg.joint.rotation.x = bend + lp.knee;
+      leg.end.rotation.x = -(lp.swing + bend / 2 + lp.knee) * 0.6;
+    }
+  };
+
+  // IK du bras droit, dans le repère du buste : épaule `shoulder`, coude et main d'après la pose (FK), main visée.
+  const shoulder = armR.root.position;
+  const target = new THREE.Vector3();
+  const elbow = new THREE.Vector3();
+  const hand = new THREE.Vector3();
+  const goal = new THREE.Vector3();
+  const axis = new THREE.Vector3();
+  const pole = new THREE.Vector3();
+  const reachLength = UPPER_ARM + FOREARM;
+  /** Main d'après la pose seule (FK), et où elle devrait être pour que le tamis touche `target`, pondéré par `weight`. */
+  const reachGoal = (racketDir: THREE.Vector3, weight: number): number => {
+    tmpQ.copy(armR.root.quaternion);
+    elbow.copy(DOWN).applyQuaternion(tmpQ).multiplyScalar(UPPER_ARM).add(shoulder);
+    tmpQ.multiply(armR.joint.quaternion);
+    hand.copy(DOWN).applyQuaternion(tmpQ).multiplyScalar(FOREARM).add(elbow);
+    goal.copy(target).addScaledVector(racketDir, -SWEET_SPOT).sub(hand);
+    if (goal.length() > MAX_REACH) goal.setLength(MAX_REACH);
+    goal.multiplyScalar(weight).add(hand);
+    // Ce qui manque au bras tendu pour atteindre la main visée.
+    return goal.distanceTo(shoulder) - reachLength * 0.97;
+  };
+  const solveArm = (): void => {
+    axis.copy(goal).sub(shoulder);
+    const d = Math.min(Math.max(axis.length(), Math.abs(UPPER_ARM - FOREARM) + 1e-3), reachLength * 0.999);
+    axis.normalize();
+    // Le coude reste du côté où la pose le met (plan du bras inchangé à poids nul).
+    pole.copy(elbow).sub(shoulder);
+    pole.addScaledVector(axis, -pole.dot(axis));
+    if (pole.lengthSq() < 1e-8) pole.set(0, 0, 1).applyQuaternion(armR.root.quaternion).addScaledVector(axis, -pole.dot(axis));
+    pole.normalize();
+    const a = (UPPER_ARM * UPPER_ARM - FOREARM * FOREARM + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, UPPER_ARM * UPPER_ARM - a * a));
+    elbow.copy(shoulder).addScaledVector(axis, a).addScaledVector(pole, h);
+    hand.copy(shoulder).addScaledVector(axis, d);
+    // Repère du bras : le segment le long de -Y, l'avant-bras plié vers +Z (voir `limb` : le coude tourne autour de X).
+    ay.copy(shoulder).sub(elbow).normalize();
+    az.copy(hand).sub(elbow);
+    const forearm = az.length();
+    az.addScaledVector(ay, -az.dot(ay));
+    if (az.lengthSq() < 1e-8) az.set(0, 0, 1).applyQuaternion(armR.root.quaternion).addScaledVector(ay, -az.dot(ay));
+    az.normalize();
+    ax.crossVectors(ay, az);
+    armR.root.quaternion.setFromRotationMatrix(tmpM.makeBasis(ax, ay, az));
+    const bendCos = tmpDir.copy(elbow).sub(shoulder).dot(az.copy(hand).sub(elbow)) / (UPPER_ARM * forearm);
+    armR.joint.rotation.x = -Math.acos(Math.min(1, Math.max(-1, bendCos)));
+  };
+  /** Après un changement du corps : point visé dans le nouveau repère du buste, et nouvelle main visée. */
+  const retarget = (reach: Reach, racketDir: THREE.Vector3): number => {
+    object.updateWorldMatrix(true, true);
+    target.copy(reach.target);
+    torso.worldToLocal(target);
+    return reachGoal(racketDir, reach.weight);
+  };
+  const racketDir = new THREE.Vector3();
+
   return {
     object,
     racketMount,
-    apply(pose: Pose): void {
+    apply(pose: Pose, reach?: Reach | null): void {
       body.rotation.y = pose.bodyYaw;
-      hips.position.y = HIP_Y - pose.crouch + pose.bob + pose.jump;
       // Les hanches tournent avec les épaules (jambes comprises : les pieds pivotent), le buste fait le reste.
       hips.rotation.y = pose.hipTwist;
       torso.rotation.set(pose.lean, pose.twist - pose.hipTwist, 0, 'YXZ');
       // La tête compense la moitié de la torsion : le joueur regarde la balle.
       head.rotation.y = -pose.twist * 0.5;
-
-      // Genoux fléchis pour abaisser le bassin de `crouch`, pieds sous le corps, plus la foulée.
-      const bend = 2 * Math.acos(Math.min(1, Math.max(-1, 1 - pose.crouch / (THIGH + SHIN))));
-      for (const [leg, lp] of [[legR, pose.legR], [legL, pose.legL]] as const) {
-        leg.root.rotation.set(-bend / 2 + lp.swing, 0, lp.spread);
-        leg.joint.rotation.x = bend + lp.knee;
-        leg.end.rotation.x = -(lp.swing + bend / 2 + lp.knee) * 0.6;
-      }
+      applyLegs(pose, pose.crouch);
 
       pointLimb(armR.root, pose.armR);
       armR.joint.rotation.x = -pose.elbowR;
       pointLimb(armL.root, pose.armL);
       armL.joint.rotation.x = -0.4;
+
+      racketDir.set(pose.racket[0], pose.racket[1], pose.racket[2]).normalize();
+      if (reach && reach.weight > 0) {
+        // Balle trop basse pour le bras : les jambes plient (le buste descend avec le bassin), puis on vise à nouveau.
+        let missing = retarget(reach, racketDir);
+        const dip = Math.min(MAX_DIP, Math.max(0, missing)) * (target.y < shoulder.y ? 1 : 0);
+        if (dip > 0) {
+          applyLegs(pose, pose.crouch + dip);
+          missing = retarget(reach, racketDir);
+        }
+        // Toujours trop loin : le buste se penche vers elle, l'épaule pivotant autour du bassin.
+        if (missing > 0) {
+          axis.crossVectors(shoulder, goal);
+          if (axis.lengthSq() > 1e-8) {
+            torso.quaternion.multiply(tmpQ.setFromAxisAngle(axis.normalize(), Math.min(MAX_BEND, missing / shoulder.length())));
+            retarget(reach, racketDir);
+          }
+        }
+        solveArm();
+      }
 
       // Raquette : manche le long de `racket`, dans le repère du buste ; tamis en prise marteau (`hammerFace`),
       // perpendiculaire au plan de l'avant-bras et du manche, du côté de `face`.
