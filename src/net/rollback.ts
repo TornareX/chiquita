@@ -37,6 +37,13 @@ export interface RollbackOptions<C> {
   same(a: C, b: C): boolean;
   /** Pas de l'état de départ. */
   startTick?: number;
+  /**
+   * Serveur de référence (`matchServer.ts`) : il confirme les commandes de tout le monde, celles des joueurs locaux
+   * comprises (il remplace une commande arrivée trop tard). Les commandes locales jouent tout de suite, mais restent
+   * provisoires : si celle du serveur diffère, on rejoue comme pour un joueur distant. Les premiers pas du délai
+   * d'entrée ne sont alors connus d'avance que pour les joueurs locaux (provisoires, neutres).
+   */
+  serverConfirms?: boolean;
 }
 
 export interface RollbackHooks<S> {
@@ -73,6 +80,8 @@ export class RollbackSession<S, C> {
   /** Plus ancien pas à recalculer, ou `null`. */
   private rollbackTo: number | null = null;
   private readonly isLocal: boolean[];
+  /** Avec `serverConfirms` : commandes locales jouées en attendant celles du serveur. */
+  private readonly provisional: Map<number, C>[];
 
   constructor(
     readonly state: S,
@@ -85,8 +94,16 @@ export class RollbackSession<S, C> {
     this.prunedBefore = start;
     this.isLocal = Array.from({ length: options.players }, (_, i) => options.local.includes(i));
     this.confirmed = Array.from({ length: options.players }, () => new Map<number, C>());
+    this.provisional = Array.from({ length: options.players }, () => new Map<number, C>());
     // Les premiers pas, couverts par le délai d'entrée de chacun, sont neutres : chaque machine le sait.
     const delayOf = (p: number): number => (this.isLocal[p] ? options.inputDelay : (options.remoteInputDelay ?? options.inputDelay));
+    if (options.serverConfirms) {
+      this.provisional.forEach((inputs, p) => {
+        if (this.isLocal[p]) for (let t = start; t < start + options.inputDelay; t++) inputs.set(t, options.neutral);
+      });
+      this.confirmedUntil = Array.from({ length: options.players }, () => start - 1);
+      return;
+    }
     this.confirmed.forEach((inputs, p) => {
       for (let t = start; t < start + delayOf(p); t++) inputs.set(t, options.neutral);
     });
@@ -108,16 +125,43 @@ export class RollbackSession<S, C> {
     return this.confirmed[player]!.get(tick);
   }
 
+  /** La commande du joueur local `player` pour le pas `tick` est déjà donnée (pour ne la lire qu'une fois). */
+  hasLocal(player: number, tick: number): boolean {
+    return this.confirmed[player]!.has(tick) || this.provisional[player]!.has(tick);
+  }
+
+  /** Commande locale provisoire (`serverConfirms`) du joueur `player` au pas `tick`. */
+  provisionalAt(player: number, tick: number): C | undefined {
+    return this.provisional[player]!.get(tick);
+  }
+
+  /** Toutes les commandes de tout le monde sont connues pour de bon jusqu'au pas `tick` compris. */
+  confirmedThrough(tick: number): boolean {
+    return this.confirmedUntil.every((t) => t >= tick);
+  }
+
+  /** Recalculer à partir du pas `tick` au prochain rattrapage (s'il a un instantané, c'est-à-dire s'il a été prédit). */
+  invalidate(tick: number): boolean {
+    if (tick >= this.tick || !this.snapshots.has(tick)) return false;
+    this.rollbackTo = this.rollbackTo === null ? tick : Math.min(this.rollbackTo, tick);
+    return true;
+  }
+
   /** Commande d'un joueur local, pour le pas `localTick` ; rend ce pas. */
   addLocal(player: number, commands: C): number {
     const tick = this.localTick;
-    this.confirm(player, tick, commands);
+    if (this.options.serverConfirms) this.provisional[player]!.set(tick, commands);
+    else this.confirm(player, tick, commands);
     return tick;
   }
 
-  /** Commande reçue d'un joueur distant pour le pas `tick` (en double, en retard ou en désordre : sans danger). */
+  /**
+   * Commande reçue d'un joueur distant pour le pas `tick` (en double, en retard ou en désordre : sans danger). Avec
+   * `serverConfirms`, aussi celle d'un joueur local, telle que le serveur l'a retenue.
+   */
   addRemote(player: number, tick: number, commands: C): void {
-    if (this.isLocal[player] || this.confirmed[player]!.has(tick) || tick < this.prunedBefore) return;
+    if (this.isLocal[player] && !this.options.serverConfirms) return;
+    if (this.confirmed[player]!.has(tick) || tick < this.prunedBefore) return;
     this.confirm(player, tick, commands);
     // Pas déjà calculé avec une autre commande : il faudra le refaire.
     const used = this.used.get(tick);
@@ -129,9 +173,8 @@ export class RollbackSession<S, C> {
   /** Le pas courant peut se calculer : commandes locales données, et pas trop de pas prédits. */
   canAdvance(): boolean {
     for (let p = 0; p < this.options.players; p++) {
-      if (this.isLocal[p]) {
-        if (!this.confirmed[p]!.has(this.tick)) return false;
-      } else if (this.tick - this.confirmedUntil[p]! > this.options.maxRollback) return false;
+      if (this.isLocal[p] && !this.hasLocal(p, this.tick)) return false;
+      if ((!this.isLocal[p] || this.options.serverConfirms) && this.tick - this.confirmedUntil[p]! > this.options.maxRollback) return false;
     }
     return true;
   }
@@ -179,7 +222,7 @@ export class RollbackSession<S, C> {
     for (let p = 0; p < this.options.players; p++) {
       const known = this.confirmed[p]!.get(tick);
       if (known === undefined) predicted = true;
-      commands.push(known ?? this.predict(p, tick));
+      commands.push(known ?? this.provisional[p]!.get(tick) ?? this.predict(p, tick));
     }
     if (predicted) this.snapshots.set(tick, this.game.save(this.state));
     else this.snapshots.delete(tick);
@@ -223,6 +266,7 @@ export class RollbackSession<S, C> {
         const old = inputs.get(t);
         if (old !== undefined) this.lastPruned[p] = old;
         inputs.delete(t);
+        this.provisional[p]!.delete(t);
       });
     }
     this.prunedBefore = keepFrom;

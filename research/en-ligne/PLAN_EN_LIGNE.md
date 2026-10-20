@@ -205,3 +205,65 @@ Limites de ce mode : pas de ralenti du coup gagnant ni de micro-pause à la frap
 pour un seul joueur) ; changer un réglage dans le menu ou l'assistance (bouton) repart de l'état de la partie,
 sans perdre le score ; la « machine distante » fait jouer les IA sur ce qu'elles voient de la partie là-bas,
 avec leur propre retard sur l'humain.
+
+## Phase 1, première étape : parties privées en ligne (21/10/2026, même branche)
+
+Le vrai jeu en ligne, en local ou sur un réseau : un serveur, des salles à code, deux à quatre humains, les places
+libres jouées par l'IA du serveur.
+
+| Pièce | Où | Ce qu'elle fait |
+|---|---|---|
+| Serveur | `server/main.ts` (`npm run serveur`, port 2567) | Serveur HTTP + WebSocket (paquet `ws`). Ne fait que brancher les messages sur le salon. |
+| Salon | `src/net/lobby.ts` | Salles à code de 4 lettres (sans I ni O), places, hôte (règle simple ou double, niveau de l'IA, lance), départ d'un joueur = une IA prend sa place, salle fermée quand elle est vide. |
+| Match du serveur | `src/net/matchServer.ts` | Il **retient** la commande de chaque joueur à chaque pas (en retard : la précédente, personne n'attend un joueur lent), fait jouer les IA sans délai, calcule le match (c'est son score qui compte), envoie à tous les commandes retenues et, chaque seconde, son empreinte. |
+| Navigateur | `src/net/onlineClient.ts`, `src/net/connection.ts` | Cale son horloge sur celle du serveur (pings), calcule un peu en avance (moitié du ping + 25 ms) pour que ses commandes arrivent à temps, joue les siennes tout de suite, prédit les autres, et corrige par rollback quand arrivent les commandes retenues, les siennes comprises si le serveur a dû les remplacer. Compare son empreinte à celle du serveur chaque seconde. |
+| Protocole | `src/net/protocol.ts` | Salle en JSON ; commandes en binaire (en-tête de 8 octets + 4 octets par joueur et par pas). La configuration du match (format, places, réglages de chaque humain, graine) part du serveur : tout le monde part de la même partie. |
+| Salon dans le jeu | `src/modes/online.ts`, `src/ui/onlineLobby.ts` | `?enligne` : nom, créer ou rejoindre (code), places, et pour l'hôte simple/double, niveau de l'IA, « Lancer le match ». |
+
+Choix fait en route : `ws` plutôt que Colyseus pour cette étape. Colyseus apporte surtout sa synchronisation d'état,
+que nous n'utilisons pas (nous synchronisons des commandes et faisons du rollback) ; pour des salles à code, `ws`
+tient en une centaine de lignes que nous maîtrisons et testons. Colyseus (ou équivalent) reviendra peut-être pour le
+matchmaking (phase 3).
+
+Vérifié :
+- `tests/net/online.test.ts` : serveur + deux navigateurs à travers de fausses liaisons (80 et 40 ms de ping, avec
+  gigue ; l'horloge d'un navigateur décalée de 12 s) : 19 empreintes sur 19 identiques au serveur pour chacun. Avec
+  un joueur à la connexion instable (90 ms ±70) : le serveur remplace 784 de ses commandes arrivées trop tard, son
+  navigateur se corrige, toujours 13 empreintes sur 13 identiques.
+- `tests/net/lobby.test.ts` : salles, codes, places, hôte, lancement, départ remplacé par l'IA.
+- `tests/e2e/enligne.spec.ts` : deux onglets de Chromium passent par le salon et le vrai serveur, jouent un double
+  (deux humains virtuels, deux IA du serveur) : 12 empreintes sur 12 identiques au serveur pour chacun, les quatre
+  joueurs frappent. (Une première version du test divergeait : sa manette virtuelle faisait jouer une IA qui
+  remplissait un cache de la partie hors du pas, ce qu'une vraie manette ne fait pas. Corrigé dans le test.)
+
+Pas encore fait (suite de la phase 1) : se reconnecter après une coupure (aujourd'hui : bandeau « connexion perdue »,
+le match continue sans soi, joué par l'IA) ; renvoyer l'état à un joueur qui diverge (aujourd'hui : l'encart l'affiche
+en rouge) ; deux joueurs sur la même machine dans un même navigateur ; le salon à la manette ; héberger le serveur
+sur Internet (Fly.io, région Paris) ; numéro de version de la sim.
+
+## Comment tester en ligne
+
+1. Dans le dossier du worktree, lancer le serveur de jeu dans un terminal, et le jeu dans un autre :
+
+   ```
+   npm run serveur
+   npm run dev
+   ```
+
+2. Ouvrir **http://localhost:5173/?enligne** dans deux onglets (ou deux navigateurs). Dans le premier : son nom,
+   « Créer une salle » ; un code de 4 lettres s'affiche. Dans le second : son nom, le code, « Rejoindre ».
+3. Chacun prend une place (les places libres sont jouées par l'IA). L'hôte choisit simple ou double et le niveau de
+   l'IA, puis « Lancer le match ». La manette (ou le clavier) choisie pour la première place humaine dans les
+   réglages joue sa propre place.
+4. Avec un ami sur le même réseau (Wi-Fi de la maison) : lancer le jeu avec `npm run dev -- --host`, puis il ouvre
+   `http://<adresse de ton PC>:5173/?enligne` (Windows peut demander d'autoriser Node dans le pare-feu). Par
+   Internet, il faudra d'abord héberger le serveur.
+
+Options d'URL : `&serveur=hote:port` (autre serveur), `&delai=1` (délai d'entrée, images), `&fenetre=250` (rollback au
+plus, ms).
+
+Quoi regarder, dans l'encart en bas à droite : le **ping** mesuré, l'**avance** sur le serveur (en pas de 1/240 s),
+les pas rejoués, les corrections, et surtout **« empreintes : N identiques au serveur »** : si elle passe à
+« DÉSYNCHRONISÉ », les deux machines ne calculent plus le même match (à me signaler). « commandes remplacées par le
+serveur » compte celles des siennes arrivées trop tard. Deux onglets dans le même navigateur : un onglet en arrière-plan
+est ralenti par le navigateur, mieux vaut deux fenêtres côte à côte.

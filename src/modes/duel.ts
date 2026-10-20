@@ -34,10 +34,26 @@ import { hitstopMs, juiceFlags } from '../render/juice';
 import { createReplayBadge, REPLAY_DELAY, ReplayRecorder, replayWorthy, type Replay } from './replay';
 import { quantizeCommands } from '../net/codec';
 import { NetMatch } from '../net/duelNet';
-import { EventGate, fakeNetFromUrl } from '../net/fakeNet';
+import { describeFakeNet, EventGate, fakeNetFromUrl, TICKS_PER_FRAME } from '../net/fakeNet';
+import type { Connection } from '../net/connection';
+import { OnlineClient } from '../net/onlineClient';
+import { createMatchDuel, type MatchConfig } from '../net/protocol';
+import type { RollbackHooks } from '../net/rollback';
 import { createNetHud } from '../ui/netHud';
 import { NEUTRAL_ARCADE } from '../sim/commands';
 import type { Vec3 } from '../sim/vec3';
+
+/** Match en ligne lancé depuis le salon (`src/modes/online.ts`). */
+export interface OnlineStart {
+  config: MatchConfig;
+  /** Début du match en temps du serveur (ms), et places tenues par ce navigateur. */
+  startAt: number;
+  seats: number[];
+  connection: Connection;
+  /** Délai d'entrée et rollback au plus (pas). */
+  inputDelay: number;
+  maxRollback: number;
+}
 
 /** Bouton Start (Menu) de la disposition standard : ouvre et ferme les réglages. */
 const START_BUTTON = 9;
@@ -69,18 +85,29 @@ function muteable<T extends object>(sounds: T, audible: () => boolean): T {
  *   (délai d'entrée, en images) et `&fenetre=150` (rollback au plus, ms). Les humains jouent sur la machine locale,
  *   les IA sur une autre, reliées par une fausse liaison ; chaque machine prédit et corrige (rollback). Pas de
  *   ralenti ni de micro-pause dans ce mode.
+ *
+ * `online` : match en ligne (`src/modes/online.ts`) ; la partie part de la configuration du serveur, identique chez
+ * tous, et les réglages du menu ne la changent plus (seuls le son et l'affichage restent à soi).
  */
-export function startDuel(canvas: HTMLCanvasElement): void {
+export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null = null): void {
   const params = new URLSearchParams(location.search);
   const settings = loadSettings(params);
   const rulesOf = (s: DuelSettings): MatchRules | null =>
     s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint };
-  const duel = new Duel(rulesOf(settings), settings.match.doubles ? 'double' : 'simple');
-  duel.highFloor = highFloorFromUrl();
-  // Sensations réglées dans le labo, si on a choisi de les garder en match.
-  const feel = loadFeel();
+  const duel = online ? createMatchDuel(online.config) : new Duel(rulesOf(settings), settings.match.doubles ? 'double' : 'simple');
   const juice = juiceFlags();
-  if (feel.inMatch) applyFeel(duel.profile, feel.feel);
+  if (!online) {
+    duel.highFloor = highFloorFromUrl();
+    // Sensations réglées dans le labo, si on a choisi de les garder en match.
+    const feel = loadFeel();
+    if (feel.inMatch) applyFeel(duel.profile, feel.feel);
+  }
+  // Faux réseau : réglages lus dans l'URL, ou `null`.
+  const fakeNet = online ? null : fakeNetFromUrl(params);
+  /** Match en réseau (faux ou vrai) : rollbacks, sons datés, animations lissées, ni ralenti ni micro-pause. */
+  const networked = fakeNet !== null || online !== null;
+  /** En ligne : la manette ou le clavier choisi pour la première place humaine joue sa place à soi. */
+  const onlineController = settings.players.find(isHuman) ?? 'manette1';
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
   const keyboard = createKeyboardPads(canvas);
@@ -100,6 +127,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const sources: string[] = ['Clavier', 'Clavier', 'Clavier', 'Clavier'];
   /** Applique les réglages à la partie en cours ; `restart` relance une partie avec les nouvelles règles (et le format). */
   const apply = (s: DuelSettings, restart: boolean): void => {
+    // En ligne, la partie est celle du serveur : aucun réglage local ne la touche.
+    if (online) return;
     if (restart) {
       duel.rules = rulesOf(s);
       duel.format = s.match.doubles ? 'double' : 'simple';
@@ -134,6 +163,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const menu = createSettingsMenu(
     settings,
     (s, restart) => {
+      if (online) return;
       apply(s, restart);
       // Nouvelle partie : l'historique du ralenti ne la rejoue plus.
       if (restart) recorder?.clear();
@@ -161,7 +191,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   /** Commandes de chaque joueur : la manette ou le clavier choisis pour sa place, ou son IA. */
   const read = (index: number, pads: readonly Gamepad[]): ArcadeCommands => {
     const bot = bots[index];
-    const controller = settings.players[index]!;
+    const controller = online ? onlineController : settings.players[index]!;
     sources[index] = CONTROLLER_SHORT[controller];
     if (bot && !isHuman(controller)) {
       states[index] = buttons[index] = playerSwings[index] = null;
@@ -182,7 +212,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     buttons[index] = pad
       ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) }
       : { kind: 'keyboard', player: keys ?? ((index % 2) as 0 | 1), layout: keyboardLayout };
-    if (state.assistButton && !assistHeld[index]) {
+    if (!online && state.assistButton && !assistHeld[index]) {
       const player = duel.players[index]!;
       player.assist = ASSIST_LEVELS[(ASSIST_LEVELS.indexOf(player.assist) + 1) % ASSIST_LEVELS.length]!;
       settings.assists[index] = player.assist;
@@ -204,10 +234,8 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   const freezeSeconds = Number(params.get('figer'));
   const freezeTick = freezeSeconds > 0 ? Math.round(freezeSeconds / SIM_DT) : null;
   const frozen = (): boolean => freezeTick !== null && duel.tick >= freezeTick;
-  // Faux réseau : réglages lus dans l'URL, ou `null`.
-  const fakeNet = fakeNetFromUrl(params);
-  // Ralenti du coup gagnant entre les points (étape V7) ; jamais sur le banc d'essai figé ni en faux réseau.
-  const recorder = juice.replay !== 'off' && freezeTick === null && !fakeNet ? new ReplayRecorder() : null;
+  // Ralenti du coup gagnant entre les points (étape V7) ; jamais sur le banc d'essai figé ni en réseau.
+  const recorder = juice.replay !== 'off' && freezeTick === null && !networked ? new ReplayRecorder() : null;
   const badge = recorder ? createReplayBadge() : null;
   /** Point qui attend son ralenti (pas de la fin du point), et ralenti en cours. */
   let replayPending: number | null = null;
@@ -223,7 +251,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     });
   }
   /** Événements déjà joués (faux réseau) : un rollback refait des pas, leurs sons et effets ne repartent pas. */
-  const gate = fakeNet ? new EventGate() : null;
+  const gate = networked ? new EventGate() : null;
   /**
    * Sons et effets d'un pas qui vient d'être calculé. `replayed` : pas refait par un rollback ; seuls ses événements
    * encore jamais vus comptent, ce qui suit le temps (crissements, affichage des entrées) attend le présent.
@@ -256,7 +284,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       sounds.shot({ ...shot, quality });
       sounds.grunt(shot.contact, shotPower(shot), VOICES[shot.player % VOICES.length]!);
       // Pas de micro-pause en ligne : la simulation ne peut pas s'arrêter pour un seul joueur.
-      const hitstop = fakeNet ? 0 : hitstopMs(shot, juice.hitstop);
+      const hitstop = networked ? 0 : hitstopMs(shot, juice.hitstop);
       if (hitstop > 0) hitstopUntil = performance.now() + hitstop;
       if (shot.perfect) view.shake(0.5);
       // Le remate secoue la caméra, même sans frappe parfaite (GAME_DESIGN.md §6). [à calibrer]
@@ -265,55 +293,76 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     unmute?.();
   };
 
-  /** Faux réseau : le match à deux machines, et ce qu'en montre l'encart (compté par image). */
+  /** Faux réseau : le match à deux machines. */
   let net: NetMatch | null = null;
   let netRestart = false;
-  const netHud = fakeNet ? createNetHud(fakeNet) : null;
+  /** Ce que montre l'encart du réseau, compté par image. */
   let netFrame = { replayed: 0, corrections: 0, playerCorrections: 0, stalls: 0, longest: 0 };
   /** Balle et joueurs juste avant un rollback, pour lisser à l'écran le saut que la correction leur fait faire. */
   let ballBefore: Vec3 | null = null;
   let playersBefore: Vec3[] = [];
-  if (fakeNet) view.setOnline(true);
+  if (networked) view.setOnline(true);
+  /** Sons et effets de chaque pas calculé (rejoué ou non), et lissage des corrections : faux réseau et en ligne. */
+  const rollbackHooks: RollbackHooks<Duel> = {
+    onStep: (_, __, replayed) => afterSimStep(replayed),
+    beforeRollback: (state) => {
+      ballBefore = state.ball ? { ...state.ball.pos } : null;
+      playersBefore = state.players.map((p) => ({ ...p.pos }));
+    },
+    afterRollback: (state) => {
+      state.players.forEach((p, i) => {
+        const before = playersBefore[i];
+        if (!before) return;
+        const offset = { x: before.x - p.pos.x, y: 0, z: before.z - p.pos.z };
+        const jump = Math.hypot(offset.x, offset.z);
+        // Au-delà de 3 m, c'est un nouveau point (replacement) : pas de fondu.
+        if (jump > 0.005 && jump < 3) {
+          view.correctPlayer(i, offset);
+          netFrame.playerCorrections++;
+        }
+      });
+      const after = state.ball?.pos;
+      if (!ballBefore || !after) return;
+      const offset = { x: ballBefore.x - after.x, y: ballBefore.y - after.y, z: ballBefore.z - after.z };
+      const jump = Math.hypot(offset.x, offset.y, offset.z);
+      // Au-delà de quelques mètres, ce n'est plus la même balle (le point a tourné autrement) : pas de fondu.
+      if (jump > 0.005 && jump < 4) {
+        view.correctBall(offset);
+        netFrame.corrections++;
+      }
+    },
+  };
   /** (Re)part de l'état de la partie : au début, et quand un réglage la change (menu, assistance). */
   const startNet = (): void => {
     if (!fakeNet) return;
     const localA = duel.players.map((_, i) => i).filter((i) => isHuman(settings.players[i]!));
     const { conditions, inputDelay, maxRollback } = fakeNet;
-    net = new NetMatch(
-      duel,
-      // Les IA jouent sans délai sur leur machine (voir `inputDelayB`).
-      { localA, conditions, inputDelay, inputDelayB: 0, maxRollback },
-      {
-        onStep: (_, __, replayed) => afterSimStep(replayed),
-        beforeRollback: (state) => {
-          ballBefore = state.ball ? { ...state.ball.pos } : null;
-          playersBefore = state.players.map((p) => ({ ...p.pos }));
-        },
-        afterRollback: (state) => {
-          state.players.forEach((p, i) => {
-            const before = playersBefore[i];
-            if (!before) return;
-            const offset = { x: before.x - p.pos.x, y: 0, z: before.z - p.pos.z };
-            const jump = Math.hypot(offset.x, offset.z);
-            // Au-delà de 3 m, c'est un nouveau point (replacement) : pas de fondu.
-            if (jump > 0.005 && jump < 3) {
-              view.correctPlayer(i, offset);
-              netFrame.playerCorrections++;
-            }
-          });
-          const after = state.ball?.pos;
-          if (!ballBefore || !after) return;
-          const offset = { x: ballBefore.x - after.x, y: ballBefore.y - after.y, z: ballBefore.z - after.z };
-          const jump = Math.hypot(offset.x, offset.y, offset.z);
-          // Au-delà de quelques mètres, ce n'est plus la même balle (le point a tourné autrement) : pas de fondu.
-          if (jump > 0.005 && jump < 4) {
-            view.correctBall(offset);
-            netFrame.corrections++;
-          }
-        },
-      },
-    );
+    // Les IA jouent sans délai sur leur machine (voir `inputDelayB`).
+    net = new NetMatch(duel, { localA, conditions, inputDelay, inputDelayB: 0, maxRollback }, rollbackHooks);
   };
+  /** En ligne : ce navigateur, calé sur l'horloge du serveur, et l'encart qui le décrit. */
+  const onlineClient = online
+    ? new OnlineClient(duel, { seats: online.seats, startAt: online.startAt, inputDelay: online.inputDelay, maxRollback: online.maxRollback, hooks: rollbackHooks })
+    : null;
+  if (online && onlineClient) {
+    online.connection.attach(onlineClient);
+    online.config.seats.forEach((seat, i) => {
+      if (!online.seats.includes(i)) sources[i] = seat.kind === 'human' ? seat.name : `IA ${seat.level}`;
+    });
+  }
+  const netHud = fakeNet
+    ? createNetHud(() => describeFakeNet(fakeNet))
+    : online && onlineClient
+      ? createNetHud(
+          () => `en ligne · ping ${onlineClient.stats.ping} ms · en avance de ${onlineClient.stats.ahead} pas · délai ${online.inputDelay / TICKS_PER_FRAME} im.`,
+          () => {
+            const s = onlineClient.stats;
+            const sync = s.desyncs ? `DÉSYNCHRONISÉ (${s.desyncs}, dès le pas ${s.firstDesync})` : 'identiques au serveur';
+            return `empreintes : ${s.checked} ${sync} · commandes remplacées par le serveur : ${s.overridden}`;
+          },
+        )
+      : null;
+  const maxRollback = fakeNet?.maxRollback ?? online?.maxRollback ?? 0;
   /** Les IA jouent sur l'autre machine, avec ce qu'elles voient de la partie là-bas. */
   const readRemote = (state: Duel, index: number): ArcadeCommands => {
     sources[index] = CONTROLLER_SHORT[settings.players[index]!];
@@ -324,6 +373,20 @@ export function startDuel(canvas: HTMLCanvasElement): void {
 
   const loop = new FixedStepLoop(SIM_DT, () => {
     if (frozen()) return;
+    if (online && onlineClient) {
+      const pads = connectedGamepads();
+      const { replayed, rollbacks, stalls } = onlineClient.session.stats;
+      // Menu ouvert : le match continue chez les autres ; sa place ne bouge plus.
+      const paused = menu.isOpen || padTest.isOpen;
+      onlineClient.step((_, index) => (paused ? NEUTRAL_ARCADE : read(index, pads)), performance.now());
+      online.connection.flush();
+      const stats = onlineClient.session.stats;
+      netFrame.replayed += stats.replayed - replayed;
+      netFrame.stalls += stats.stalls - stalls;
+      if (stats.rollbacks > rollbacks) netFrame.longest = Math.max(netFrame.longest, stats.lastReplayed);
+      gate?.forget(duel.tick - 4 * maxRollback);
+      return;
+    }
     if (net) {
       const pads = connectedGamepads();
       const { replayed, rollbacks } = net.a.session.stats;
@@ -331,7 +394,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
       const stats = net.a.session.stats;
       netFrame.replayed += stats.replayed - replayed;
       if (stats.rollbacks > rollbacks) netFrame.longest = Math.max(netFrame.longest, stats.lastReplayed);
-      gate?.forget(duel.tick - 4 * (fakeNet?.maxRollback ?? 0));
+      gate?.forget(duel.tick - 4 * maxRollback);
       if (netRestart) {
         netRestart = false;
         startNet();
@@ -348,7 +411,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
   });
 
   const debug = import.meta.env.DEV || params.has('debug');
-  if (debug) window.__duel = { duel, Bot, net: () => net };
+  if (debug) window.__duel = { duel, Bot, net: () => net, online: () => onlineClient };
 
   const perf = debug ? createPerfMeter(params.has('perf')) : null;
   let last = performance.now();
@@ -385,7 +448,7 @@ export function startDuel(canvas: HTMLCanvasElement): void {
     skipPressed = false;
     const replaying = replay !== null;
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
-    if (!replaying && !menu.isOpen && !padTest.isOpen && now >= hitstopUntil) alpha = loop.advance(frameTime);
+    if (!replaying && (online || (!menu.isOpen && !padTest.isOpen)) && now >= hitstopUntil) alpha = loop.advance(frameTime);
     const renderStart = performance.now();
     if (replay) view.render(replayAlpha, frameTime * replay.speed, menu.isOpen || padTest.isOpen);
     else view.render(frozen() ? 0 : alpha, frameTime, now < hitstopUntil || frozen());

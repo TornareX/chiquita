@@ -52,6 +52,15 @@
         "--strictPort"
       ],
       "port": 5176
+    },
+    {
+      "name": "padel-serveur",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/xavie/Documents/Dev/padel-smash/.claude/worktrees/epic-davinci-74c02a/node_modules/tsx/dist/cli.mjs",
+        "C:/Users/xavie/Documents/Dev/padel-smash/.claude/worktrees/epic-davinci-74c02a/server/main.ts"
+      ],
+      "port": 2567
     }
   ]
 }

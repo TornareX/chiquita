@@ -45,6 +45,12 @@ export function fakeNetFromUrl(params: URLSearchParams): FakeNetConfig | null {
   };
 }
 
+/** Première ligne de l'encart : le réseau simulé. */
+export function describeFakeNet(config: FakeNetConfig): string {
+  const { ping, jitter, loss } = config.conditions;
+  return `réseau simulé · ping ${ping} ms${jitter ? ` ±${jitter}` : ''}${loss ? ` · perte ${Math.round(loss * 100)} %` : ''} · délai ${config.delayFrames} im. · fenêtre ${config.windowMs} ms`;
+}
+
 /**
  * Événements datés (pas + joueur) déjà joués : après un rollback, la simulation refait les mêmes pas et revoit les
  * mêmes frappes, rebonds et fins de point ; un son ou un effet ne doit partir qu'une fois. Un événement que la

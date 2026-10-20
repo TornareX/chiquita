@@ -133,7 +133,7 @@ function advance(
   session.rollback();
   const tick = session.localTick;
   for (const player of peer.local) {
-    if (session.commandAt(player, tick) !== undefined) continue;
+    if (session.hasLocal(player, tick)) continue;
     // Arrondies avant d'entrer dans la simulation : les deux machines calculent avec les mêmes valeurs.
     const commands = quantizeCommands(withoutTrace(session.state, () => read(session.state, player), outside));
     peer.addLocal(player, commands);

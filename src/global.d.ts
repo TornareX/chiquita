@@ -16,7 +16,9 @@ declare global {
       commandScript?: (world: World) => Partial<PlayerCommands>;
     };
     /** Échange arcade, exposé en mode debug (preview, Playwright). */
-    __duel?: { duel: Duel; Bot: typeof Bot; net?: () => import('./net/duelNet').NetMatch | null };
+    __duel?: { duel: Duel; Bot: typeof Bot; net?: () => import('./net/duelNet').NetMatch | null;
+      online?: () => import('./net/onlineClient').OnlineClient | null;
+    };
     /** Tutoriel, exposé en mode debug (Playwright) : étape en cours, réussites, essai. */
     __tutorial?: { readonly phase: string; readonly successes: number; readonly attempt: number };
     /** Effets de balle et de vitre de la vue du match, exposés en mode debug (compteurs, ralenti pour les captures). */

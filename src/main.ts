@@ -1,6 +1,7 @@
 import { startAnimations } from './modes/animations';
 import { startDuel } from './modes/duel';
 import { startLabo } from './modes/labo';
+import { startOnline } from './modes/online';
 import { startTutorial } from './modes/tutoriel';
 import { startTrainer } from './modes/trainer';
 
@@ -11,9 +12,12 @@ if (!canvas) throw new Error('Canvas #scene introuvable');
 // `?mode=labo` : labo de sensations, une situation de match rejouée en boucle pour régler la physique.
 // `?mode=tutoriel` : une leçon par coup (`&lecon=bandeja` pour en ouvrir une directement).
 // `?mode=animations` : visionneur des animations du personnage, coup par coup, sans jouer.
-const mode = new URLSearchParams(location.search).get('mode');
+// `?enligne` (ou `?mode=enligne`) : jeu en ligne, salon puis match contre le serveur (`npm run serveur`).
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode');
 if (mode === 'trainer') startTrainer(canvas);
 else if (mode === 'labo') startLabo(canvas);
 else if (mode === 'tutoriel') startTutorial(canvas);
 else if (mode === 'animations') startAnimations(canvas);
+else if (mode === 'enligne' || params.has('enligne')) startOnline(canvas);
 else startDuel(canvas);
