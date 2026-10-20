@@ -4,6 +4,7 @@ import { BALL_RADIUS, NET_HEIGHT_CENTER } from './constants';
 import { forwardOf, rightOf, type Player } from './player';
 import type { PhysicsProfile, RacketTuning } from './profile';
 import { addScaled, cross, dot, length, scale, sub, vec3, type Vec3 } from './vec3';
+import { datan, dcos, dhypot, dsin, sq } from './dmath';
 
 export type RacketPhase = 'idle' | 'preparing' | 'swinging' | 'recovering';
 
@@ -184,11 +185,11 @@ export interface ShotInput {
 function elevationFor(speed: number, distance: number, rise: number, gravity: number): number {
   // Tir tendu : la plus petite des deux solutions de la parabole. La traînée est compensée
   // en comptant une vitesse un peu plus faible.
-  const k = (gravity * distance * distance) / (2 * (speed * 0.93) ** 2);
+  const k = (gravity * distance * distance) / (2 * sq(speed * 0.93));
   const discriminant = distance * distance - 4 * k * (k + rise);
   // Vitesse insuffisante : on prend l'angle qui passe le plus haut possible à cette distance.
   const tangent = discriminant >= 0 ? (distance - Math.sqrt(discriminant)) / (2 * k) : distance / (2 * k);
-  return clamp(Math.atan(tangent), -25 * DEG, 60 * DEG);
+  return clamp(datan(tangent), -25 * DEG, 60 * DEG);
 }
 
 /**
@@ -204,7 +205,7 @@ export function computeShot(
   profile: PhysicsProfile,
 ): { vel: Vec3; spin: Vec3; quality: number } | null {
   const t = profile.racket;
-  const offset = Math.min(1, Math.sqrt(input.offsetRight ** 2 + input.offsetUp ** 2 + input.depth ** 2));
+  const offset = Math.min(1, dhypot(input.offsetRight, input.offsetUp, input.depth));
   const quality = 1 - offset;
   // Une préparation complète stabilise le tamis : les coups décentrés dévient moins.
   const deviation = t.edgeDeviation * (1 - 0.5 * input.charge);
@@ -215,7 +216,7 @@ export function computeShot(
     // En retard, la balle part du côté de la raquette ; en avance, elle est tirée de l'autre côté.
     input.side * (t.idealContact - input.progress) * t.timingAngle * DEG +
     input.offsetRight * deviation * DEG;
-  const direction = vec3(-Math.sin(yaw), 0, Math.cos(yaw));
+  const direction = vec3(-dsin(yaw), 0, dcos(yaw));
 
   // Vitesse : le tamis pousse la balle, et une balle qui arrive vite repart plus vite.
   const headSpeed = input.headSpeed * (input.soft ? t.softFactor : 1) * (1 - t.edgeSpeedLoss * offset);
@@ -232,7 +233,7 @@ export function computeShot(
       (brush > 0 ? brush * t.lobClearance : brush * t.sliceClearance),
   );
   // Distance au filet le long de la direction du coup ; sans objet si le joueur lui tourne le dos.
-  const towardNet = Math.cos(yaw);
+  const towardNet = dcos(yaw);
   const elevation =
     (towardNet > 0.2
       ? elevationFor(
@@ -245,9 +246,9 @@ export function computeShot(
     input.offsetUp * deviation * DEG;
 
   const vel = vec3(
-    direction.x * speed * Math.cos(elevation),
-    speed * Math.sin(elevation),
-    direction.z * speed * Math.cos(elevation),
+    direction.x * speed * dcos(elevation),
+    speed * dsin(elevation),
+    direction.z * speed * dcos(elevation),
   );
   // Brossage : lift (positif) ou slice (négatif), autour de l'axe horizontal perpendiculaire au coup.
   const spinRate = (brush * t.spinGain * speed) / BALL_RADIUS;

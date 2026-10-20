@@ -8,6 +8,7 @@ import { forehandFor, forwardFor, rightFor } from './shots';
 import { vec3, type Vec3 } from './vec3';
 import { predictBall } from './predict';
 import { pathDistance, waypoint } from './walkable';
+import { dhypot } from './dmath';
 
 /**
  * Joueur automatique. Il ne triche pas : il ne produit que des commandes, comme une manette (appui
@@ -316,7 +317,7 @@ export class Bot {
     if (!ball) return unknown;
     const plan = planIntercept(ball, me.pos, me.side, duel.tick, duel.profile, 0, duel.bounces > 0, false, me.height, false, me.hand);
     if (!plan) return unknown;
-    const speed = Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2);
+    const speed = dhypot(ball.vel.x, ball.vel.z);
     const color = ballColor(duel.pressureOf(this.index, 'normal', plan.contact.y, speed, 0, plan.tick));
     return { color, volley: plan.volley, height: plan.contact.y };
   }

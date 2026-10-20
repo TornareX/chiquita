@@ -1,6 +1,7 @@
 import { DOOR_FAR, DOOR_NEAR, HALF_LENGTH, HALF_WIDTH, RUNOFF_BACK, RUNOFF_SIDE } from './constants';
 import type { CourtSide } from './shots';
 import { vec3, type Vec3 } from './vec3';
+import { dhypot } from './dmath';
 
 /**
  * Où un joueur peut se tenir (GAME_DESIGN.md §5, salida de pista) : sa moitié du terrain, ou toute la
@@ -88,7 +89,7 @@ function door(from: Vec3, to: Vec3, side: CourtSide): Vec3 | null {
 
 /** Longueur du trajet à pied de `from` à `to`, en passant par la porte s'il faut sortir ou rentrer. */
 export function pathDistance(from: Vec3, to: Vec3, side: CourtSide): number {
-  const flat = (a: Vec3, b: Vec3): number => Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+  const flat = (a: Vec3, b: Vec3): number => dhypot(a.x - b.x, a.z - b.z);
   const via = door(from, to, side);
   return via ? flat(from, via) + flat(via, to) : flat(from, to);
 }

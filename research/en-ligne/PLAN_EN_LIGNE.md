@@ -115,10 +115,19 @@ Files classées, OpenSkill, classement, saisons, signalements.
 - Fermeture d'Hathora : https://crux.supercraft.host/blog/hathora-shut-down-where-to-go-after-may-2026/ ,
   https://docs.edgegap.com/docs/tools-and-integrations/switch-from-hathora
 
-## Phase 0 faite en partie : rollback et faux réseau (19/10/2026, branche du worktree `epic-davinci-74c02a`)
+## Phase 0 faite : rollback, faux réseau, maths déterministes (19-21/10/2026, branche du worktree `epic-davinci-74c02a`)
 
-Fait : points 3, 4, 5 et 6 de la phase 0. Pas fait : les maths déterministes et le test croisé entre navigateurs
-(points 1 et 2).
+Fait : les six points de la phase 0. Reste à faire tourner le test croisé dans Firefox et WebKit une fois ces deux
+navigateurs installés pour Playwright (`npx playwright install firefox webkit`) ; Node et Chromium sont vérifiés.
+
+**Maths déterministes (21/10).** `src/sim/dmath.ts` : `dsin`, `dcos`, `datan` (algorithmes de fdlibm, seulement
+`+ - * /`), `dhypot` (`Math.sqrt`) et `sq` (au lieu de `x ** 2`, lui aussi « approché » par la norme). Les 19 appels
+de la sim sont remplacés ; `tests/sim/dmath.test.ts` vérifie l'écart avec `Math` (quelques derniers chiffres binaires,
+sur 400 000 valeurs) et **refuse** toute fonction approchée dans `src/sim` (sin, cos, tan, atan, exp, log, pow,
+hypot, `**`…). Les stats IA contre IA n'ont pas bougé (32 min simulées, simple et double : mêmes points, mêmes coups
+par point, mêmes coups gagnants). Test croisé : `tests/e2e/determinisme.spec.ts` joue le même match d'IA de 30 s
+(`src/net/crossMatch.ts`) dans Node, Chromium, Firefox et WebKit et compare l'empreinte seconde par seconde. Node et
+Chromium : `bcf20ffd` tous les deux.
 
 | Pièce | Où | Ce qu'elle fait |
 |---|---|---|
@@ -140,11 +149,12 @@ tard), plus les protections du rendu ci-dessus. Mesuré (à-coup moyen de la pos
 avant, 2 à 7 fois celui du jeu hors ligne ; après, le même qu'hors ligne, à 120 ms comme à 200 ms de ping avec 10 %
 de perte.
 
-Seul changement de la sim : aucun. Une trouvaille, à garder en tête : `bounceCache` (dans `Duel.passesBehind`) se
-remplit au premier appel, et la lecture de la manette l'appelle **hors du pas** (`counterWallReady`). Deux machines
-dont l'une a lu la manette et l'autre non calculaient donc un rebond prévu à des instants différents. Le faux
-réseau fait ces lectures « sans trace » (`withoutTrace`) ; pour le vrai serveur, mieux vaudra que la sim ne garde
-pas en mémoire ce qu'on lui demande de l'extérieur.
+Changements de la sim, petits et mécaniques : les maths ci-dessus, et `bounceCache` (dans `Duel.passesBehind`). Il se
+remplissait au premier appel, et la lecture de la manette l'appelle **hors du pas** (`counterWallReady`) : deux
+machines dont l'une a lu la manette et l'autre non calculaient le rebond prévu à des instants différents. Depuis le
+21/10, il est calculé dans `hit()`, une fois par frappe, et une question posée de l'extérieur ne change plus rien
+(test : `tests/net/rollback.test.ts`, « même sans garde »). Le faux réseau garde ses lectures « sans trace »
+(`withoutTrace`) pour l'autre cache, `ownerCache`, que seule l'IA lit.
 
 Mesuré :
 - Tests (`tests/net/`) : un match en double joué à travers le faux réseau (ping 120 ms, gigue 20 ms, perte 5 % ;

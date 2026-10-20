@@ -1,6 +1,7 @@
 import { findExercise } from './exercises';
 import { Prng } from './prng';
 import { cross, normalize, scale, vec3, type Vec3 } from './vec3';
+import { dcos, dsin } from './dmath';
 
 export interface LaunchParams {
   /** Position de départ de la balle. */
@@ -62,7 +63,7 @@ export const MAX_INTERVAL = 10;
 export function toLaunch(params: LaunchParams): Launch {
   const az = params.azimuth * DEG;
   const el = params.elevation * DEG;
-  const dir = vec3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el));
+  const dir = vec3(dsin(az) * dcos(el), dsin(el), -dcos(az) * dcos(el));
   // Axe du lift : horizontal, perpendiculaire à la direction de la balle.
   const liftAxis = normalize(cross(UP, dir));
   return {

@@ -106,6 +106,25 @@ describe('rollback à travers un faux réseau', () => {
       duel.step(commands);
     }
   });
+
+  it("la lecture de la manette (contre-vitre proposée) ne change pas le match, même sans garde", () => {
+    // Deux parties, mêmes commandes ; l'une se fait interroger avant chaque pas comme le fait la lecture de la manette.
+    const asked = new Duel(RULES, 'double');
+    const quiet = new Duel(RULES, 'double');
+    const bots = asked.players.map((_, i) => new Bot(i, 13 + i, AI_LEVELS.normal));
+    let checks = 0;
+    for (let t = 0; t < 240 * 20; t++) {
+      const commands = bots.map((bot) => withoutTrace(asked, () => bot.commands(asked)));
+      const before = hashState(asked);
+      asked.players.forEach((_, i) => asked.counterWallReady(i) && checks++);
+      // Rien n'a bougé dans l'état, caches compris : une autre machine qui n'a rien demandé calcule la même chose.
+      expect(hashState(asked)).toBe(before);
+      asked.step(commands);
+      quiet.step(commands);
+    }
+    expect(checks).toBeGreaterThan(0);
+    expect(hashState(asked)).toBe(hashState(quiet));
+  });
 });
 
 describe('moteur de rollback générique', () => {

@@ -2,6 +2,7 @@ import type { PlayerCommands } from './commands';
 import { HALF_LENGTH, HALF_WIDTH } from './constants';
 import type { PhysicsProfile } from './profile';
 import { vec3, type Vec3 } from './vec3';
+import { dcos, dsin } from './dmath';
 
 export interface Player {
   /** Position des pieds (y > 0 pendant le split-step). */
@@ -34,12 +35,12 @@ export function createPlayer(pos: Vec3 = vec3(0, 0, -7)): Player {
 
 /** Direction horizontale du regard. */
 export function forwardOf(yaw: number): Vec3 {
-  return vec3(-Math.sin(yaw), 0, Math.cos(yaw));
+  return vec3(-dsin(yaw), 0, dcos(yaw));
 }
 
 /** Direction horizontale à droite du regard. */
 export function rightOf(yaw: number): Vec3 {
-  return vec3(-Math.cos(yaw), 0, -Math.sin(yaw));
+  return vec3(-dcos(yaw), 0, -dsin(yaw));
 }
 
 export function stepPlayer(

@@ -30,6 +30,7 @@ import { predictBall } from './predict';
 import { ballColor, ballPressure, shotError } from './pressure';
 import { add, addScaled, length, scale, vec3, type Vec3 } from './vec3';
 import { DOOR_MID, inCourt, moveWithin, outsideCourt, pathDistance, waypoint } from './walkable';
+import { dhypot } from './dmath';
 
 /**
  * Assistance de course, réglable par joueur (GAME_DESIGN.md §6) :
@@ -448,7 +449,7 @@ export function contactTiming(
     const ry = height === null ? 0 : ball.pos.y - height;
     const rz = ball.pos.z - player.pos.z;
     const timing = (rx * vx + ry * vy + rz * vz) / speed2;
-    const miss = Math.sqrt((rx - timing * vx) ** 2 + (rz - timing * vz) ** 2);
+    const miss = dhypot(rx - timing * vx, rz - timing * vz);
     if (miss < best.miss) best = { timing, miss, wing };
     if (wing === 'fore' && miss <= foreMiss) break;
   }
@@ -1226,7 +1227,7 @@ export class Duel {
     const waited = (this.tick - engagement.releaseTick) * SIM_DT - r.pressure.volleySweep;
     const judged = timing - pace * Math.max(0, waited);
     // Balle verte, jaune ou rouge : sous pression, la sous-fenêtre parfaite rétrécit (réflexes).
-    const pressure = this.pressureOf(index, kind, ball.pos.y, Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2), length(player.vel));
+    const pressure = this.pressureOf(index, kind, ball.pos.y, dhypot(ball.vel.x, ball.vel.z), length(player.vel));
     const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure - r.pressure.paceShrink * pace;
     const perfect = judged >= -r.perfectBefore * shrink && judged <= r.perfectAfter * shrink && miss <= r.sweetSpot;
     // Erreur du coup : pression, timing, et balle trop loin du point idéal.
@@ -1329,10 +1330,7 @@ export class Duel {
     const player = this.players[index]!;
     const side = player.side;
     if (this.bounces > 0) return ball.vel.z * side > 0;
-    if (this.bounceCache?.hits !== this.hits) {
-      this.bounceCache = { hits: this.hits, bounce: predictBall(ball, this.profile, 4, 64).bounce };
-    }
-    const bounce = this.bounceCache.bounce;
+    const bounce = this.bounceCache?.hits === this.hits ? this.bounceCache.bounce : predictBall(ball, this.profile, 4, 64).bounce;
     return bounce !== null && bounce.z * side > 0 && (bounce.z - player.pos.z) * side > 0.3;
   }
 
@@ -1384,7 +1382,7 @@ export class Duel {
     const r = this.profile.rally;
     const t = r.counterWall;
     // Coup poussé, comme le coupé : la balle basse gêne moins qu'un coup frappé.
-    const pressure = this.pressureOf(index, 'slice', ball.pos.y, Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2), length(player.vel));
+    const pressure = this.pressureOf(index, 'slice', ball.pos.y, dhypot(ball.vel.x, ball.vel.z), length(player.vel));
     const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure;
     // Comme les autres coups, la balle se frappe sur le côté, à `standLateral`.
     const miss = Math.abs(Math.abs(chance.lateral) - r.standLateral);
@@ -1458,7 +1456,7 @@ export class Duel {
     const hitter = this.lastHitter === null ? null : this.players[this.lastHitter];
     if (hitter?.lastHit?.kind === 'lob') return null;
     const ball = this.ball;
-    if (ball && Math.hypot(ball.vel.x, ball.vel.z) < this.profile.rally.floatSpeed) return null;
+    if (ball && dhypot(ball.vel.x, ball.vel.z) < this.profile.rally.floatSpeed) return null;
     return this.profile.rally.hitHigh;
   }
 
@@ -1546,7 +1544,7 @@ export class Duel {
     const engagement = this.players[index]!.engagement;
     const plan = engagement?.plan;
     if (!engagement || !plan || !this.ball) return null;
-    const speed = Math.sqrt(this.ball.vel.x ** 2 + this.ball.vel.z ** 2);
+    const speed = dhypot(this.ball.vel.x, this.ball.vel.z);
     const kind = engagement.kind === 'overhead' && plan.contact.y < this.profile.rally.overheadLow ? 'slice' : engagement.kind;
     return this.pressureOf(index, kind, plan.contact.y, speed, 0, plan.tick);
   }
@@ -1631,6 +1629,9 @@ export class Duel {
       ...(extra.counterWall ? { counterWall: true } : {}),
       ...(extra.miscue ? { miscue: extra.miscue } : {}),
     };
+    // Rebond prévu, pour `passesBehind` : calculé ici, une fois par frappe, et jamais à la demande (une question posée
+    // hors du pas, par l'entrée ou l'IA, ne doit pas changer le match : jeu en ligne, `src/net`).
+    this.bounceCache = { hits: this.hits, bounce: predictBall(ball, this.profile, 4, 64).bounce };
   }
 
   /** Règles du padel appliquées aux contacts du pas. */

@@ -5,6 +5,7 @@ import { BALL_RADIUS, HALF_LENGTH, HALF_WIDTH, NET_HEIGHT_POSTS, PLAYER_HEIGHT, 
 import { netHeightAt } from './court';
 import type { PhysicsProfile, ShotTypeTuning } from './profile';
 import { addScaled, cross, length, normalize, scale, sub, vec3, type Vec3 } from './vec3';
+import { dhypot } from './dmath';
 
 /** Camp d'un joueur : -1 = côté Z négatif (près de la caméra), 1 = côté Z positif. */
 export type CourtSide = -1 | 1;
@@ -212,7 +213,7 @@ function heightAtNet(pos: Vec3, vel: Vec3, spin: Vec3, maxSeconds: number, profi
  * l'horizontale et `rise` m à la verticale (parabole sans air) : smash frappé vers le bas.
  */
 function launchTime(distance: number, rise: number, speed: number, g: number): number {
-  const launch = (T: number): number => Math.sqrt((distance / T) ** 2 + ((rise + (g * T * T) / 2) / T) ** 2);
+  const launch = (T: number): number => dhypot(distance / T, (rise + (g * T * T) / 2) / T);
   let T = 0.05;
   while (T < 2 && launch(T) > speed) T += 0.005;
   return T;
