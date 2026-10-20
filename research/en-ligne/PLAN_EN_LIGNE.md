@@ -117,8 +117,7 @@ Files classées, OpenSkill, classement, saisons, signalements.
 
 ## Phase 0 faite : rollback, faux réseau, maths déterministes (19-21/10/2026, branche du worktree `epic-davinci-74c02a`)
 
-Fait : les six points de la phase 0. Reste à faire tourner le test croisé dans Firefox et WebKit une fois ces deux
-navigateurs installés pour Playwright (`npx playwright install firefox webkit`) ; Node et Chromium sont vérifiés.
+Fait : les six points de la phase 0.
 
 **Maths déterministes (21/10).** `src/sim/dmath.ts` : `dsin`, `dcos`, `datan` (algorithmes de fdlibm, seulement
 `+ - * /`), `dhypot` (`Math.sqrt`) et `sq` (au lieu de `x ** 2`, lui aussi « approché » par la norme). Les 19 appels
@@ -126,8 +125,11 @@ de la sim sont remplacés ; `tests/sim/dmath.test.ts` vérifie l'écart avec `Ma
 sur 400 000 valeurs) et **refuse** toute fonction approchée dans `src/sim` (sin, cos, tan, atan, exp, log, pow,
 hypot, `**`…). Les stats IA contre IA n'ont pas bougé (32 min simulées, simple et double : mêmes points, mêmes coups
 par point, mêmes coups gagnants). Test croisé : `tests/e2e/determinisme.spec.ts` joue le même match d'IA de 30 s
-(`src/net/crossMatch.ts`) dans Node, Chromium, Firefox et WebKit et compare l'empreinte seconde par seconde. Node et
-Chromium : `bcf20ffd` tous les deux.
+(`src/net/crossMatch.ts`) dans Node, Chromium, Firefox et WebKit et compare l'empreinte seconde par seconde : les
+quatre donnent `bcf20ffd`, à chaque seconde (Windows, Firefox 157, WebKit 27.2). À savoir : sur ce PC, l'ancienne sim
+(avec `Math.sin`…) donnait déjà la même empreinte dans les quatre moteurs. Les maths déterministes sont une garantie
+pour ce qui n'est pas testé ici (Safari sur Mac et iPhone, processeurs ARM, autres bibliothèques mathématiques),
+que la norme autorise à différer.
 
 | Pièce | Où | Ce qu'elle fait |
 |---|---|---|
