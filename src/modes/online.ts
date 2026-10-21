@@ -75,7 +75,7 @@ export function startOnline(canvas: HTMLCanvasElement): void {
       error: (message) => lobby.error(message),
       closed: () => {
         connection = null;
-        lobby.unreachable(`Serveur introuvable (${url}). Est-il lancé (npm run serveur) ?`);
+        lobby.unreachable(`Serveur introuvable (${url}) : vérifie ta connexion, puis réessaie.`);
       },
       reconnecting: () => banner.show('Connexion perdue, reconnexion…'),
       reconnected: () => banner.hide(),

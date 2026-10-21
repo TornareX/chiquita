@@ -228,7 +228,9 @@ for (const size of SIZES) {
       // Point gagné : l'annonce à la couleur de l'équipe, et pourquoi.
       await page.goto(MATCH);
       await page.waitForFunction(() => window.__duel?.duel.phase === 'dead' && window.__duel.duel.lastResult != null, null, { timeout: 60_000, polling: 20 });
-      await page.waitForTimeout(400);
+      // L'annonce affichée et entrée (la pause entre deux points est courte quand la page rame, en 4K).
+      await page.locator('#point', { hasText: /^(Point|Jeu|Set)/ }).waitFor();
+      await page.waitForFunction(() => getComputedStyle(document.getElementById('point')!).opacity === '1');
       await shot(page, '29-annonce-point');
 
       // Por tres provoqué (comme `effects.spec.ts`) : la grande annonce des effets par-dessus celle du HUD.
@@ -295,6 +297,7 @@ for (const size of SIZES) {
     });
 
     test('écrans annexes', async ({ page }) => {
+      test.setTimeout(90_000);
       await page.goto('/?mode=tutoriel');
       await page.waitForTimeout(2500);
       await shot(page, '30-tutoriel');
