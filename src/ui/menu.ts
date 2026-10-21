@@ -1,4 +1,5 @@
 import { connectedGamepads } from '../input/gamepad';
+import './theme.css';
 import './menu.css';
 
 /**
@@ -159,7 +160,23 @@ export function createMenu(options: MenuOptions = {}): Menu {
   root.hidden = true;
   const panel = document.createElement('div');
   panel.className = 'menu-panel';
-  root.append(panel);
+  // Aides manette en bas d'écran : ce que font A et B (B disparaît quand il ne fait rien).
+  const hints = document.createElement('div');
+  hints.className = 'menu-pad-hints';
+  hints.setAttribute('aria-hidden', 'true');
+  for (const [key, text, extra] of [
+    ['A', 'Valider', ''],
+    ['B', 'Retour', ' is-back'],
+  ] as const) {
+    const hint = document.createElement('span');
+    hint.className = `menu-pad-hint${extra}`;
+    const glyph = document.createElement('span');
+    glyph.className = 'menu-pad-key';
+    glyph.textContent = key;
+    hint.append(glyph, text);
+    hints.append(hint);
+  }
+  root.append(panel, hints);
   document.body.append(root);
 
   let stack: MenuScreen[] = [];
@@ -332,6 +349,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
     panel.replaceChildren(...children);
     panel.dataset.screen = screen.id;
     root.dataset.screen = screen.id;
+    root.dataset.back = editing || screen.back || stack.length > 1 || options.onRootBack ? 'oui' : 'non';
     if (focusedId === null || !elements.has(focusedId)) focusedId = items.find(focusable)?.id ?? null;
     if (editing && !elements.has(editing.id)) editing = null;
     setFocus(focusedId, !root.hidden);

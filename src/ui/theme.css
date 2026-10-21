@@ -1,7 +1,8 @@
 /*
- * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étape 2. Les valeurs
- * sont encore celles du style neutre provisoire ; la passe design les remplace ici, sans toucher aux écrans.
+ * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étapes 2 et 3.
  * `menu.css`, `hud.css` et `annexes.css` n'utilisent que ces variables pour les couleurs et les polices.
+ * La palette « Grillage » (DA du 21/10/2026) est en tête ; les menus s'en servent déjà. Les variables du HUD et des
+ * écrans annexes gardent les valeurs du style neutre jusqu'à leur étape (8 et 9).
  */
 
 /* Archivo (licence OFL, `fonts/ARCHIVO-OFL.txt`), variable en largeur (62-125 %) et en graisse (100-900), latin. */
@@ -23,16 +24,46 @@
 }
 
 :root {
-  /* Polices. `--ui-font-brand` est embarquée, pas encore utilisée par les écrans. */
+  /*
+   * Palette « Grillage ». Le jaune balle est réservé au focus et à l'action principale. Bleu et rouge se
+   * distinguent aussi par la clarté (le bleu est nettement plus sombre) ; petit texte sur rouge : en encre.
+   * La 3D garde ses propres teintes (`TEAM_COLORS`, `src/render/duelScene.ts`) : ce bleu se confond avec le court,
+   * bleu lui aussi ; l'unification se décide avec le HUD (étape 8).
+   */
+  --ink: #0d0b1a;
+  --plate: #1b1631;
+  --plate-raised: #261f45;
+  --violet: #7a3cff;
+  --ball: #e6ff2e;
+  --blue: #2f6bff;
+  --red: #ff4d3d;
+  --white: #ffffff;
+  /* Texte sur l'encre et sur les plaques, légèrement violacé ; traits et repères éteints. */
+  --ink-fg: #f3f0ff;
+  --ink-soft: #e4deff;
+  --ink-muted: #b3a9de;
+  --ink-line: #6e6596;
+  /* Une maille du grillage, à 45° : pas, épaisseur et couleur du fil. */
+  --mesh-step: calc(33 * var(--ui-px));
+  --mesh-wire: rgba(122, 60, 255, 0.16);
+  --mesh: repeating-linear-gradient(45deg, var(--mesh-wire) 0 1px, transparent 1px var(--mesh-step)),
+    repeating-linear-gradient(-45deg, var(--mesh-wire) 0 1px, transparent 1px var(--mesh-step));
+
+  /* Polices : Archivo (embarquée) pour l'interface ; titres, valeurs et chiffres en étroite italique 900. */
   --ui-font: system-ui, sans-serif;
   --ui-font-mono: monospace;
   --ui-font-brand: 'Archivo', system-ui, sans-serif;
+  --ui-font-text: 'Archivo', system-ui, sans-serif;
+  --ui-brand-stretch: 62%;
 
   /*
    * Échelle unique : l'interface est pensée en 1920×1080 ; 1 `--ui-px` vaut 1 px à cette taille et suit la fenêtre
-   * (le plus petit des deux côtés, en 16:9). Pas encore utilisée par les écrans.
+   * (le plus petit des deux côtés, en 16:9). Les menus s'en servent ; le HUD y passera à l'étape 8.
    */
   --ui-px: calc(min(100vw, 100vh * 16 / 9) / 1920);
+  /* Zone de sécurité d'une télé : 5 % sur les bords. */
+  --ui-safe-x: 5vw;
+  --ui-safe-y: 5vh;
 
   /* Texte. */
   --ui-fg: #f2f5f7;

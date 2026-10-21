@@ -1,42 +1,59 @@
 /*
- * Apparence des menus (`src/ui/menu.ts`). Style neutre provisoire, repris de l'ancien menu des réglages : la passe
- * design remplacera ces valeurs sans toucher au comportement. Tout passe par les variables ci-dessous et par des
- * classes stables :
+ * Apparence des menus (`src/ui/menu.ts`), dans la DA « Grillage » (`research/DESIGN_PLAN.md`, contrat
+ * `.impeccable/surfaces/src-ui-menu-css.md`) : chaque entrée est une plaque aux coins coupés à 45°, comme une maille
+ * du grillage ; le focus est la balle, une plaque jaune qui glisse avec un petit rebond. Couleurs, polices et
+ * échelle viennent de `theme.css` ; tout se mesure en `--ui-px` (pensé en 1920×1080). Classes stables :
  *   .menu (racine, .menu-dim au-dessus d'une partie, .menu-opaque pour l'accueil), [data-screen] (écran affiché)
  *   .menu-panel, .menu-title, .menu-screen-hint, .menu-items, .menu-heading, .menu-info, .menu-message
  *   .menu-item (+ .menu-action / .menu-choice / .menu-toggle / .menu-text ; états .is-focused, .is-primary,
- *   .is-disabled, .is-on, .is-editing, .is-lit ; équipes .blue / .red ; places .is-mine)
+ *   .is-disabled, .is-on, .is-editing, .is-lit ; équipes .blue / .red, sous-entrée .sub ; places .is-mine)
  *   .menu-button, .menu-label, .menu-control, .menu-arrow, .menu-value, .menu-input, .menu-letters, .menu-letter
  *   (.is-current), .menu-hint
+ *   .menu-pad-hints, .menu-pad-hint (.is-back), .menu-pad-key (aides manette en bas d'écran ; [data-back='non'] :
+ *   B ne fait rien sur cet écran)
  */
 :root {
-  --menu-font: 14px/1.4 var(--ui-font);
-  --menu-title-size: 20px;
-  --menu-heading-size: 12px;
-  --menu-small-size: 12px;
-  --menu-fg: var(--ui-fg);
-  --menu-muted: var(--ui-muted);
-  --menu-backdrop-dim: rgba(0, 0, 0, 0.45);
-  --menu-backdrop-opaque: #0b1118;
-  --menu-floating-bg: rgba(10, 16, 22, 0.7);
-  --menu-panel-bg: rgba(12, 18, 26, 0.96);
-  --menu-panel-width: 460px;
-  --menu-panel-padding: 18px 20px;
-  --menu-radius: 12px;
-  --menu-item-bg: var(--ui-control-bg);
-  --menu-item-hover-bg: var(--ui-control-hover);
-  --menu-item-border: var(--ui-line);
-  --menu-item-radius: 6px;
-  --menu-item-padding: 7px 12px;
-  --menu-gap: 6px;
-  --menu-focus: var(--ui-gold);
-  --menu-primary-bg: var(--ui-gold);
-  --menu-primary-fg: #10161d;
-  --menu-error: #ff8a80;
-  --menu-blue: #4da3ff;
-  --menu-red: #ff6b5e;
-  --menu-lit-bg: #3a3410;
-  --menu-lit-ring: #ffe066;
+  --u: var(--ui-px);
+  --menu-text-size: calc(24 * var(--u));
+  --menu-small-size: calc(20 * var(--u));
+  --menu-title-size: calc(68 * var(--u));
+  --menu-heading-size: calc(26 * var(--u));
+  --menu-value-size: calc(27 * var(--u));
+  --menu-fg: var(--ink-fg);
+  --menu-muted: var(--ink-muted);
+  --menu-panel-width: calc(840 * var(--u));
+  --menu-gap: calc(5 * var(--u));
+  --menu-row-height: calc(52 * var(--u));
+  --menu-row-padding: 0 calc(26 * var(--u));
+  --menu-sub-height: calc(42 * var(--u));
+  /* Plaque : fond, liseré (transparent au repos), épaisseur du liseré, coin coupé. */
+  --menu-bevel: calc(16 * var(--u));
+  --menu-edge-width: calc(3 * var(--u));
+  --menu-focus-shift: calc(12 * var(--u));
+  --menu-plate-blue: color-mix(in oklab, var(--plate) 74%, var(--blue));
+  --menu-plate-red: color-mix(in oklab, var(--plate) 80%, var(--red));
+  --menu-error: color-mix(in oklab, var(--red) 70%, var(--white));
+  /* Rebond court du focus : une balle dans la maille. */
+  --menu-bounce: cubic-bezier(0.3, 1.9, 0.55, 1);
+}
+
+/* Coin coupé en haut à gauche et en bas à droite, d'une taille `--bevel`. */
+.menu-item,
+.menu-item::before,
+.menu-item::after,
+.menu-input,
+.menu-letter,
+.menu-info.room-code,
+#pause-button {
+  --bevel: var(--menu-bevel);
+  clip-path: polygon(
+    var(--bevel) 0,
+    100% 0,
+    100% calc(100% - var(--bevel)),
+    calc(100% - var(--bevel)) 100%,
+    0 100%,
+    0 var(--bevel)
+  );
 }
 
 .menu {
@@ -46,95 +63,249 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--menu-backdrop-dim);
+  background: var(--mesh), rgba(13, 11, 26, 0.8);
   color: var(--menu-fg);
-  font: var(--menu-font);
+  font-family: var(--ui-font-text);
+  font-size: var(--menu-text-size);
+  line-height: 1.3;
+  caret-color: var(--ball);
+}
+.menu ::selection {
+  background: var(--ball);
+  color: var(--ink);
 }
 .menu[hidden] {
   display: none;
 }
 .menu-opaque {
-  background: var(--menu-backdrop-opaque);
+  background:
+    var(--mesh),
+    linear-gradient(0deg, rgba(122, 60, 255, 0.3), rgba(122, 60, 255, 0) 45%),
+    var(--ink);
 }
 
+/* Pas de panneau : les plaques posent directement sur la maille. */
 .menu-panel {
-  width: min(var(--menu-panel-width), calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
+  width: min(var(--menu-panel-width), calc(100vw - 2 * var(--ui-safe-x)));
+  max-height: calc(100vh - 2 * var(--ui-safe-y) - 90 * var(--u));
+  overflow: hidden auto;
   box-sizing: border-box;
-  padding: var(--menu-panel-padding);
-  border-radius: var(--menu-radius);
-  background: var(--menu-panel-bg);
+  padding: 0 calc(24 * var(--u));
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-line) transparent;
+  /* Liste plus haute que l'écran : le bas s'efface tant qu'il reste des entrées en dessous. */
+  mask-image: linear-gradient(to top, transparent, #000 var(--menu-fade));
+  animation: menu-scroll-fade linear both;
+  animation-timeline: scroll(self);
+}
+@property --menu-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes menu-scroll-fade {
+  0%,
+  92% {
+    --menu-fade: calc(90 * var(--u));
+  }
+  100% {
+    --menu-fade: 0px;
+  }
 }
 
 .menu-title {
-  margin: 0 0 4px;
+  margin: 0 0 calc(10 * var(--u));
+  font-family: var(--ui-font-brand);
   font-size: var(--menu-title-size);
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--white);
 }
 .menu-screen-hint,
 .menu-hint,
 .menu-info {
-  margin: 4px 0 6px;
+  margin: calc(6 * var(--u)) 0;
   color: var(--menu-muted);
   font-size: var(--menu-small-size);
 }
+.menu-screen-hint {
+  max-width: 60ch;
+}
+/* Intertitre : un losange violet, le mot, puis un fil jusqu'au bord. */
 .menu-heading {
-  margin: 16px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  margin: calc(22 * var(--u)) 0 calc(6 * var(--u));
+  font-family: var(--ui-font-brand);
   font-size: var(--menu-heading-size);
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--menu-muted);
+  color: var(--ink-soft);
+}
+.menu-heading::before {
+  content: '';
+  flex: none;
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  background: var(--violet);
+  transform: rotate(45deg);
+}
+.menu-heading::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ink-line);
 }
 .menu-items {
   display: flex;
   flex-direction: column;
   gap: var(--menu-gap);
-  margin-top: 10px;
+  margin-top: calc(14 * var(--u));
+  /* Place pour le glissement du focus. */
+  padding-right: var(--menu-focus-shift);
 }
 .menu-message {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
   min-height: 1.4em;
-  margin: 10px 0 0;
+  margin: calc(14 * var(--u)) 0 0;
   color: var(--menu-error);
+  font-weight: 700;
+}
+.menu-message:not(:empty)::before {
+  content: '';
+  flex: none;
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  background: var(--red);
+  transform: rotate(45deg);
 }
 
+/*
+ * Une entrée : la plaque est peinte par `::after` (fond) posé sur `::before` (liseré), tous deux coupés comme
+ * l'entrée ; les états ne changent que les variables.
+ */
 .menu-item {
+  --plate-bg: var(--plate);
+  --plate-edge: transparent;
+  --plate-fg: var(--menu-fg);
+  --plate-muted: var(--menu-muted);
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 12px;
-  padding: var(--menu-item-padding);
-  border: 1px solid var(--menu-item-border);
-  border-radius: var(--menu-item-radius);
-  background: var(--menu-item-bg);
+  gap: calc(4 * var(--u)) calc(16 * var(--u));
+  min-height: var(--menu-row-height);
+  box-sizing: border-box;
+  padding: var(--menu-row-padding);
+  color: var(--plate-fg);
+  font-weight: 600;
   cursor: pointer;
   outline: none;
+  transition: transform 220ms var(--menu-bounce);
+}
+.menu-item::before,
+.menu-item::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+.menu-item::before {
+  inset: 0;
+  background: var(--plate-edge);
+}
+.menu-item::after {
+  --bevel: calc(var(--menu-bevel) - var(--menu-edge-width) * 0.41);
+  inset: var(--menu-edge-width);
+  background: var(--plate-bg);
 }
 .menu-item:hover {
-  background: var(--menu-item-hover-bg);
+  --plate-bg: var(--plate-raised);
 }
-.menu-item.is-focused {
-  border-color: var(--menu-focus);
-  box-shadow: 0 0 0 1px var(--menu-focus);
-}
-.menu-item.is-disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+
+/* Équipes : la plaque prend une teinte de l'équipe, et un losange de sa couleur précède le nom. */
 .menu-item.blue {
-  border-left: 4px solid var(--menu-blue);
+  --team: var(--blue);
+  --plate-bg: var(--menu-plate-blue);
 }
 .menu-item.red {
-  border-left: 4px solid var(--menu-red);
+  --team: var(--red);
+  --plate-bg: var(--menu-plate-red);
 }
-.menu-item.is-lit {
-  animation: menu-lit 0.8s ease-out;
+.menu-item.blue:not(.sub) > :first-child::before,
+.menu-item.red:not(.sub) > :first-child::before {
+  content: '';
+  display: inline-block;
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  margin-right: calc(14 * var(--u));
+  vertical-align: 0.05em;
+  background: var(--team);
+  box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink);
+  transform: rotate(45deg);
 }
-@keyframes menu-lit {
+/* Réglage d'une place (course, main) : plus bas, en retrait sous elle. */
+.menu-item.sub {
+  min-height: var(--menu-sub-height);
+  margin-left: calc(42 * var(--u));
+  font-size: var(--menu-small-size);
+}
+.menu-item.sub .menu-value {
+  font-size: var(--menu-text-size);
+}
+
+/* Focus : la plaque passe au jaune balle et glisse, avec un rebond court. */
+.menu-item.is-focused {
+  --plate-bg: var(--ball);
+  --plate-edge: var(--ball);
+  --plate-fg: var(--ink);
+  --plate-muted: color-mix(in oklab, var(--ink) 78%, var(--ball));
+  transform: translateX(var(--menu-focus-shift));
+}
+.menu-item.is-disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+.menu-item.is-disabled:hover {
+  --plate-bg: var(--plate);
+}
+.menu-item.blue.is-disabled:hover {
+  --plate-bg: var(--menu-plate-blue);
+}
+.menu-item.red.is-disabled:hover {
+  --plate-bg: var(--menu-plate-red);
+}
+/* Ma place, en ligne : liseré blanc. */
+.menu-item.is-mine:not(.is-focused) {
+  --plate-edge: var(--white);
+}
+/* Place allumée quand sa manette se signale : un éclair blanc qui s'éteint. */
+.menu-item.is-lit::before {
+  animation: menu-lit-edge 0.8s ease-out;
+}
+.menu-item.is-lit::after {
+  animation: menu-lit-plate 0.8s ease-out;
+}
+@keyframes menu-lit-edge {
   from {
-    box-shadow: 0 0 0 4px var(--menu-lit-ring);
-    background: var(--menu-lit-bg);
+    background: var(--white);
+  }
+}
+@keyframes menu-lit-plate {
+  from {
+    background: color-mix(in oklab, var(--plate-bg) 55%, var(--white));
   }
 }
 
@@ -144,116 +315,276 @@
 }
 .menu-button {
   flex: 1;
-  padding: var(--menu-item-padding);
+  align-self: stretch;
+  min-height: var(--menu-row-height);
+  padding: var(--menu-row-padding);
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
   text-align: left;
   cursor: inherit;
   outline: none;
 }
-.menu-action.is-primary {
-  background: var(--menu-primary-bg);
-  border-color: var(--menu-primary-bg);
-  color: var(--menu-primary-fg);
-  font-weight: 700;
-}
 .menu-action .menu-hint {
   flex-basis: 100%;
-  margin: -4px 12px 6px;
+  margin: calc(-12 * var(--u)) calc(26 * var(--u)) calc(12 * var(--u));
+}
+/* L'action principale (« Lancer ») : liseré et mot en jaune balle au repos, plaque pleine au focus. */
+.menu-action.is-primary {
+  --plate-edge: var(--ball);
+  --plate-fg: var(--ball);
+  font-family: var(--ui-font-brand);
+  font-size: calc(30 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.menu-action.is-primary.is-focused {
+  --plate-fg: var(--ink);
 }
 .menu-action.is-primary .menu-hint {
-  color: inherit;
+  font-family: var(--ui-font-text);
+  font-stretch: 100%;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.menu-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.menu-arrow {
-  padding: 0 6px;
-  border: 0;
-  background: none;
-  color: var(--menu-muted);
-  font: inherit;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-.menu-value {
-  min-width: 120px;
-  text-align: center;
-  font-weight: 600;
-}
-.menu-toggle .menu-value {
+.menu-label {
+  flex: 1;
   min-width: 0;
-  color: var(--menu-muted);
-}
-.menu-toggle.is-on .menu-value {
-  color: var(--menu-fg);
 }
 .menu-hint {
   flex-basis: 100%;
-  margin: 0;
+  margin: 0 0 calc(10 * var(--u));
+  color: var(--plate-muted);
+}
+.menu-control {
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+}
+/* Flèches d'un choix, dessinées (le caractère du bouton est masqué). */
+.menu-arrow {
+  display: grid;
+  place-items: center;
+  width: calc(36 * var(--u));
+  height: calc(40 * var(--u));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--plate-muted);
+  font-size: 0;
+  cursor: pointer;
+  /* Le focus du navigateur peut se poser sur la flèche : c'est la plaque qui le montre. */
+  outline: none;
+}
+.menu-arrow::before {
+  content: '';
+  width: calc(12 * var(--u));
+  height: calc(20 * var(--u));
+  background: currentColor;
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+.menu-next::before {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.menu-arrow:hover,
+.menu-item.is-focused .menu-arrow {
+  color: var(--plate-fg);
+}
+.menu-value {
+  min-width: calc(220 * var(--u));
+  text-align: center;
+  font-family: var(--ui-font-brand);
+  font-size: var(--menu-value-size);
+  font-stretch: 75%;
+  font-style: italic;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+/* Interrupteur : un losange plein quand c'est oui, vide quand c'est non. */
+.menu-toggle .menu-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(12 * var(--u));
+  min-width: calc(96 * var(--u));
+  color: var(--plate-muted);
+}
+.menu-toggle .menu-value::before {
+  content: '';
+  width: calc(13 * var(--u));
+  height: calc(13 * var(--u));
+  box-sizing: border-box;
+  border: calc(2 * var(--u)) solid currentColor;
+  transform: rotate(45deg);
+}
+.menu-toggle.is-on .menu-value {
+  color: var(--plate-fg);
+}
+.menu-toggle.is-on .menu-value::before {
+  background: currentColor;
 }
 
+/* Saisie : un champ encre dans la plaque. */
 .menu-input {
+  --bevel: calc(10 * var(--u));
   flex: 1;
   min-width: 0;
-  max-width: 220px;
-  padding: 4px 8px;
-  border: 1px solid var(--menu-item-border);
-  border-radius: var(--menu-item-radius);
-  background: var(--menu-backdrop-opaque);
-  color: inherit;
+  max-width: calc(360 * var(--u));
+  height: calc(40 * var(--u));
+  box-sizing: border-box;
+  padding: 0 calc(16 * var(--u));
+  border: 0;
+  background: var(--ink);
+  color: var(--ink-fg);
   font: inherit;
+  font-weight: 700;
+  outline: none;
+}
+.menu-input::placeholder {
+  color: var(--ink-muted);
+  opacity: 1;
+}
+/* Édition à la manette : la plaque redevient encre, liserée de jaune, et la lettre en cours est la balle. */
+.menu-item.is-editing {
+  --plate-bg: var(--ink);
+  --plate-edge: var(--ball);
+  --plate-fg: var(--ink-fg);
+  --plate-muted: var(--ink-muted);
 }
 .menu-letters {
   display: flex;
   flex-basis: 100%;
   justify-content: flex-end;
-  gap: 4px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  gap: calc(6 * var(--u));
+  margin-bottom: calc(10 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: var(--menu-value-size);
+  font-stretch: 75%;
+  font-style: italic;
+  font-weight: 900;
+}
+.menu-letter {
+  --bevel: calc(8 * var(--u));
+  display: grid;
+  place-items: center;
+  width: calc(40 * var(--u));
+  height: calc(46 * var(--u));
+  background: var(--plate-raised);
 }
 .menu-letter.is-current {
-  color: var(--menu-focus);
-  text-decoration: underline;
+  background: var(--ball);
+  color: var(--ink);
 }
 
-/* Code d'une salle en ligne. */
+/* Code d'une salle en ligne : la plus grosse valeur de l'écran, sur sa propre plaque. */
 .menu-info.room-code {
-  margin: 4px 0;
-  color: var(--menu-fg);
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: 0.25em;
+  --bevel: calc(22 * var(--u));
+  margin: calc(8 * var(--u)) 0;
+  padding: calc(14 * var(--u)) 0 calc(10 * var(--u));
+  background: var(--plate);
+  color: var(--white);
+  font-family: var(--ui-font-brand);
+  font-size: calc(96 * var(--u));
+  font-stretch: 75%;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
   text-align: center;
 }
-.menu-item.is-mine .menu-label::after {
-  content: ' (toi)';
-  color: var(--menu-focus);
+
+/* Aides manette en bas d'écran : A valide, B revient. */
+.menu-pad-hints {
+  position: absolute;
+  left: var(--ui-safe-x);
+  right: var(--ui-safe-x);
+  bottom: var(--ui-safe-y);
+  display: flex;
+  align-items: center;
+  gap: calc(34 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: calc(21 * var(--u));
+  font-stretch: 80%;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.menu-pad-hint {
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+}
+.menu[data-back='non'] .menu-pad-hint.is-back {
+  display: none;
+}
+.menu-pad-key {
+  display: grid;
+  place-items: center;
+  width: calc(36 * var(--u));
+  height: calc(36 * var(--u));
+  box-sizing: border-box;
+  border: calc(3 * var(--u)) solid var(--white);
+  border-radius: 50%;
+  font-size: calc(19 * var(--u));
+  font-stretch: 100%;
+  font-style: normal;
+  font-weight: 900;
+}
+.menu-pad-hint:not(.is-back) .menu-pad-key {
+  background: var(--white);
+  color: var(--ink);
 }
 
 /* Bouton de pause, en haut à droite pendant un match (souris). */
 #pause-button {
+  --bevel: calc(10 * var(--u));
   position: fixed;
-  top: 12px;
-  right: 16px;
-  padding: 6px 12px;
-  border: 1px solid var(--menu-item-border);
-  border-radius: var(--menu-item-radius);
-  background: var(--menu-floating-bg);
-  color: var(--menu-fg);
-  font: var(--menu-font);
-  font-size: 13px;
+  top: calc(24 * var(--u));
+  right: calc(32 * var(--u));
+  padding: calc(10 * var(--u)) calc(22 * var(--u));
+  border: 0;
+  background: var(--plate);
+  color: var(--ink-soft);
+  font-family: var(--ui-font-brand);
+  font-size: calc(19 * var(--u));
+  font-stretch: 80%;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 #pause-button:hover {
-  background: var(--menu-item-hover-bg);
+  background: var(--plate-raised);
+  color: var(--white);
+}
+#pause-button:focus-visible {
+  background: var(--ball);
+  color: var(--ink);
+  outline: none;
 }
 #pause-button[hidden] {
   display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-item {
+    transition: none;
+  }
+  .menu-item.is-lit::before,
+  .menu-item.is-lit::after {
+    animation-duration: 0.01s;
+  }
 }

@@ -118,6 +118,38 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    l'encart réseau, la carte et la démo du tutoriel.
 3. **Composants du menu commun** en Grillage : entrée, entrée principale, choix à flèches, interrupteur, saisie et
    lettres, titres, aides manette en bas d'écran. États : repos, focus, désactivé, allumé, édition.
+   *Fait.* `theme.css` porte la palette Grillage (`--ink`, `--plate`, `--ball`, `--blue`, `--red`, `--violet`, textes
+   `--ink-*`, motif `--mesh`), Archivo pour tout le texte des menus, la zone de sécurité (`--ui-safe-x/y`) ; les
+   menus sont entièrement en `--ui-px`. Les variables du HUD et des annexes gardent leurs anciennes valeurs (étapes 8
+   et 9). Décisions :
+   - Plus de panneau : les plaques posent sur l'encre et la maille (accueil), ou sur la partie assombrie et maillée
+     (pause). Plaque = `clip-path` à 6 sommets (deux coins coupés) ; liseré et fond dessinés par `::before`/`::after`,
+     les états ne changent que des variables (`--plate-bg`, `--plate-edge`, `--plate-fg`).
+   - Focus : plaque jaune balle, texte encre, glissement de 12 px avec rebond court (transition, donc seulement quand
+     le focus bouge, pas quand une valeur change). `detect` signale l'élastique en simple avis : gardé, c'est le
+     mouvement signature du contrat. Coupé avec `prefers-reduced-motion`.
+   - Action principale : liseré et mot jaunes au repos, plaque pleine au focus ; titres, intertitres, valeurs et
+     action principale en Archivo étroite italique 900, en capitales.
+   - Équipes : plus de bordure épaisse à gauche ; la plaque prend une teinte de l'équipe et un losange de sa couleur
+     précède le nom (les sous-entrées « Course », « Main » sont en retrait, sans losange). `detect` ne signale plus
+     rien d'autre.
+   - Interrupteur : losange plein (oui) ou vide (non) devant la valeur. Flèches des choix dessinées en CSS (le
+     caractère ‹ › reste dans le bouton pour les tests, masqué). Édition à la manette : plaque encre liserée de jaune,
+     la lettre en cours en jaune. Ma place en ligne : liseré blanc (l'ancienne règle « (toi) » ne s'appliquait pas
+     aux actions ; le nom porte déjà « (toi) »). Message d'erreur : rouge éclairci avec un losange rouge. Code de
+     salle : grosse valeur sur sa plaque. Bouton de pause : petite plaque en capitales.
+   - Barre d'aides manette (A Valider, B Retour) ajoutée par `menu.ts` sans toucher à la navigation ; B disparaît
+     quand il ne fait rien (`data-back="non"`, accueil). `menu.ts` importe aussi `theme.css` (les pages de test le
+     chargent alors seules).
+   - Liste plus haute que l'écran : le bas s'efface en fondu tant qu'il reste des entrées dessous (animation liée au
+     défilement).
+   - Couleurs d'équipe de la 3D **pas unifiées** : essayé, le bleu `#2F6BFF` se confond avec le court, bleu lui aussi
+     (déjà vrai avec l'ancien bleu). À trancher avec le HUD (étape 8) : changer le bleu des maillots, ou du court.
+   Restent pour la suite : « Jouer » en double et en simple ne tient plus sur un écran (« Lancer le match » est sous
+   le pli, la liste défile) : à reprendre à l'étape 5 ; titres en haut à gauche et repères des manettes branchées en
+   losanges dans la barre d'aides (étape 4) ; symboles des boutons selon la manette dans la barre d'aides (A/B fixes
+   pour l'instant) ; bleu et rouge ne se distinguent en clarté que modérément (le nom de l'équipe est toujours écrit) ;
+   le jugement depuis le canapé, à la manette.
 4. **Accueil** : titre en typo seule, fond fixe avec le motif de maille, disposition en tuiles.
 5. **Jouer** : l'écran le plus dense (places des 4 joueurs, IA, règles). Maquette d'abord (`shape`).
 6. **Pause, Réglages, Entraînement.**
