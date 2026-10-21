@@ -102,29 +102,31 @@ test('en ligne : deux joueurs, une salle à code, le même match que le serveur'
     page.on('pageerror', (error) => errors.push(error.message));
     await virtualPads(page, seed, own);
     await page.goto(`/?enligne&serveur=${GAME_SERVER}&boutons=1${query}`);
-    await page.waitForSelector('#online-name');
+    await page.waitForSelector('[data-item="nom"] input');
     return page;
   };
   const host = await open(61, 0);
   const guest = await open(62, 1, '&manette=2');
-  await expect(guest.locator('#online-device')).toHaveValue('manette2');
+  await expect(guest.locator('[data-item="peripherique"] .menu-value')).toHaveText('Manette 2');
 
-  await host.selectOption('#online-device', 'manette1');
-  await host.fill('#online-name', 'Xavier');
-  await host.click('#online-create');
+  // L'hôte choisit la manette 1 dans le salon.
+  const device = host.locator('[data-item="peripherique"]');
+  while ((await device.locator('.menu-value').textContent()) !== 'Manette 1') await device.locator('.menu-next').click();
+  await host.fill('[data-item="nom"] input', 'Xavier');
+  await host.click('[data-item="creer"] button');
   const codeBox = host.locator('.room-code');
   await expect(codeBox).toHaveText(/^[A-Z]{4}$/);
   const code = (await codeBox.textContent())!;
 
-  await guest.fill('#online-name', 'Ami');
-  await guest.fill('#online-code', code);
-  await guest.click('#online-join');
+  await guest.fill('[data-item="nom"] input', 'Ami');
+  await guest.fill('[data-item="code"] input', code);
+  await guest.click('[data-item="rejoindre"] button');
   await expect(guest.locator('.room-code')).toHaveText(code);
   // Chacun a pris la première place libre : Bleu 1 pour l'hôte, Rouge 1 pour l'invité.
-  await expect(host.locator('.seat[data-seat="1"] .who')).toHaveText('Ami');
+  await expect(host.locator('[data-item="place-1"]')).toContainText('Ami');
   await host.screenshot({ path: 'screenshots/41-enligne-salon.png' });
 
-  await host.click('#online-start');
+  await host.click('[data-item="lancer"] button');
   await expect(host.locator('#online-lobby')).toBeHidden();
   await expect(guest.locator('#online-lobby')).toBeHidden();
 
@@ -162,20 +164,20 @@ test('en ligne : liaison coupée puis page rechargée, le joueur reprend sa plac
     await virtualPads(page, seed, own);
     await trackSockets(page);
     await page.goto(`/?enligne&serveur=${GAME_SERVER}&boutons=1${query}`);
-    await page.waitForSelector('#online-name');
+    await page.waitForSelector('[data-item="nom"] input');
     return page;
   };
   const host = await open(71, 0, '&manette=1');
   const guest = await open(72, 1, '&manette=2');
-  await host.fill('#online-name', 'Xavier');
-  await host.click('#online-create');
+  await host.fill('[data-item="nom"] input', 'Xavier');
+  await host.click('[data-item="creer"] button');
   await expect(host.locator('.room-code')).toHaveText(/^[A-Z]{4}$/);
   const code = (await host.locator('.room-code').textContent())!;
-  await guest.fill('#online-name', 'Ami');
-  await guest.fill('#online-code', code);
-  await guest.click('#online-join');
-  await expect(host.locator('.seat[data-seat="1"] .who')).toHaveText('Ami');
-  await host.click('#online-start');
+  await guest.fill('[data-item="nom"] input', 'Ami');
+  await guest.fill('[data-item="code"] input', code);
+  await guest.click('[data-item="rejoindre"] button');
+  await expect(host.locator('[data-item="place-1"]')).toContainText('Ami');
+  await host.click('[data-item="lancer"] button');
   await expect.poll(async () => Math.min((await stats(host)).checked, (await stats(guest)).checked), { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
 
   // Liaison coupée : bandeau, puis reconnexion d'elle-même et reprise depuis l'état du serveur.

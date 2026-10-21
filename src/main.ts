@@ -19,7 +19,7 @@ if (!canvas) throw new Error('Canvas #scene introuvable');
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode');
 /** Paramètres qui ne décrivent pas une partie : avec eux seuls, on reste à l'accueil. */
-const HOME_PARAMS = ['debug', 'perf'];
+const HOME_PARAMS = ['debug', 'perf', 'serveur'];
 const home = mode === 'accueil' || (mode === null && [...params.keys()].every((key) => HOME_PARAMS.includes(key)));
 if (home) startHome(canvas);
 else if (mode === 'trainer') startTrainer(canvas);

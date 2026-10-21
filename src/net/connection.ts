@@ -108,11 +108,23 @@ export class Connection {
     this.send({ t: 'hello', name, prefs: this.prefs, token: this.token, version: gameVersion() });
   }
 
-  /** Quitte la salle exprès : sa place passe à l'IA, sans reprise ; la liaison reste ouverte (salon). */
-  leave(): void {
+  /**
+   * Quitte la salle exprès : sa place passe à l'IA, sans reprise ; la liaison reste ouverte (salon). Rendu quand le
+   * message est parti (au plus une demi-seconde) : on peut alors quitter la page sans le perdre.
+   */
+  leave(): Promise<void> {
     this.send({ t: 'leave' });
     this.inMatch = false;
     this.client = null;
+    const socket = this.socket;
+    const until = performance.now() + 500;
+    return new Promise((resolve) => {
+      const check = (): void => {
+        if (socket.bufferedAmount === 0 || performance.now() > until) resolve();
+        else window.setTimeout(check, 10);
+      };
+      check();
+    });
   }
 
   get open(): boolean {

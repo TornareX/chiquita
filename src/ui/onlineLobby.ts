@@ -2,6 +2,7 @@ import type { AiLevel } from '../sim/bot';
 import type { DuelFormat } from '../sim/duel';
 import type { RoomView } from '../net/protocol';
 import { CONTROLLER_LABELS, DEVICES, playerName, type Device } from './duelSettings';
+import { createMenu, type MenuItem, type MenuScreen } from './menu';
 
 const NAME_KEY = 'padel.enligne.nom';
 const LEVELS: { value: AiLevel; label: string }[] = [
@@ -9,30 +10,9 @@ const LEVELS: { value: AiLevel; label: string }[] = [
   { value: 'normal', label: 'IA normale' },
   { value: 'fort', label: 'IA forte' },
 ];
-
-const STYLE = `
-#online-lobby { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); z-index: 20; }
-#online-lobby[hidden] { display: none; }
-#online-lobby .panel { width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 18px 20px; border-radius: 12px; background: rgba(12, 18, 26, 0.96); color: #f2f5f7; font: 14px/1.4 system-ui, sans-serif; }
-#online-lobby h1 { margin: 0 0 4px; font-size: 20px; }
-#online-lobby h2 { margin: 16px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9fb0bf; }
-#online-lobby .hint { margin: 4px 0 8px; color: #9fb0bf; font-size: 12px; }
-#online-lobby .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
-#online-lobby input, #online-lobby select { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #3a4a58; border-radius: 6px; background: #1c2833; color: inherit; font: inherit; }
-#online-lobby input.code { text-transform: uppercase; letter-spacing: 0.3em; font-weight: 700; }
-#online-lobby button { padding: 6px 12px; border: 1px solid #3a4a58; border-radius: 6px; background: #1c2833; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
-#online-lobby button:hover { background: #26384a; }
-#online-lobby button.primary { background: #ffd23f; border-color: #ffd23f; color: #10161d; font-weight: 700; }
-#online-lobby button:disabled { opacity: 0.5; cursor: default; }
-#online-lobby .room-code { font-size: 34px; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 4px 0; }
-#online-lobby .seats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border-radius: 10px; background: #1d4f7a; }
-#online-lobby .seats.simple { grid-template-columns: 1fr; }
-#online-lobby .seat { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 2px solid #4da3ff; border-radius: 8px; background: rgba(12, 18, 26, 0.88); }
-#online-lobby .seat.red { border-color: #ff5a4e; }
-#online-lobby .seat .who { font-weight: 600; }
-#online-lobby .seat.mine .who::after { content: ' (toi)'; color: #ffd23f; }
-#online-lobby .error { min-height: 1.4em; color: #ff8a80; margin-top: 8px; }
-`;
+/** Lettres d'un nom, et d'un code de salle (sans I ni O, comme le serveur), proposées à la manette. */
+const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -';
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /** Nom retenu dans ce navigateur (ou une chaîne vide). */
 export function savedName(): string {
@@ -51,12 +31,18 @@ export interface LobbyActions {
   seat(seat: number | null): void;
   setup(format: DuelFormat, level: AiLevel): void;
   start(): void;
+  /** Quitter la salle (avant le match). */
+  leave(): void;
+  /** Serveur injoignable : réessayer de s'y connecter. */
+  retry(): void;
+  /** Retour à l'accueil du jeu. */
+  home(): void;
 }
 
 /**
- * Salon du jeu en ligne (`?enligne`) : son nom, créer une salle ou en rejoindre une avec son code, puis les places
- * (libres = IA), et pour l'hôte, simple ou double, le niveau de l'IA et « Lancer ». Chacun choisit avec quoi il joue
- * (manette ou clavier) : deux fenêtres sur un même PC peuvent prendre deux manettes. À la souris pour l'instant.
+ * Salon du jeu en ligne (`?enligne`), sur le menu commun (manette, clavier, souris) : son nom, avec quoi on joue,
+ * créer une salle ou en rejoindre une avec son code ; puis les places (libres = IA), et pour l'hôte, simple ou double,
+ * le niveau de l'IA et « Lancer ». Deux fenêtres sur un même PC peuvent prendre deux manettes.
  */
 export function createOnlineLobby(
   initialDevice: Device,
@@ -65,21 +51,19 @@ export function createOnlineLobby(
   show(room: RoomView | null): void;
   error(message: string): void;
   status(message: string): void;
+  /** Serveur injoignable : le message, et « Réessayer ». */
+  unreachable(message: string): void;
   hide(): void;
 } {
-  const style = document.createElement('style');
-  style.textContent = STYLE;
-  document.head.append(style);
-  const root = document.createElement('div');
-  root.id = 'online-lobby';
-  const panel = document.createElement('div');
-  panel.className = 'panel';
-  root.append(panel);
-  document.body.append(root);
-
+  const menu = createMenu({ id: 'online-lobby', overlay: 'opaque' });
   let name = savedName();
-  const saveName = (value: string): string => {
-    name = value.trim().slice(0, 20) || 'Joueur';
+  let code = '';
+  let device = initialDevice;
+  let room: RoomView | null = null;
+  let unreachable = false;
+
+  const saveName = (): string => {
+    name = name.trim().slice(0, 20) || 'Joueur';
     try {
       localStorage.setItem(NAME_KEY, name);
     } catch {
@@ -87,136 +71,145 @@ export function createOnlineLobby(
     }
     return name;
   };
-  const errorLine = document.createElement('div');
-  errorLine.className = 'error';
-  let device = initialDevice;
-
-  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...children: (Node | string)[]): HTMLElementTagNameMap[K] => {
-    const node = Object.assign(document.createElement(tag), props);
-    node.append(...children);
-    return node;
+  const join = (): void => {
+    const clean = code.trim().toUpperCase();
+    if (clean.length === 4) actions.join(saveName(), clean);
+    else menu.message('Le code a 4 lettres.');
   };
 
   /** « Je joue avec » : manettes 1 à 4, clavier bleu ou rouge. */
-  const deviceRow = (): HTMLElement => {
-    const select = el('select');
-    select.id = 'online-device';
-    for (const d of DEVICES) select.append(el('option', { value: d, textContent: CONTROLLER_LABELS[d] }));
-    select.value = device;
-    select.onchange = () => {
-      device = select.value as Device;
-      actions.device(device);
-    };
-    return el('div', { className: 'row' }, select);
+  const deviceItem = (): MenuItem => ({
+    kind: 'choice',
+    id: 'peripherique',
+    label: 'Je joue avec',
+    value: device,
+    options: DEVICES.map((d) => ({ value: d, label: CONTROLLER_LABELS[d] })),
+    set: (d: Device) => {
+      device = d;
+      actions.device(d);
+    },
+  });
+
+  const homeScreen: MenuScreen = {
+    id: 'en-ligne',
+    title: 'Jouer en ligne',
+    hint: 'Crée une salle et donne son code à tes amis, ou tape le code d’une salle.',
+    back: () => actions.home(),
+    items: () => {
+      const items: MenuItem[] = [
+        { kind: 'text', id: 'nom', label: 'Ton nom', value: name, maxLength: 20, charset: NAME_CHARS, placeholder: 'Ton nom', set: (v) => (name = v) },
+        deviceItem(),
+        { kind: 'action', id: 'creer', label: 'Créer une salle', primary: true, run: () => actions.create(saveName()) },
+        {
+          kind: 'text',
+          id: 'code',
+          label: 'Code d’une salle',
+          value: code,
+          maxLength: 4,
+          charset: CODE_CHARS,
+          placeholder: 'CODE',
+          set: (v) => (code = v.toUpperCase()),
+          submit: join,
+        },
+        { kind: 'action', id: 'rejoindre', label: 'Rejoindre', run: join },
+      ];
+      if (unreachable) items.push({ kind: 'action', id: 'reessayer', label: 'Réessayer', run: () => actions.retry() });
+      items.push({ kind: 'action', id: 'retour', label: 'Retour à l’accueil', run: () => actions.home() });
+      return items;
+    },
   };
 
-  const renderHome = (): void => {
-    const nameInput = el('input', { value: name, placeholder: 'Ton nom', maxLength: 20 });
-    nameInput.id = 'online-name';
-    const codeInput = el('input', { placeholder: 'CODE', maxLength: 4, className: 'code' });
-    codeInput.id = 'online-code';
-    const create = el('button', { className: 'primary', textContent: 'Créer une salle' });
-    create.id = 'online-create';
-    const join = el('button', { textContent: 'Rejoindre' });
-    join.id = 'online-join';
-    create.onclick = () => actions.create(saveName(nameInput.value));
-    join.onclick = () => {
-      const code = codeInput.value.trim().toUpperCase();
-      if (code.length === 4) actions.join(saveName(nameInput.value), code);
-      else errorLine.textContent = 'Le code a 4 lettres.';
-    };
-    codeInput.onkeydown = (event) => {
-      if (event.key === 'Enter') join.click();
-    };
-    panel.replaceChildren(
-      el('h1', { textContent: 'Jouer en ligne' }),
-      el('p', { className: 'hint', textContent: 'Crée une salle et donne son code à tes amis, ou tape le code d’une salle.' }),
-      el('h2', { textContent: 'Ton nom' }),
-      el('div', { className: 'row' }, nameInput),
-      el('h2', { textContent: 'Je joue avec' }),
-      deviceRow(),
-      el('h2', { textContent: 'Nouvelle salle' }),
-      el('div', { className: 'row' }, create),
-      el('h2', { textContent: 'Rejoindre une salle' }),
-      el('div', { className: 'row' }, codeInput, join),
-      errorLine,
-    );
-  };
-
-  const renderRoom = (room: RoomView): void => {
-    const host = room.host === room.you;
-    const doubles = room.format === 'double';
-    const seats = el('div', { className: `seats${doubles ? '' : ' simple'}` });
-    // Bleus en bas (côté de la caméra), comme dans le menu des réglages : Rouge 2, Rouge 1 / filet / Bleu 2, Bleu 1.
-    const order = doubles ? [3, 1, 2, 0] : [1, 0];
-    for (const i of order) {
-      const holder = room.seats[i] ?? null;
-      const member = room.members.find((m) => m.id === holder);
-      const mine = holder === room.you;
-      const levelLabel = LEVELS.find((l) => l.value === room.level)?.label ?? 'IA';
-      const card = el(
-        'div',
-        { className: `seat ${i % 2 === 0 ? 'blue' : 'red'}${mine ? ' mine' : ''}` },
-        el('div', { textContent: playerName(i, doubles) }),
-        el('div', { className: 'who', textContent: member ? member.name : levelLabel }),
-      );
-      card.dataset.seat = String(i);
-      if (!room.playing && (holder === null || mine)) {
-        const button = el('button', { textContent: mine ? 'Laisser à l’IA' : 'Prendre cette place' });
-        button.onclick = () => actions.seat(mine ? null : i);
-        card.append(button);
+  const roomScreen: MenuScreen = {
+    id: 'salle',
+    title: 'Salle',
+    back: () => actions.leave(),
+    items: () => {
+      if (!room) return [];
+      const host = room.host === room.you;
+      const doubles = room.format === 'double';
+      const levelLabel = LEVELS.find((l) => l.value === room!.level)?.label ?? 'IA';
+      const items: MenuItem[] = [
+        { kind: 'info', id: 'code-salle', text: room.code, tags: ['room-code'] },
+        { kind: 'info', id: 'aide', text: 'Donne ce code à tes amis. Les places libres sont jouées par l’IA.' },
+        { kind: 'heading', id: 'places', text: 'Places' },
+      ];
+      // Bleus d'abord (côté de la caméra), comme dans « Jouer ».
+      for (const i of doubles ? [0, 2, 1, 3] : [0, 1]) {
+        const holder = room.seats[i] ?? null;
+        const member = room.members.find((m) => m.id === holder);
+        const mine = holder === room.you;
+        const free = holder === null;
+        const who = member ? `${member.name}${mine ? ' (toi)' : ''}` : levelLabel;
+        items.push({
+          kind: 'action',
+          id: `place-${i}`,
+          label: `${playerName(i, doubles)} : ${who}`,
+          tags: [i % 2 === 0 ? 'blue' : 'red', ...(mine ? ['is-mine'] : [])],
+          hint: room.playing ? undefined : mine ? 'Laisser à l’IA' : free ? 'Prendre cette place' : undefined,
+          disabled: room.playing || !(free || mine),
+          run: () => actions.seat(mine ? null : i),
+        });
       }
-      seats.append(card);
-    }
-    const children: (Node | string)[] = [
-      el('h1', { textContent: 'Salle' }),
-      el('div', { className: 'room-code', textContent: room.code }),
-      el('p', { className: 'hint', textContent: 'Donne ce code à tes amis. Les places libres sont jouées par l’IA.' }),
-      el('h2', { textContent: 'Places' }),
-      seats,
-      el('h2', { textContent: 'Je joue avec' }),
-      deviceRow(),
-    ];
-    if (host && !room.playing) {
-      const format = el('select');
-      format.id = 'online-format';
-      format.append(el('option', { value: 'simple', textContent: 'Simple (1 contre 1)' }), el('option', { value: 'double', textContent: 'Double (2 contre 2)' }));
-      format.value = room.format;
-      const level = el('select');
-      level.id = 'online-level';
-      for (const l of LEVELS) level.append(el('option', { value: l.value, textContent: l.label }));
-      level.value = room.level;
-      const changed = (): void => actions.setup(format.value as DuelFormat, level.value as AiLevel);
-      format.onchange = changed;
-      level.onchange = changed;
-      const start = el('button', { className: 'primary', textContent: 'Lancer le match' });
-      start.id = 'online-start';
-      start.onclick = () => actions.start();
-      children.push(el('h2', { textContent: 'Match' }), el('div', { className: 'row' }, format, level), el('div', { className: 'row' }, start));
-    } else if (!room.playing) {
-      const hostName = room.members.find((m) => m.id === room.host)?.name ?? 'l’hôte';
-      children.push(el('p', { className: 'hint', textContent: `En attente de ${hostName}, qui lance le match.` }));
-    }
-    children.push(errorLine);
-    panel.replaceChildren(...children);
+      items.push(deviceItem());
+      if (host && !room.playing) {
+        const format = room.format;
+        const level = room.level;
+        items.push(
+          { kind: 'heading', id: 'match', text: 'Match' },
+          {
+            kind: 'choice',
+            id: 'format',
+            label: 'Format',
+            value: format,
+            options: [
+              { value: 'simple', label: 'Simple (1 contre 1)' },
+              { value: 'double', label: 'Double (2 contre 2)' },
+            ],
+            set: (f: DuelFormat) => actions.setup(f, level),
+          },
+          {
+            kind: 'choice',
+            id: 'niveau',
+            label: 'Niveau de l’IA',
+            value: level,
+            options: LEVELS,
+            set: (l: AiLevel) => actions.setup(format, l),
+          },
+          { kind: 'action', id: 'lancer', label: 'Lancer le match', primary: true, run: () => actions.start() },
+        );
+      } else if (!room.playing) {
+        const hostName = room.members.find((m) => m.id === room!.host)?.name ?? 'l’hôte';
+        items.push({ kind: 'info', id: 'attente', text: `En attente de ${hostName}, qui lance le match.` });
+      }
+      items.push({ kind: 'action', id: 'quitter-salle', label: 'Quitter la salle', run: () => actions.leave() });
+      return items;
+    },
   };
 
-  renderHome();
   return {
-    show(room): void {
-      root.hidden = false;
-      errorLine.textContent = '';
-      if (room) renderRoom(room);
-      else renderHome();
+    show(next): void {
+      const wasRoom = room !== null;
+      room = next;
+      unreachable = false;
+      const screen = next ? roomScreen : homeScreen;
+      // Même écran (la salle a changé) : on relit ses entrées sans perdre le focus.
+      if (menu.isOpen && menu.screen === screen && wasRoom === (next !== null)) menu.refresh();
+      else menu.show(screen);
     },
     error(message): void {
-      errorLine.textContent = message;
+      menu.message(message);
     },
     status(message): void {
-      errorLine.textContent = message;
+      menu.message(message);
+    },
+    unreachable(message): void {
+      room = null;
+      unreachable = true;
+      menu.show(homeScreen);
+      menu.message(message);
     },
     hide(): void {
-      root.hidden = true;
+      menu.hide();
     },
   };
 }

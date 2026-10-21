@@ -75,8 +75,7 @@ export function startOnline(canvas: HTMLCanvasElement): void {
       error: (message) => lobby.error(message),
       closed: () => {
         connection = null;
-        lobby.show(null);
-        lobby.error(`Impossible de joindre le serveur (${url}). Est-il lancé (npm run serveur) ?`);
+        lobby.unreachable(`Serveur introuvable (${url}). Est-il lancé (npm run serveur) ?`);
       },
       reconnecting: () => banner.show('Connexion perdue, reconnexion…'),
       reconnected: () => banner.hide(),
@@ -119,6 +118,14 @@ export function startOnline(canvas: HTMLCanvasElement): void {
     seat: (seat) => connection?.send({ t: 'seat', seat }),
     setup: (format, level) => connection?.send({ t: 'setup', format, level }),
     start: () => connection?.send({ t: 'start' }),
+    leave: () => {
+      void connection?.leave();
+      lobby.show(null);
+    },
+    retry: () => whenOpen(() => lobby.show(null)),
+    home: () => {
+      void (connection?.leave() ?? Promise.resolve()).then(() => (location.href = '/'));
+    },
   });
   lobby.show(null);
   // Tout de suite : si cette fenêtre jouait un match (rechargée, coupée), le serveur lui rend sa place.
