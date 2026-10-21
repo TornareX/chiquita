@@ -1,0 +1,47 @@
+import { SITUATIONS } from '../../sim/situations';
+import type { Menu, MenuItem, MenuScreen } from '../menu';
+
+/**
+ * Écran « Entraînement » : le tutoriel (une leçon par coup, avec sa propre liste et ses étoiles) et les situations de
+ * match du labo, rejouées en boucle. Avec `?debug`, les outils de développement : machine à balles et animations.
+ * `go` lance un mode par son adresse (sans le `?`).
+ */
+export function trainingScreen(menu: Menu, go: (query: string) => void, debug: boolean): MenuScreen {
+  const situations: MenuScreen = {
+    id: 'situations',
+    title: 'Situations de match',
+    hint: 'Une situation rejouée en boucle, identique, contre l’IA : de quoi travailler un coup précis.',
+    items: () => [
+      ...SITUATIONS.map(
+        (s): MenuItem => ({ kind: 'action', id: `situation-${s.id}`, label: s.name, hint: s.hint, run: () => go(`mode=labo&situation=${s.id}`) }),
+      ),
+      { kind: 'action', id: 'retour', label: 'Retour', run: () => menu.pop() },
+    ],
+  };
+  return {
+    id: 'entrainement',
+    title: 'Entraînement',
+    items: () => {
+      const items: MenuItem[] = [
+        {
+          kind: 'action',
+          id: 'tutoriel',
+          label: 'Tutoriel',
+          hint: 'Une leçon par coup : quand le jouer, comment, et des essais jusqu’à le réussir.',
+          primary: true,
+          run: () => go('mode=tutoriel'),
+        },
+        { kind: 'action', id: 'situations', label: 'Situations de match', hint: 'Le labo : une situation rejouée en boucle.', run: () => menu.push(situations) },
+      ];
+      if (debug) {
+        items.push(
+          { kind: 'heading', id: 'outils', text: 'Outils (développement)' },
+          { kind: 'action', id: 'machine', label: 'Machine à balles', hint: 'Ancienne vue à la première personne, clavier et souris.', run: () => go('mode=trainer') },
+          { kind: 'action', id: 'animations', label: 'Animations', hint: 'Visionneur des animations du personnage.', run: () => go('mode=animations') },
+        );
+      }
+      items.push({ kind: 'action', id: 'retour', label: 'Retour', run: () => menu.pop() });
+      return items;
+    },
+  };
+}

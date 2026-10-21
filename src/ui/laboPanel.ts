@@ -182,10 +182,12 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
     bottom,
   );
   panel.append(copied);
-  button('Retour au match', () => (location.search = ''), bottom);
+  button('Retour à l’accueil', () => (location.search = ''), bottom);
 
   document.body.append(panel);
-  select(SITUATIONS[0]!);
+  // `?situation=lob-court` : la situation choisie dans « Entraînement » ; sinon la première.
+  const asked = new URLSearchParams(location.search).get('situation');
+  select(SITUATIONS.find((s) => s.id === asked) ?? SITUATIONS[0]!);
   return {
     update(won: number, played: number, buttons: InputSource): void {
       const key = `${current?.id}|${sourceKey(buttons)}`;

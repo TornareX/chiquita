@@ -2,10 +2,11 @@ import { createMenu, type MenuScreen } from '../ui/menu';
 import { createPadTest, type PadTest } from '../ui/padTest';
 import { playScreen } from '../ui/screens/playScreen';
 import { settingsScreen } from '../ui/screens/settingsScreen';
+import { trainingScreen } from '../ui/screens/trainingScreen';
 import { initialSetup, loadPreferences, savePreferences, saveSetup, setupQuery, type MatchSetup } from '../ui/settingsStore';
 
 /**
- * Accueil (`/` sans paramètre de jeu, ou `?mode=accueil`) : Jouer · En ligne · Réglages
+ * Accueil (`/` sans paramètre de jeu, ou `?mode=accueil`) : Jouer · En ligne · Entraînement · Réglages
  * (`research/MENUS_PLAN.md` §2). Écran simple, sans scène 3D. Chaque mode se lance en rechargeant la page avec son
  * adresse : l'adresse reste la seule source de vérité, et les raccourcis d'adresse sautent l'accueil.
  * `?serveur=hote:port` : le serveur du jeu en ligne, passé à « En ligne ».
@@ -27,6 +28,7 @@ export function startHome(canvas: HTMLCanvasElement): void {
     go(setupQuery(setup));
   };
   const play = playScreen(menu, initialSetup(prefs), prefs, launch);
+  const training = trainingScreen(menu, go, debug);
 
   /** « Teste ta manette », créé à la première demande ; le menu se cache le temps du test. */
   let padTest: PadTest | null = null;
@@ -62,6 +64,7 @@ export function startHome(canvas: HTMLCanvasElement): void {
         hint: 'Une salle à code, avec des amis chacun chez soi.',
         run: () => go(`enligne${server ? `&serveur=${encodeURIComponent(server)}` : ''}`),
       },
+      { kind: 'action', id: 'entrainement', label: 'Entraînement', hint: 'Le tutoriel et les situations de match.', run: () => menu.push(training) },
       { kind: 'action', id: 'reglages', label: 'Réglages', hint: 'Son, affichage, manette, et tes préférences de joueur.', run: () => menu.push(settings) },
     ],
   };

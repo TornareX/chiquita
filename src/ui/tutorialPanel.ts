@@ -33,7 +33,7 @@ export interface TutorialPanelActions {
   testPad(): void;
   /** Bouton principal d'une carte (« Commencer », « Leçon suivante »). */
   confirm(): void;
-  /** Retour à la liste, ou au match depuis la liste. */
+  /** Retour à la liste, ou à l'accueil depuis la liste. */
   back(): void;
 }
 
@@ -133,7 +133,7 @@ export function createTutorialPanel(actions: TutorialPanelActions): TutorialPane
       });
       const row = document.createElement('div');
       row.className = 'row';
-      row.append(button('Tester ma manette', actions.testPad), button('Retour au match (Échap)', actions.back));
+      row.append(button('Tester ma manette', actions.testPad), button('Retour à l’accueil (Échap)', actions.back));
       card.append(row);
       open();
     },
