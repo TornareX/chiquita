@@ -184,6 +184,10 @@ export function createMenu(options: MenuOptions = {}): Menu {
   // Repères des manettes branchées : un losange par manette, plein quand elle est là.
   const padRow = document.createElement('span');
   padRow.className = 'menu-pads';
+  // Le navigateur ne voit une manette qu'après un premier appui : sans manette, on le dit.
+  const padLabel = document.createElement('span');
+  padLabel.className = 'menu-pads-label';
+  padRow.append(padLabel);
   const padMarks = Array.from({ length: 4 }, () => {
     const mark = document.createElement('span');
     mark.className = 'menu-pad';
@@ -197,6 +201,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
     padCount = count;
     padMarks.forEach((mark, i) => mark.classList.toggle('is-on', i < count));
     padRow.dataset.count = String(count);
+    padLabel.textContent = count === 0 ? 'Aucune manette : appuie sur un bouton' : `${count} manette${count > 1 ? 's' : ''}`;
   };
   root.append(panel, hints);
   document.body.append(root);

@@ -556,6 +556,11 @@
 }
 .menu[data-screen='accueil'] .menu-pads {
   display: flex;
+  align-items: center;
+}
+/* Le nombre de manettes, devant les losanges, dans le style des aides A/B. */
+.menu-pads-label {
+  margin-right: calc(10 * var(--u));
 }
 .menu-pad {
   width: calc(18 * var(--u));

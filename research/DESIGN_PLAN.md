@@ -166,7 +166,9 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
      nom jaunes au repos (action principale). Maille aussi dans les plaques des tuiles.
    - Repères des manettes branchées : quatre losanges à droite de la barre d'aides, pleins pour chaque manette
      branchée (`.menu-pads`, `data-count`), mis à jour par la boucle de lecture des manettes ; affichés sur l'accueil
-     seulement pour l'instant.
+     seulement pour l'instant. Retouche après essai de Xavier, qui ne comprenait pas les losanges seuls : un libellé
+     les précède, dans le style des aides A/B, « 1 manette », « 2 manettes »…, et sans manette « Aucune manette :
+     appuie sur un bouton » (le navigateur ne voit une manette qu'après un premier appui).
    - Pas d'image dans la tuile « Jouer » ni de bande de couleur en haut des autres (maquette) : pas de visuel embarqué
      prêt, et la bande colorée ressemble trop à la bordure latérale écartée à l'étape 3.
    - Test du navigateur ajouté (`menu.spec.ts`) : gauche/droite et bas sur l'accueil, au clavier et à la manette,

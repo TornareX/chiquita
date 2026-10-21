@@ -137,6 +137,7 @@ test('accueil en tuiles : gauche et droite passent d’une tuile à l’autre, h
   await expect(home).toHaveAttribute('data-layout', 'tiles');
   await expect(focused(page)).toHaveAttribute('data-item', 'jouer');
   await expect(home.locator('.menu-pads')).toHaveAttribute('data-count', '0');
+  await expect(home.locator('.menu-pads-label')).toHaveText('Aucune manette : appuie sur un bouton');
 
   // Clavier : droite et gauche, en boucle ; bas suit le même ordre.
   await page.keyboard.press('ArrowRight');
@@ -151,6 +152,7 @@ test('accueil en tuiles : gauche et droite passent d’une tuile à l’autre, h
   await plugPad(page);
   await expect(home.locator('.menu-pads')).toHaveAttribute('data-count', '1');
   await expect(home.locator('.menu-pad.is-on')).toHaveCount(1);
+  await expect(home.locator('.menu-pads-label')).toHaveText('1 manette');
   await tap(page, 15);
   await tap(page, 15);
   await expect(focused(page)).toHaveAttribute('data-item', 'entrainement');
