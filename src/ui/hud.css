@@ -146,8 +146,8 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
 }
 
 /*
- * Match fini : il ne reste que les équipes et, dans la bande agrandie, le score de chaque set ; l'annonce de la fin
- * descend sous la bande pour la laisser lire.
+ * Match fini : il ne reste que les équipes et, dans la bande agrandie, le score de chaque set. L'annonce de la fin
+ * passe en bas de l'écran, dans la zone de sécurité : sous le tableau, elle cachait le joueur du fond.
  */
 #score[data-over] :is(.score-games, .score-points) {
   display: none;
@@ -163,7 +163,12 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   color: var(--ink-soft);
 }
 body:has(#score[data-over]) #point {
-  top: calc(var(--hud-call-top) + 64 * var(--hud-u));
+  top: auto;
+  bottom: var(--ui-safe-y);
+}
+/* Liaison perdue en ligne : le bandeau prend la place des annonces, qui se taisent jusqu'au retour. */
+body:has(#online-banner:not([hidden])) #point {
+  visibility: hidden;
 }
 
 .score-strip {
@@ -312,8 +317,11 @@ body:has(#score[data-over]) #point {
   font-size: calc(20 * var(--hud-u));
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  /* Les plaques se touchent : une seule colonne d'encre, le bandeau LED ne se lit pas entre deux lignes. */
+  align-items: stretch;
+  /*
+   * Même largeur pour toutes les lignes, et les plaques se touchent : une seule colonne d'encre, le bandeau LED ne se
+   * lit pas entre deux lignes.
+   */
   gap: 0;
   transition: opacity 0.3s;
 }
