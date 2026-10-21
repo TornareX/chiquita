@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Menu (test)</title>
+  </head>
+  <body>
+    <!-- Page de test du composant de menu (`tests/e2e/menu.spec.ts`) : un écran avec chaque sorte d'entrée. -->
+    <script type="module">
+      import { createMenu } from '/src/ui/menu.ts';
+      const log = (window.__log = []);
+      const state = (window.__state = { level: 'normal', sound: true, name: '', count: 0 });
+      const menu = createMenu({ overlay: 'opaque', onRootBack: () => log.push('racine') });
+      const sub = {
+        id: 'sous-ecran',
+        title: 'Sous-écran',
+        items: () => [{ kind: 'action', id: 'rien', label: 'Rien', run: () => log.push('rien') }],
+      };
+      const main = {
+        id: 'essai',
+        title: 'Essai',
+        items: () => [
+          { kind: 'action', id: 'compter', label: `Compter (${state.count})`, primary: true, run: () => { state.count++; log.push('compter'); menu.refresh(); } },
+          { kind: 'heading', id: 'groupe', text: 'Groupe' },
+          { kind: 'choice', id: 'niveau', label: 'Niveau', value: state.level, options: [
+            { value: 'facile', label: 'Facile' }, { value: 'normal', label: 'Normal' }, { value: 'fort', label: 'Fort' },
+          ], set: (v) => (state.level = v) },
+          { kind: 'toggle', id: 'son', label: 'Son', value: state.sound, set: (v) => (state.sound = v) },
+          { kind: 'info', id: 'note', text: 'Une note.' },
+          { kind: 'text', id: 'nom', label: 'Code', value: state.name, maxLength: 4, charset: 'ABC', set: (v) => (state.name = v), submit: () => log.push('code ' + state.name) },
+          { kind: 'action', id: 'sous-ecran', label: 'Sous-écran', run: () => menu.push(sub) },
+        ],
+      };
+      menu.show(main);
+      window.__menu = menu;
+    </script>
+  </body>
+</html>

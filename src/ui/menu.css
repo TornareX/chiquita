@@ -1,0 +1,237 @@
+/*
+ * Apparence des menus (`src/ui/menu.ts`). Style neutre provisoire, repris de l'ancien menu des réglages : la passe
+ * design remplacera ces valeurs sans toucher au comportement. Tout passe par les variables ci-dessous et par des
+ * classes stables :
+ *   .menu (racine, .menu-dim au-dessus d'une partie, .menu-opaque pour l'accueil), [data-screen] (écran affiché)
+ *   .menu-panel, .menu-title, .menu-screen-hint, .menu-items, .menu-heading, .menu-info, .menu-message
+ *   .menu-item (+ .menu-action / .menu-choice / .menu-toggle / .menu-text ; états .is-focused, .is-primary,
+ *   .is-disabled, .is-on, .is-editing, .is-lit ; équipes .blue / .red ; places .is-mine)
+ *   .menu-button, .menu-label, .menu-control, .menu-arrow, .menu-value, .menu-input, .menu-letters, .menu-letter
+ *   (.is-current), .menu-hint
+ */
+:root {
+  --menu-font: 14px/1.4 system-ui, sans-serif;
+  --menu-title-size: 20px;
+  --menu-heading-size: 12px;
+  --menu-small-size: 12px;
+  --menu-fg: #f2f5f7;
+  --menu-muted: #9fb0bf;
+  --menu-backdrop-dim: rgba(0, 0, 0, 0.45);
+  --menu-backdrop-opaque: #0b1118;
+  --menu-panel-bg: rgba(12, 18, 26, 0.96);
+  --menu-panel-width: 460px;
+  --menu-panel-padding: 18px 20px;
+  --menu-radius: 12px;
+  --menu-item-bg: #1c2833;
+  --menu-item-hover-bg: #263645;
+  --menu-item-border: #3a4a58;
+  --menu-item-radius: 6px;
+  --menu-item-padding: 7px 12px;
+  --menu-gap: 6px;
+  --menu-focus: #ffd23f;
+  --menu-primary-bg: #ffd23f;
+  --menu-primary-fg: #10161d;
+  --menu-error: #ff8a80;
+  --menu-blue: #4da3ff;
+  --menu-red: #ff6b5e;
+  --menu-lit-bg: #3a3410;
+  --menu-lit-ring: #ffe066;
+}
+
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--menu-backdrop-dim);
+  color: var(--menu-fg);
+  font: var(--menu-font);
+}
+.menu[hidden] {
+  display: none;
+}
+.menu-opaque {
+  background: var(--menu-backdrop-opaque);
+}
+
+.menu-panel {
+  width: min(var(--menu-panel-width), calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: var(--menu-panel-padding);
+  border-radius: var(--menu-radius);
+  background: var(--menu-panel-bg);
+}
+
+.menu-title {
+  margin: 0 0 4px;
+  font-size: var(--menu-title-size);
+}
+.menu-screen-hint,
+.menu-hint,
+.menu-info {
+  margin: 4px 0 6px;
+  color: var(--menu-muted);
+  font-size: var(--menu-small-size);
+}
+.menu-heading {
+  margin: 16px 0 6px;
+  font-size: var(--menu-heading-size);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--menu-muted);
+}
+.menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--menu-gap);
+  margin-top: 10px;
+}
+.menu-message {
+  min-height: 1.4em;
+  margin: 10px 0 0;
+  color: var(--menu-error);
+}
+
+.menu-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: var(--menu-item-padding);
+  border: 1px solid var(--menu-item-border);
+  border-radius: var(--menu-item-radius);
+  background: var(--menu-item-bg);
+  cursor: pointer;
+  outline: none;
+}
+.menu-item:hover {
+  background: var(--menu-item-hover-bg);
+}
+.menu-item.is-focused {
+  border-color: var(--menu-focus);
+  box-shadow: 0 0 0 1px var(--menu-focus);
+}
+.menu-item.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.menu-item.blue {
+  border-left: 4px solid var(--menu-blue);
+}
+.menu-item.red {
+  border-left: 4px solid var(--menu-red);
+}
+.menu-item.is-lit {
+  animation: menu-lit 0.8s ease-out;
+}
+@keyframes menu-lit {
+  from {
+    box-shadow: 0 0 0 4px var(--menu-lit-ring);
+    background: var(--menu-lit-bg);
+  }
+}
+
+/* Une action : tout l'élément est le bouton. */
+.menu-action {
+  padding: 0;
+}
+.menu-button {
+  flex: 1;
+  padding: var(--menu-item-padding);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: inherit;
+  outline: none;
+}
+.menu-action.is-primary {
+  background: var(--menu-primary-bg);
+  border-color: var(--menu-primary-bg);
+  color: var(--menu-primary-fg);
+  font-weight: 700;
+}
+.menu-action .menu-hint {
+  flex-basis: 100%;
+  margin: -4px 12px 6px;
+}
+.menu-action.is-primary .menu-hint {
+  color: inherit;
+}
+
+.menu-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.menu-arrow {
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--menu-muted);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.menu-value {
+  min-width: 120px;
+  text-align: center;
+  font-weight: 600;
+}
+.menu-toggle .menu-value {
+  min-width: 0;
+  color: var(--menu-muted);
+}
+.menu-toggle.is-on .menu-value {
+  color: var(--menu-fg);
+}
+.menu-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.menu-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 220px;
+  padding: 4px 8px;
+  border: 1px solid var(--menu-item-border);
+  border-radius: var(--menu-item-radius);
+  background: var(--menu-backdrop-opaque);
+  color: inherit;
+  font: inherit;
+}
+.menu-letters {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: flex-end;
+  gap: 4px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.menu-letter.is-current {
+  color: var(--menu-focus);
+  text-decoration: underline;
+}
+
+/* Code d'une salle en ligne. */
+.menu-info.room-code {
+  margin: 4px 0;
+  color: var(--menu-fg);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-align: center;
+}
+.menu-item.is-mine .menu-label::after {
+  content: ' (toi)';
+  color: var(--menu-focus);
+}
