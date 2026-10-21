@@ -26,6 +26,7 @@ import {
   loadSettings,
   padOf,
   saveSettings,
+  type Device,
   type DuelSettings,
 } from '../ui/duelSettings';
 import { loadFeel } from '../ui/feelStorage';
@@ -50,6 +51,8 @@ export interface OnlineStart {
   startAt: number;
   seats: number[];
   connection: Connection;
+  /** Manette ou clavier qui joue la place de ce navigateur. */
+  device: Device;
   /** Délai d'entrée et rollback au plus (pas). */
   inputDelay: number;
   maxRollback: number;
@@ -106,8 +109,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   const fakeNet = online ? null : fakeNetFromUrl(params);
   /** Match en réseau (faux ou vrai) : rollbacks, sons datés, animations lissées, ni ralenti ni micro-pause. */
   const networked = fakeNet !== null || online !== null;
-  /** En ligne : la manette ou le clavier choisi pour la première place humaine joue sa place à soi. */
-  const onlineController = settings.players.find(isHuman) ?? 'manette1';
+  /** En ligne : la manette ou le clavier choisi dans le salon joue sa place à soi. */
+  const onlineController = online?.device ?? 'manette1';
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
   const keyboard = createKeyboardPads(canvas);

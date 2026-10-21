@@ -1,7 +1,7 @@
 import type { AiLevel } from '../sim/bot';
 import type { DuelFormat } from '../sim/duel';
 import type { RoomView } from '../net/protocol';
-import { playerName } from './duelSettings';
+import { CONTROLLER_LABELS, DEVICES, playerName, type Device } from './duelSettings';
 
 const NAME_KEY = 'padel.enligne.nom';
 const LEVELS: { value: AiLevel; label: string }[] = [
@@ -35,6 +35,8 @@ const STYLE = `
 `;
 
 export interface LobbyActions {
+  /** Périphérique choisi pour jouer sa place (retenu par fenêtre). */
+  device(device: Device): void;
   create(name: string): void;
   join(name: string, code: string): void;
   seat(seat: number | null): void;
@@ -44,9 +46,13 @@ export interface LobbyActions {
 
 /**
  * Salon du jeu en ligne (`?enligne`) : son nom, créer une salle ou en rejoindre une avec son code, puis les places
- * (libres = IA), et pour l'hôte, simple ou double, le niveau de l'IA et « Lancer ». À la souris pour l'instant.
+ * (libres = IA), et pour l'hôte, simple ou double, le niveau de l'IA et « Lancer ». Chacun choisit avec quoi il joue
+ * (manette ou clavier) : deux fenêtres sur un même PC peuvent prendre deux manettes. À la souris pour l'instant.
  */
-export function createOnlineLobby(actions: LobbyActions): {
+export function createOnlineLobby(
+  initialDevice: Device,
+  actions: LobbyActions,
+): {
   show(room: RoomView | null): void;
   error(message: string): void;
   status(message: string): void;
@@ -79,11 +85,25 @@ export function createOnlineLobby(actions: LobbyActions): {
   };
   const errorLine = document.createElement('div');
   errorLine.className = 'error';
+  let device = initialDevice;
 
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...children: (Node | string)[]): HTMLElementTagNameMap[K] => {
     const node = Object.assign(document.createElement(tag), props);
     node.append(...children);
     return node;
+  };
+
+  /** « Je joue avec » : manettes 1 à 4, clavier bleu ou rouge. */
+  const deviceRow = (): HTMLElement => {
+    const select = el('select');
+    select.id = 'online-device';
+    for (const d of DEVICES) select.append(el('option', { value: d, textContent: CONTROLLER_LABELS[d] }));
+    select.value = device;
+    select.onchange = () => {
+      device = select.value as Device;
+      actions.device(device);
+    };
+    return el('div', { className: 'row' }, select);
   };
 
   const renderHome = (): void => {
@@ -109,6 +129,8 @@ export function createOnlineLobby(actions: LobbyActions): {
       el('p', { className: 'hint', textContent: 'Crée une salle et donne son code à tes amis, ou tape le code d’une salle.' }),
       el('h2', { textContent: 'Ton nom' }),
       el('div', { className: 'row' }, nameInput),
+      el('h2', { textContent: 'Je joue avec' }),
+      deviceRow(),
       el('h2', { textContent: 'Nouvelle salle' }),
       el('div', { className: 'row' }, create),
       el('h2', { textContent: 'Rejoindre une salle' }),
@@ -148,6 +170,8 @@ export function createOnlineLobby(actions: LobbyActions): {
       el('p', { className: 'hint', textContent: 'Donne ce code à tes amis. Les places libres sont jouées par l’IA.' }),
       el('h2', { textContent: 'Places' }),
       seats,
+      el('h2', { textContent: 'Je joue avec' }),
+      deviceRow(),
     ];
     if (host && !room.playing) {
       const format = el('select');

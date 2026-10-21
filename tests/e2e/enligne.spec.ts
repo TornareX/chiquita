@@ -4,11 +4,13 @@ const env = (globalThis as { process?: { env: Record<string, string | undefined>
 const GAME_SERVER = `localhost:${env.E2E_SERVEUR ?? 2567}`;
 
 /**
- * Manette virtuelle sur la place de ce navigateur, pilotée par une IA qui ne voit que la partie de ce navigateur
- * (comme un joueur devant son écran). Installée avant le chargement de la page : elle attend que la partie existe.
+ * Deux manettes branchées sur le PC, vues par chaque fenêtre (comme sur un vrai PC : le navigateur donne toutes les
+ * manettes à toutes les pages). Dans cette fenêtre, seule la manette `own` (0 ou 1) est tenue, par une IA qui ne voit
+ * que la partie de cette fenêtre (comme un joueur devant son écran) ; l'autre reste au repos. Installée avant le
+ * chargement de la page : elle attend que la partie existe.
  */
-async function virtualPad(page: Page, seed: number): Promise<void> {
-  await page.addInitScript((seed) => {
+async function virtualPads(page: Page, seed: number, own: number): Promise<void> {
+  await page.addInitScript(([seed, own]) => {
     const buttonOf = { normal: 0, overhead: 1, slice: 2, lob: 3 } as const;
     let bot: { commands(duel: unknown): { stick: { forward: number; right: number }; shot: keyof typeof buttonOf | null } } | null = null;
     let lastTick = -1;
@@ -38,43 +40,48 @@ async function virtualPad(page: Page, seed: number): Promise<void> {
         const flip = seat % 2 === 0 ? 1 : -1;
         const buttons = Array.from({ length: 16 }, () => ({ pressed: false, touched: false, value: 0 }));
         if (commands.shot) buttons[buttonOf[commands.shot]] = { pressed: true, touched: true, value: 1 };
-        pads = [
-          {
-            index: 0,
-            id: 'manette virtuelle',
-            connected: true,
-            mapping: 'standard',
-            axes: [commands.stick.right * flip, -commands.stick.forward * flip, 0, 0],
-            buttons,
-          } as unknown as Gamepad,
-        ];
+        const idle = Array.from({ length: 16 }, () => ({ pressed: false, touched: false, value: 0 }));
+        pads = [0, 1].map(
+          (index) =>
+            ({
+              index,
+              id: `manette virtuelle ${index + 1}`,
+              connected: true,
+              mapping: 'standard',
+              axes: index === own ? [commands.stick.right * flip, -commands.stick.forward * flip, 0, 0] : [0, 0, 0, 0],
+              buttons: index === own ? buttons : idle,
+            }) as unknown as Gamepad,
+        );
       }
       return pads;
     };
-  }, seed);
+  }, [seed, own] as const);
 }
 
 /**
- * Jeu en ligne, phase 1 : deux onglets (deux joueurs) passent par le salon et le vrai serveur (`npm run serveur`) :
- * l'un crée une salle, l'autre la rejoint avec son code, l'hôte lance un double (les deux places libres jouées par l'IA
- * du serveur). Chaque navigateur doit calculer exactement le même match que le serveur, seconde après seconde, et le
- * match doit vraiment se jouer.
+ * Jeu en ligne, phase 1 : deux onglets (deux joueurs sur un même PC, deux manettes) passent par le salon et le vrai
+ * serveur (`npm run serveur`) : l'un crée une salle et choisit la manette 1 dans le salon, l'autre rejoint avec le
+ * code et `&manette=2` dans l'adresse ; l'hôte lance un double (les deux places libres jouées par l'IA du serveur).
+ * Chaque fenêtre ne doit lire que sa manette (sinon l'invité, qui lirait la manette 1 au repos chez lui, ne frapperait
+ * jamais), et calculer exactement le même match que le serveur, seconde après seconde.
  */
 test('en ligne : deux joueurs, une salle à code, le même match que le serveur', async ({ browser }) => {
   test.setTimeout(150_000);
   const errors: string[] = [];
-  const open = async (seed: number): Promise<Page> => {
+  const open = async (seed: number, own: number, query = ''): Promise<Page> => {
     const context = await browser.newContext({ viewport: { width: 400, height: 225 } });
     const page = await context.newPage();
     page.on('pageerror', (error) => errors.push(error.message));
-    await virtualPad(page, seed);
-    await page.goto(`/?enligne&serveur=${GAME_SERVER}&boutons=1`);
+    await virtualPads(page, seed, own);
+    await page.goto(`/?enligne&serveur=${GAME_SERVER}&boutons=1${query}`);
     await page.waitForSelector('#online-name');
     return page;
   };
-  const host = await open(61);
-  const guest = await open(62);
+  const host = await open(61, 0);
+  const guest = await open(62, 1, '&manette=2');
+  await expect(guest.locator('#online-device')).toHaveValue('manette2');
 
+  await host.selectOption('#online-device', 'manette1');
   await host.fill('#online-name', 'Xavier');
   await host.click('#online-create');
   const codeBox = host.locator('.room-code');

@@ -250,17 +250,19 @@ sur Internet (Fly.io, région Paris) ; numéro de version de la sim.
    npm run dev
    ```
 
-2. Ouvrir **http://localhost:5173/?enligne** dans deux onglets (ou deux navigateurs). Dans le premier : son nom,
-   « Créer une salle » ; un code de 4 lettres s'affiche. Dans le second : son nom, le code, « Rejoindre ».
+2. Ouvrir **http://localhost:5173/?enligne&manette=1** et **http://localhost:5173/?enligne&manette=2** dans deux
+   fenêtres côte à côte. Dans la première : son nom, « Créer une salle » ; un code de 4 lettres s'affiche. Dans la
+   seconde : son nom, le code, « Rejoindre ».
 3. Chacun prend une place (les places libres sont jouées par l'IA). L'hôte choisit simple ou double et le niveau de
-   l'IA, puis « Lancer le match ». La manette (ou le clavier) choisie pour la première place humaine dans les
-   réglages joue sa propre place.
+   l'IA, puis « Lancer le match ». Chaque fenêtre joue sa place avec ce qui est choisi sous « Je joue avec » dans le
+   salon (manette 1 à 4, clavier bleu ou rouge), retenu par fenêtre ; `&manette=2` ou `&clavier=1` dans l'adresse
+   le règle d'avance. Sans choix : le premier périphérique humain des réglages (sur deux PC, la manette 1 de chacun).
 4. Avec un ami sur le même réseau (Wi-Fi de la maison) : lancer le jeu avec `npm run dev -- --host`, puis il ouvre
    `http://<adresse de ton PC>:5173/?enligne` (Windows peut demander d'autoriser Node dans le pare-feu). Par
    Internet, il faudra d'abord héberger le serveur.
 
 Options d'URL : `&serveur=hote:port` (autre serveur), `&delai=1` (délai d'entrée, images), `&fenetre=250` (rollback au
-plus, ms).
+plus, ms), `&manette=2` ou `&clavier=1` (avec quoi on joue).
 
 Quoi regarder, dans l'encart en bas à droite : le **ping** mesuré, l'**avance** sur le serveur (en pas de 1/240 s),
 les pas rejoués, les corrections, et surtout **« empreintes : N identiques au serveur »** : si elle passe à

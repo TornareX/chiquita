@@ -1,18 +1,39 @@
 import { Connection, serverUrl } from '../net/connection';
 import { TICKS_PER_FRAME } from '../net/fakeNet';
 import { SIM_DT } from '../sim/constants';
-import { loadSettings } from '../ui/duelSettings';
+import { DEVICES, isHuman, loadSettings, type Device } from '../ui/duelSettings';
 import { createOnlineLobby } from '../ui/onlineLobby';
 import { startDuel } from './duel';
 
 /** Délai d'entrée par défaut (images) et rollback au plus (ms) en ligne. [à juger à la manette] */
 const DEFAULT_DELAY_FRAMES = 1;
 const DEFAULT_WINDOW_MS = 250;
+/** Périphérique choisi dans cette fenêtre (`sessionStorage` : une fenêtre à côté peut en prendre un autre). */
+const DEVICE_KEY = 'padel.enligne.peripherique';
+
+/**
+ * Avec quoi ce navigateur joue sa place : `&manette=2` (1 à 4) ou `&clavier=1` (bleu) / `2` (rouge) dans l'adresse,
+ * sinon le dernier choix fait dans cette fenêtre, sinon le premier périphérique humain des réglages.
+ */
+function initialDevice(params: URLSearchParams, fallback: Device): Device {
+  const pad = Number(params.get('manette'));
+  if (pad >= 1 && pad <= 4) return `manette${pad}` as Device;
+  const keys = Number(params.get('clavier'));
+  if (keys === 1 || keys === 2) return `clavier${keys}` as Device;
+  try {
+    const saved = sessionStorage.getItem(DEVICE_KEY);
+    if (saved && (DEVICES as readonly string[]).includes(saved)) return saved as Device;
+  } catch {
+    // Stockage indisponible : le réglage par défaut.
+  }
+  return fallback;
+}
 
 /**
  * Jeu en ligne (`?enligne`, `research/en-ligne/PLAN_EN_LIGNE.md`, phase 1) : le salon (créer une salle, la rejoindre
  * avec son code, prendre une place), puis le match, joué contre le serveur de jeu (`npm run serveur`). Options d'URL :
- * `&serveur=hote:port` (par défaut cette machine, port 2567), `&delai=1` (images), `&fenetre=250` (ms).
+ * `&serveur=hote:port` (par défaut cette machine, port 2567), `&delai=1` (images), `&fenetre=250` (ms), `&manette=2` ou
+ * `&clavier=1` (avec quoi on joue, aussi au choix dans le salon ; utile pour deux fenêtres sur un même PC).
  */
 export function startOnline(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
@@ -20,6 +41,7 @@ export function startOnline(canvas: HTMLCanvasElement): void {
   const prefs = { assist: settings.assists[0], prepMove: settings.prepMove, hand: settings.hands[0] };
   const delayFrames = Math.max(0, Math.min(10, Math.round(Number(params.get('delai') ?? DEFAULT_DELAY_FRAMES)) || 0));
   const windowMs = Math.max(50, Math.min(1000, Number(params.get('fenetre') ?? DEFAULT_WINDOW_MS) || DEFAULT_WINDOW_MS));
+  let device = initialDevice(params, settings.players.find(isHuman) ?? 'manette1');
 
   let connection: Connection | null = null;
   let started = false;
@@ -45,6 +67,7 @@ export function startOnline(canvas: HTMLCanvasElement): void {
           startAt,
           seats,
           connection: c,
+          device,
           inputDelay: delayFrames * TICKS_PER_FRAME,
           maxRollback: Math.round(windowMs / 1000 / SIM_DT),
         });
@@ -69,7 +92,15 @@ export function startOnline(canvas: HTMLCanvasElement): void {
     }, 20);
   };
 
-  const lobby = createOnlineLobby({
+  const lobby = createOnlineLobby(device, {
+    device: (chosen) => {
+      device = chosen;
+      try {
+        sessionStorage.setItem(DEVICE_KEY, chosen);
+      } catch {
+        // Sans stockage, le choix vaut jusqu'au rechargement.
+      }
+    },
     create: (name) => connect(name, (c) => c.send({ t: 'create' })),
     join: (name, code) => connect(name, (c) => c.send({ t: 'join', code })),
     seat: (seat) => connection?.send({ t: 'seat', seat }),
