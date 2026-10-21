@@ -134,3 +134,47 @@ test('les adresses de jeu sautent l’accueil ; `/` et `?debug` l’affichent', 
   await page.goto('/?mode=accueil');
   await expect(page.locator('#accueil')).toBeVisible();
 });
+
+test('Entraînement : tutoriel et situations de match ; les outils seulement avec `?debug`', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-item="entrainement"] button').click();
+  await expect(page.locator('#accueil')).toHaveAttribute('data-screen', 'entrainement');
+  await expect(page.locator('[data-item="machine"]')).toHaveCount(0);
+  await expect(page.locator('[data-item="animations"]')).toHaveCount(0);
+  await page.locator('[data-item="situations"] button').click();
+  await page.locator('[data-item="situation-lob-court"] button').click();
+  await page.waitForURL(/mode=labo&situation=lob-court/);
+  await expect(page.locator('#panel button[data-situation="lob-court"]')).toHaveClass(/selected/);
+  // Retour à l'accueil depuis le labo.
+  await page.getByRole('button', { name: 'Retour à l’accueil' }).click();
+  await page.waitForURL((url) => url.search === '');
+
+  await page.locator('[data-item="entrainement"] button').click();
+  await page.locator('[data-item="tutoriel"] button').click();
+  await page.waitForURL(/mode=tutoriel/);
+
+  await page.goto('/?debug');
+  await page.locator('[data-item="entrainement"] button').click();
+  await expect(page.locator('[data-item="machine"]')).toBeVisible();
+  await page.locator('[data-item="animations"] button').click();
+  await page.waitForURL(/mode=animations&debug/);
+});
+
+test('Réglages : les préférences sont gardées et pré-remplissent « Jouer »', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-item="reglages"] button').click();
+  await page.locator('[data-item="son"]').click();
+  await expect(page.locator('[data-item="son"] .menu-value')).toHaveText('Non');
+  const device = page.locator('[data-item="peripherique"]');
+  while ((await device.locator('.menu-value').textContent()) !== 'Manette 2') await device.locator('.menu-next').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#accueil')).toHaveAttribute('data-screen', 'accueil');
+  await expect(page.locator('#accueil .is-focused')).toHaveAttribute('data-item', 'reglages');
+
+  await page.reload();
+  const prefs = await page.evaluate(() => JSON.parse(localStorage.getItem('padel-smash.preferences')!));
+  expect(prefs).toMatchObject({ sound: false, device: 'manette2' });
+  // Première fois dans « Jouer » : sa place avec sa manette.
+  await page.locator('[data-item="jouer"] button').click();
+  await expect(page.locator('[data-item="place-0"] .menu-value')).toHaveText(/Manette 2/);
+});
