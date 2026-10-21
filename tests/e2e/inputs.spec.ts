@@ -73,7 +73,9 @@ test('« Teste ta manette » dit quel bouton a été pressé', async ({ page }) 
   await page.waitForFunction(() => window.__duel !== undefined);
   await plugPlayStation(page);
 
+  // Pause, puis Réglages : « Tester ma manette ».
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Réglages' }).click();
   await page.getByRole('button', { name: 'Tester ma manette' }).click();
   const screen = page.locator('#pad-test');
   await expect(screen).toBeVisible();
@@ -109,5 +111,5 @@ test('« Teste ta manette » dit quel bouton a été pressé', async ({ page }) 
   await page.screenshot({ path: 'screenshots/21-teste-ta-manette.png' });
   await page.keyboard.press('Escape');
   await expect(screen).toBeHidden();
-  await expect(page.locator('#settings')).toBeHidden();
+  await expect(page.locator('#pause-menu')).toBeHidden();
 });

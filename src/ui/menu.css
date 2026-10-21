@@ -18,6 +18,7 @@
   --menu-muted: #9fb0bf;
   --menu-backdrop-dim: rgba(0, 0, 0, 0.45);
   --menu-backdrop-opaque: #0b1118;
+  --menu-floating-bg: rgba(10, 16, 22, 0.7);
   --menu-panel-bg: rgba(12, 18, 26, 0.96);
   --menu-panel-width: 460px;
   --menu-panel-padding: 18px 20px;
@@ -234,4 +235,25 @@
 .menu-item.is-mine .menu-label::after {
   content: ' (toi)';
   color: var(--menu-focus);
+}
+
+/* Bouton de pause, en haut à droite pendant un match (souris). */
+#pause-button {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  padding: 6px 12px;
+  border: 1px solid var(--menu-item-border);
+  border-radius: var(--menu-item-radius);
+  background: var(--menu-floating-bg);
+  color: var(--menu-fg);
+  font: var(--menu-font);
+  font-size: 13px;
+  cursor: pointer;
+}
+#pause-button:hover {
+  background: var(--menu-item-hover-bg);
+}
+#pause-button[hidden] {
+  display: none;
 }

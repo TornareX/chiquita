@@ -18,9 +18,9 @@ import { createDuelHud } from '../ui/duelHud';
 import { createPerfMeter } from '../ui/perfMeter';
 import { createInputDisplay } from '../ui/inputDisplay';
 import { createPadTest } from '../ui/padTest';
+import { createPauseMenu } from '../ui/pauseMenu';
 import {
   CONTROLLER_SHORT,
-  createSettingsMenu,
   isHuman,
   keyboardOf,
   loadSettings,
@@ -165,9 +165,9 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
       saveSettings(settings);
     },
   );
-  const menu = createSettingsMenu(
-    settings,
-    (s, restart) => {
+  const menu = createPauseMenu(settings, {
+    online: online !== null,
+    onChange: (s, restart) => {
       if (online) return;
       apply(s, restart);
       // Une place passée d'humain à IA (ou l'inverse) peut changer le camp de la caméra.
@@ -177,8 +177,14 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
       // Faux réseau : les deux machines repartent de la partie réglée (et des nouvelles places humaines et IA).
       if (fakeNet) netRestart = true;
     },
-    () => padTest.open(),
-  );
+    onTestPad: () => padTest.open(),
+    // En ligne : on quitte la salle exprès, l'IA garde la place (pas de reprise au retour).
+    onQuit: () => {
+      online?.connection.leave();
+      location.href = '/';
+    },
+    blocked: () => padTest.isOpen,
+  });
   /**
    * Frappe au geste du stick droit, une par manette puis une par côté du clavier (touches, et souris pour le bleu) ;
    * et celle tenue par chaque joueur.

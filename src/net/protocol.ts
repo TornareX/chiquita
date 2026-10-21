@@ -75,6 +75,8 @@ export type ClientMessage =
   | { t: 'seat'; seat: number | null }
   | { t: 'setup'; format: DuelFormat; level: AiLevel }
   | { t: 'start' }
+  /** Quitte sa salle exprès : sa place passe à l'IA, sans être gardée (contrairement à une coupure). */
+  | { t: 'leave' }
   | { t: 'ping'; at: number }
   /** Ce navigateur a divergé du serveur : il demande l'état du match. */
   | { t: 'resync' };

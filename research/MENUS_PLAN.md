@@ -87,6 +87,16 @@ Puis, dans une passe à part : design et UX avec le skill d'impeccable.style, su
 5. **Faux réseau** (`?reseau=…`, outil pour juger le rollback) : reste un raccourci d'adresse, ou une option dans
    « Entraînement » / « Outils » ?
 
+### Réponses de Xavier (21/10/2026)
+
+1. **Outils** : le joueur accède au tutoriel et au labo (ses situations de match sont un entraînement). Les animations
+   ne servent qu'au développement. « Entraînement » = Tutoriel + Situations de match (le labo) ; la machine à balles
+   (ancienne vue à la première personne) et les animations n'apparaissent qu'avec `?debug`.
+2. **Fond de l'accueil** : écran simple (le fond animé se décidera dans la passe design).
+3. **Places et règles** : seulement avant de lancer ; la pause garde Reprendre, Réglages, Recommencer, Quitter.
+4. **Serveur introuvable** : un message dans l'écran « En ligne », avec « Réessayer » et « Retour ».
+5. **Faux réseau** : reste un raccourci d'adresse (`?reseau=…`), rien dans les menus.
+
 ## 7. Environnement
 
 - Travailler dans un worktree neuf partant de main (les menus touchent `src/modes/duel.ts` et les réglages, comme le

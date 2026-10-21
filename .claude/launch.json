@@ -54,6 +54,19 @@
       "port": 5176
     },
     {
+      "name": "padel-menus",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5177",
+        "--strictPort"
+      ],
+      "port": 5177
+    },
+    {
       "name": "padel-serveur",
       "runtimeExecutable": "node",
       "runtimeArgs": [

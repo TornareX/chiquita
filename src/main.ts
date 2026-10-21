@@ -1,5 +1,6 @@
 import { startAnimations } from './modes/animations';
 import { startDuel } from './modes/duel';
+import { startHome } from './modes/home';
 import { startLabo } from './modes/labo';
 import { startOnline } from './modes/online';
 import { startTutorial } from './modes/tutoriel';
@@ -13,9 +14,15 @@ if (!canvas) throw new Error('Canvas #scene introuvable');
 // `?mode=tutoriel` : une leçon par coup (`&lecon=bandeja` pour en ouvrir une directement).
 // `?mode=animations` : visionneur des animations du personnage, coup par coup, sans jouer.
 // `?enligne` (ou `?mode=enligne`) : jeu en ligne, salon puis match contre le serveur (`npm run serveur`).
+// `/` sans paramètre de jeu (ou `?mode=accueil`) : l'accueil ; toute autre adresse lance directement le match local
+// qu'elle décrit (raccourcis de test, adresse fabriquée par l'écran « Jouer »).
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode');
-if (mode === 'trainer') startTrainer(canvas);
+/** Paramètres qui ne décrivent pas une partie : avec eux seuls, on reste à l'accueil. */
+const HOME_PARAMS = ['debug', 'perf'];
+const home = mode === 'accueil' || (mode === null && [...params.keys()].every((key) => HOME_PARAMS.includes(key)));
+if (home) startHome(canvas);
+else if (mode === 'trainer') startTrainer(canvas);
 else if (mode === 'labo') startLabo(canvas);
 else if (mode === 'tutoriel') startTutorial(canvas);
 else if (mode === 'animations') startAnimations(canvas);

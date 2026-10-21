@@ -110,6 +110,8 @@ export interface Menu {
   /** Allume un instant une entrée (une place quand on appuie sur la manette qui la joue). */
   flash(id: string): void;
   hide(): void;
+  /** Réaffiche le menu caché, sur le même écran (après « Teste ta manette », par exemple). */
+  reopen(): void;
 }
 
 export interface MenuOptions {
@@ -420,15 +422,17 @@ export function createMenu(options: MenuOptions = {}): Menu {
     { capture: true },
   );
 
-  // Manettes : état de chaque manette à l'image précédente ; A valide au relâcher (la partie qui reprend ne le voit
-  // donc jamais tenu), B revient à l'appui.
+  // Manettes : état de chaque manette à l'image précédente. A valide et B revient au relâcher : la partie qui reprend
+  // ne voit donc jamais le bouton tenu.
   let previous = new Map<number, PadSnapshot>();
-  /** A enfoncé pendant que le menu était ouvert, par manette : seul ce relâcher valide. */
+  /** A ou B enfoncé pendant que le menu était ouvert, par manette : seul ce relâcher compte. */
   const armed = new Set<number>();
+  const armedBack = new Set<number>();
   let held: { dir: Direction; since: number; last: number } | null = null;
   const snapshotPads = (): void => {
     previous = new Map(connectedGamepads().map((pad) => [pad.index, readPad(pad)]));
     armed.clear();
+    armedBack.clear();
     held = null;
   };
   /** Boucle de lecture des manettes en cours : une seule à la fois, même si le menu se ferme et rouvre dans l'image. */
@@ -442,7 +446,8 @@ export function createMenu(options: MenuOptions = {}): Menu {
       // Une manette qui apparaît se réveille sur un appui : elle part de « rien de tenu ».
       const before = previous.get(pad.index) ?? { a: false, b: false, dir: null };
       previous.set(pad.index, state);
-      if (state.b && !before.b) back();
+      if (state.b && !before.b) armedBack.add(pad.index);
+      if (!state.b && before.b && armedBack.delete(pad.index)) back();
       if (state.a && !before.a) armed.add(pad.index);
       if (!state.a && before.a && armed.delete(pad.index)) {
         const item = focusedItem();
@@ -518,6 +523,9 @@ export function createMenu(options: MenuOptions = {}): Menu {
       element.classList.remove('is-lit');
       void element.offsetWidth;
       element.classList.add('is-lit');
+    },
+    reopen(): void {
+      if (current()) open();
     },
     hide(): void {
       root.hidden = true;

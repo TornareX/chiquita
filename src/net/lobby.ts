@@ -105,6 +105,9 @@ export class Lobby {
         this.flush(room);
         member.send({ t: 'state', tick: room.match.tick, state: serializeState(room.match.duel) });
         return;
+      case 'leave':
+        this.leave(member);
+        return;
       case 'create':
         this.leave(member);
         this.join(member, this.createRoom(member.id));

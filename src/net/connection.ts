@@ -108,6 +108,13 @@ export class Connection {
     this.send({ t: 'hello', name, prefs: this.prefs, token: this.token, version: gameVersion() });
   }
 
+  /** Quitte la salle exprès : sa place passe à l'IA, sans reprise ; la liaison reste ouverte (salon). */
+  leave(): void {
+    this.send({ t: 'leave' });
+    this.inMatch = false;
+    this.client = null;
+  }
+
   get open(): boolean {
     return this.socket.readyState === WebSocket.OPEN;
   }

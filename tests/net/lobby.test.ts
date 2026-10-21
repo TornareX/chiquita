@@ -69,4 +69,38 @@ describe('salles privées', () => {
     lobby.tick();
     expect(lobby.roomCount).toBe(0);
   });
+
+  it('quitter la salle exprès (pause, « Quitter la salle ») : l’IA prend la place, sans la lui garder', () => {
+    let now = 0;
+    const lobby = new Lobby(() => now, () => 0.5);
+    const host = member(lobby);
+    const guest = member(lobby);
+    const prefs = { assist: 'magnet', prepMove: 'libre', hand: 'right' } as const;
+    lobby.message(host.id, { t: 'hello', name: 'Xavier', prefs, token: 'h', version: 'x' });
+    lobby.message(guest.id, { t: 'hello', name: 'Ami', prefs, token: 'g', version: 'x' });
+    lobby.message(host.id, { t: 'create' });
+    lobby.message(guest.id, { t: 'join', code: host.room().code });
+    lobby.message(host.id, { t: 'start' });
+    now = host.last('start')!.startAt + 500;
+    lobby.tick();
+
+    lobby.message(guest.id, { t: 'leave' });
+    expect(host.room().seats).toEqual([host.id, null, null, null]);
+    expect(host.room().members.map((m) => m.name)).toEqual(['Xavier']);
+    // Revenu avec la même fenêtre : pas de reprise, il est au salon.
+    lobby.disconnect(guest.id);
+    const back = member(lobby);
+    lobby.message(back.id, { t: 'hello', name: 'Ami', prefs, token: 'g', version: 'x' });
+    expect(back.last('resume')).toBeUndefined();
+    expect(host.room().seats).toEqual([host.id, null, null, null]);
+  });
+
+  it('quitter une salle avant le match la ferme si elle est vide', () => {
+    const lobby = new Lobby(() => 0, () => 0.5);
+    const host = member(lobby);
+    lobby.message(host.id, { t: 'create' });
+    expect(lobby.roomCount).toBe(1);
+    lobby.message(host.id, { t: 'leave' });
+    expect(lobby.roomCount).toBe(0);
+  });
 });
