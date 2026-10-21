@@ -10,12 +10,12 @@
  *   (.is-current), .menu-hint
  */
 :root {
-  --menu-font: 14px/1.4 system-ui, sans-serif;
+  --menu-font: 14px/1.4 var(--ui-font);
   --menu-title-size: 20px;
   --menu-heading-size: 12px;
   --menu-small-size: 12px;
-  --menu-fg: #f2f5f7;
-  --menu-muted: #9fb0bf;
+  --menu-fg: var(--ui-fg);
+  --menu-muted: var(--ui-muted);
   --menu-backdrop-dim: rgba(0, 0, 0, 0.45);
   --menu-backdrop-opaque: #0b1118;
   --menu-floating-bg: rgba(10, 16, 22, 0.7);
@@ -23,14 +23,14 @@
   --menu-panel-width: 460px;
   --menu-panel-padding: 18px 20px;
   --menu-radius: 12px;
-  --menu-item-bg: #1c2833;
-  --menu-item-hover-bg: #263645;
-  --menu-item-border: #3a4a58;
+  --menu-item-bg: var(--ui-control-bg);
+  --menu-item-hover-bg: var(--ui-control-hover);
+  --menu-item-border: var(--ui-line);
   --menu-item-radius: 6px;
   --menu-item-padding: 7px 12px;
   --menu-gap: 6px;
-  --menu-focus: #ffd23f;
-  --menu-primary-bg: #ffd23f;
+  --menu-focus: var(--ui-gold);
+  --menu-primary-bg: var(--ui-gold);
   --menu-primary-fg: #10161d;
   --menu-error: #ff8a80;
   --menu-blue: #4da3ff;

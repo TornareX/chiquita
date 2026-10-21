@@ -1,3 +1,4 @@
+import './hud.css';
 import { KEY_LAYOUTS } from '../input/keyboardArcade';
 import {
   BUTTON_GLYPHS,
@@ -63,7 +64,7 @@ function kbd(code: string, source: Extract<InputSource, { kind: 'keyboard' }>): 
 function keyToken(token: string, source: Extract<InputSource, { kind: 'keyboard' }>): string {
   const layout = KEY_LAYOUTS[source.player];
   if (token === 'k:move') return [layout.up, layout.left, layout.down, layout.right].map((code) => kbd(code, source)).join('');
-  if (token === 'k:sides') return `${kbd(layout.swing.left[0]!, source)}<span style="opacity:.6"> ou </span>${kbd(layout.swing.right[0]!, source)}`;
+  if (token === 'k:sides') return `${kbd(layout.swing.left[0]!, source)}${OR}${kbd(layout.swing.right[0]!, source)}`;
   const direction = token.slice(2) as 'up' | 'down' | 'left' | 'right';
   return kbd(layout.swing[direction][0]!, source);
 }
@@ -79,17 +80,23 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** Losange des 4 boutons de face, celui de `position` allumé : lisible sur toutes les manettes. */
-export function diamondSvg(position: ButtonPosition | null, color = '#ffe27a', size = 16): string {
+/**
+ * Losange des 4 boutons de face, celui de `position` allumé : lisible sur toutes les manettes. `color` : couleur du
+ * symbole sur cette manette (sinon celle des annonces, `hud.css`).
+ */
+export function diamondSvg(position: ButtonPosition | null, color?: string, size = 16): string {
   const dots = (Object.keys(DOTS) as ButtonPosition[])
     .map((p) => {
       const [cx, cy] = DOTS[p];
-      const lit = p === position;
-      return `<circle cx="${cx}" cy="${cy}" r="2.6" fill="${lit ? color : 'none'}" stroke="${lit ? color : '#9fb0bf'}" stroke-width="1.2"/>`;
+      return `<circle${p === position ? ' class="is-lit"' : ''} cx="${cx}" cy="${cy}" r="2.6" stroke-width="1.2"/>`;
     })
     .join('');
-  return `<svg class="pad-diamond" width="${size}" height="${size}" viewBox="0 0 16 16" aria-hidden="true" style="vertical-align:-3px">${dots}</svg>`;
+  const glyph = color ? ` style="--glyph:${color}"` : '';
+  return `<svg class="pad-diamond" width="${size}" height="${size}" viewBox="0 0 16 16" aria-hidden="true"${glyph}>${dots}</svg>`;
 }
+
+/** « ou » entre deux touches. */
+const OR = '<span class="btn-or"> ou </span>';
 
 /** Touches du clavier qui jouent `kind` pour ce joueur, la principale d'abord. */
 export function keysFor(kind: ShotKind, player: 0 | 1): string[] {
@@ -112,13 +119,12 @@ export function buttonIcon(kind: ShotKind, source: InputSource): string {
     return keys
       .slice(0, 2)
       .map((key) => `<kbd class="key-icon">${escapeHtml(key)}</kbd>`)
-      .join('<span style="opacity:.6"> ou </span>');
+      .join(OR);
   }
   const glyph = BUTTON_GLYPHS[source.family][position];
-  const text = glyph.text
-    ? `<b style="color:${glyph.color};margin-left:2px">${escapeHtml(glyph.text)}</b>`
-    : `<span style="margin-left:2px">${POSITION_NAMES[position]}</span>`;
-  return `<span class="btn-icon" style="white-space:nowrap">${diamondSvg(position, glyph.color)}${text}</span>`;
+  const text = glyph.text ? `<b class="btn-glyph">${escapeHtml(glyph.text)}</b>` : `<span class="btn-position">${POSITION_NAMES[position]}</span>`;
+  // La couleur du symbole sur cette manette (le A vert…) est une donnée : elle passe au CSS par `--glyph`.
+  return `<span class="btn-icon" style="--glyph:${glyph.color}">${diamondSvg(position)}${text}</span>`;
 }
 
 /**

@@ -1,0 +1,433 @@
+/*
+ * Apparence du HUD de match : score, annonces, aides (`duelHud.ts`), retour des entrées (`inputDisplay.ts`), guide
+ * du geste (`swingGuide.ts`), icônes de boutons (`buttonIcons.ts`), bandeau et flash des effets (`effectsView.ts`),
+ * ralenti et décompte (`modes/replay.ts`, `modes/labo.ts`), encart réseau (`netHud.ts`).
+ * Le code ne garde que ce qui bouge : afficher ou cacher, positions calculées, fondus. Couleurs et polices viennent
+ * de `theme.css`.
+ */
+
+/* --- Score, échange, annonces, aides (duelHud.ts) --- */
+
+.hud-text {
+  position: fixed;
+  color: var(--ui-fg);
+  font: 15px/1.4 var(--ui-font);
+  text-shadow: var(--ui-text-shadow);
+  pointer-events: none;
+}
+.hud-centered {
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+.hud-pill {
+  background: var(--ui-pill-bg);
+  padding: 4px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+#rally {
+  top: 14px;
+  font-size: 22px;
+  font-weight: 600;
+}
+.hud-rally-count {
+  font-size: 15px;
+}
+.hud-record {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+#score {
+  top: 12px;
+  left: 16px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(10, 16, 24, 0.55);
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.hud-score-table {
+  border-collapse: collapse;
+}
+.hud-score-table .serve {
+  width: 14px;
+  color: var(--ui-call);
+}
+.hud-score-table .team {
+  padding-right: 10px;
+}
+.hud-score-table .team.blue {
+  color: var(--team-blue);
+}
+.hud-score-table .team.red {
+  color: var(--team-red);
+}
+.hud-score-table .set {
+  padding: 0 6px;
+  opacity: 0.75;
+}
+.hud-score-table .games {
+  padding: 0 6px;
+}
+.hud-score-table .points {
+  min-width: 30px;
+  padding-left: 8px;
+  text-align: right;
+}
+.hud-call {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--ui-call);
+}
+
+/* Annonce au centre : service, faute, point, por tres, fin du match (`data-tone`). */
+#point {
+  top: 16%;
+  font-size: 22px;
+  font-weight: 600;
+}
+#point[data-tone='call'] {
+  color: var(--ui-call);
+}
+#point[data-tone='blue'] {
+  color: var(--team-blue);
+}
+#point[data-tone='red'] {
+  color: var(--team-red);
+}
+.hud-sub {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ui-soft);
+}
+.hud-again {
+  font-size: 15px;
+  color: var(--ui-fg);
+}
+
+#feedback {
+  top: 26%;
+  font-size: 18px;
+  font-weight: 700;
+  transition: opacity 0.25s;
+}
+
+#players {
+  left: 16px;
+  font-size: 12px;
+  color: var(--ui-soft);
+  transition: opacity 0.3s;
+}
+
+#help {
+  bottom: 14px;
+  right: 18px;
+  max-width: min(680px, calc(100vw - 390px));
+  font-size: 12px;
+  text-align: right;
+  color: var(--ui-soft);
+}
+
+/* --- Icônes de boutons et de touches (buttonIcons.ts) --- */
+
+.btn-icon {
+  white-space: nowrap;
+}
+.btn-glyph {
+  margin-left: 2px;
+  color: var(--glyph);
+}
+.btn-position {
+  margin-left: 2px;
+}
+.btn-or {
+  opacity: 0.6;
+}
+.pad-diamond {
+  vertical-align: -3px;
+}
+.pad-diamond circle {
+  fill: none;
+  stroke: var(--ui-muted);
+}
+.pad-diamond circle.is-lit {
+  fill: var(--glyph, var(--ui-call));
+  stroke: var(--glyph, var(--ui-call));
+}
+
+/* --- Retour des entrées (inputDisplay.ts) --- */
+
+.input-display {
+  position: fixed;
+  left: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-left: 3px solid var(--player);
+  border-radius: 10px;
+  background: var(--ui-pill-bg);
+  width: min(400px, calc(100vw - 32px));
+  color: var(--ui-fg);
+  font: 12px/1.35 var(--ui-font);
+  pointer-events: none;
+}
+.input-display.is-compact {
+  width: auto;
+  padding: 3px 5px;
+  background: rgba(10, 16, 24, 0.45);
+  opacity: 0.85;
+}
+.input-pads {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.input-title {
+  font-size: 11px;
+  color: var(--ui-soft);
+  white-space: nowrap;
+}
+.input-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.input-note {
+  min-height: 18px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.input-display.is-compact .input-note {
+  align-self: center;
+  min-height: 0;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+.input-history {
+  opacity: 0.8;
+}
+.input-stick {
+  opacity: 0.7;
+}
+.swing-badge {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--ui-gold);
+  color: #111;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Dessin des sticks et des boutons. */
+.input-display .ring {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: var(--ui-line-soft);
+  stroke-width: 1.5;
+}
+.input-display .axis {
+  stroke: var(--ui-line);
+  stroke-width: 1;
+}
+.input-display .stick-dot {
+  fill: var(--player);
+}
+.input-display .swing-center {
+  fill: none;
+  stroke: var(--ui-line);
+  stroke-width: 1;
+}
+.input-display .swing-trail {
+  fill: none;
+  stroke: var(--ui-gold);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  opacity: 0.8;
+}
+.input-display .swing-dot {
+  fill: var(--ui-glyph);
+}
+.input-display .swing-dot.is-shot {
+  fill: var(--ui-gold);
+}
+.input-display .button {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: var(--ui-muted);
+  stroke-width: 1.5;
+}
+.input-display .button.is-held {
+  fill: rgba(255, 255, 255, 0.55);
+  stroke: #ffffff;
+}
+.input-display .button[data-quality='perfect'] {
+  fill: var(--ui-gold);
+  stroke: var(--ui-gold);
+}
+.input-display .button[data-quality='good'] {
+  fill: var(--ui-good);
+  stroke: var(--ui-good);
+}
+.input-display .button[data-quality='off'] {
+  fill: var(--ui-warn);
+  stroke: var(--ui-warn);
+}
+.input-display .button[data-quality='miss'] {
+  fill: var(--ui-bad);
+  stroke: var(--ui-bad);
+}
+.input-display .button-label {
+  fill: var(--glyph, var(--ui-glyph));
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 700;
+}
+.input-display .button-label.is-long {
+  font-size: 8px;
+}
+
+/* --- Guide du geste au stick droit (swingGuide.ts) --- */
+
+.swing-guide {
+  position: fixed;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(10, 16, 24, 0.7);
+  color: var(--ui-fg);
+  font: 13px/1.3 var(--ui-font);
+  pointer-events: none;
+}
+.swing-title {
+  min-height: 18px;
+  font-weight: 600;
+}
+.swing-lit {
+  color: var(--ui-gold);
+}
+.swing-hint {
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.swing-flick {
+  font-size: 11px;
+  color: var(--ui-soft);
+}
+.swing-guide .ring {
+  fill: rgba(255, 255, 255, 0.05);
+  stroke: var(--ui-line);
+  stroke-width: 1.5;
+}
+.swing-guide .end {
+  fill: none;
+  stroke: var(--ui-line-soft);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.swing-guide .end.center {
+  stroke-width: 3;
+}
+.swing-guide .end.is-lit {
+  stroke: var(--ui-gold);
+}
+.swing-guide .end-label {
+  fill: var(--ui-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+.swing-guide .end-label.is-lit {
+  fill: var(--ui-gold);
+}
+.swing-guide .prep {
+  fill: var(--ui-muted);
+}
+.swing-guide .trail {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+.swing-guide .dot {
+  fill: #ffffff;
+}
+
+/* --- Effets : flash blanc et grand bandeau (effectsView.ts) --- */
+
+#effect-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(255, 236, 170, 0.7));
+  opacity: 0;
+  pointer-events: none;
+}
+#effect-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 26%;
+  z-index: 6;
+  text-align: center;
+  font: italic 900 clamp(48px, 9vw, 120px) var(--ui-font);
+  letter-spacing: 0.02em;
+  color: var(--ui-gold);
+  text-shadow: 0 0 18px rgba(255, 170, 30, 0.8), 0 5px 0 #b04a00, 0 8px 18px rgba(0, 0, 0, 0.6);
+  -webkit-text-stroke: 3px #3a1800;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- Ralenti et décompte du labo --- */
+
+#replay-badge {
+  position: fixed;
+  top: 18px;
+  right: 24px;
+  z-index: 6;
+  padding: 4px 14px;
+  border-left: 4px solid var(--ui-gold);
+  background: rgba(10, 16, 24, 0.7);
+  color: #ffffff;
+  font: italic 800 20px var(--ui-font);
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+#countdown {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font: 800 96px var(--ui-font);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* --- Encart du jeu en réseau (netHud.ts) --- */
+
+#net-hud {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 50;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #0008;
+  color: #cfe;
+  font: 12px/1.4 var(--ui-font-mono);
+  text-align: right;
+  white-space: pre;
+  pointer-events: none;
+}

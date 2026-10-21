@@ -85,6 +85,71 @@ for (const size of SIZES) {
       await shot(page, '24-affichage-entrees');
     });
 
+    test('états du match', async ({ page }) => {
+      test.setTimeout(60_000);
+      // Au clavier, en mode détaillé : service, K tenu puis relâché.
+      await page.goto('/?ai=normal&entrees=detaille&seed=7');
+      await page.waitForFunction(() => window.__duel?.duel.phase === 'serve');
+      await page.waitForTimeout(800);
+      await page.keyboard.down('KeyK');
+      await page.waitForTimeout(400);
+      await shot(page, '25-service-clavier');
+      await page.keyboard.up('KeyK');
+      await page.waitForTimeout(700);
+      await shot(page, '26-apres-frappe');
+
+      // Grand bandeau des effets et ralenti : copies figées des vrais éléments (la boucle du jeu pilote les originaux).
+      await page.evaluate(() => {
+        const freeze = (id: string, setup: (copy: HTMLElement) => void): void => {
+          const copy = document.getElementById(id)!.cloneNode(true) as HTMLElement;
+          setup(copy);
+          document.body.append(copy);
+        };
+        freeze('effect-banner', (copy) => {
+          copy.textContent = 'POR TRES !';
+          copy.style.opacity = '1';
+          copy.style.transform = 'scale(1) rotate(-4deg)';
+        });
+        freeze('replay-badge', (copy) => (copy.style.display = 'block'));
+      });
+      await shot(page, '27-bandeau-ralenti');
+
+      await page.goto(`${MATCH}&reseau=120`);
+      await page.waitForFunction(() => window.__duel !== undefined);
+      await page.waitForTimeout(2000);
+      await shot(page, '28-faux-reseau');
+    });
+
+    test('test de la manette, en cours', async ({ page }) => {
+      // Manette virtuelle : A (bouton du bas) est le premier bouton demandé.
+      await page.addInitScript(() => {
+        const fake = {
+          index: 0,
+          id: 'manette virtuelle',
+          connected: true,
+          mapping: 'standard',
+          axes: [0.5, 0, 0, 0],
+          buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+        };
+        (window as unknown as { __pad: typeof fake }).__pad = fake;
+        navigator.getGamepads = () => [fake as unknown as Gamepad];
+      });
+      await page.goto('/');
+      await menuItem(page, 'reglages');
+      await menuItem(page, 'tester-manette');
+      const press = (pressed: boolean) =>
+        page.evaluate((p) => {
+          (window as unknown as { __pad: { buttons: { pressed: boolean; value: number }[] } }).__pad.buttons[0] = { pressed: p, value: p ? 1 : 0 };
+        }, pressed);
+      await press(true);
+      await page.waitForTimeout(150);
+      await press(false);
+      await page.waitForTimeout(150);
+      await press(true);
+      await page.waitForTimeout(150);
+      await shot(page, '08-test-manette-boutons');
+    });
+
     test('écrans annexes', async ({ page }) => {
       await page.goto('/?mode=tutoriel');
       await page.waitForTimeout(2500);
@@ -93,6 +158,22 @@ for (const size of SIZES) {
       await page.locator('#panel').waitFor();
       await page.waitForTimeout(1500);
       await shot(page, '31-labo');
+
+      // Décompte avant que la situation reparte.
+      await page.keyboard.press('KeyR');
+      await page.locator('#countdown').waitFor({ state: 'visible' });
+      await shot(page, '34-labo-decompte');
+
+      // Tutoriel : carte d'une leçon, puis bandeau de la démo.
+      await page.goto('/?mode=tutoriel&boutons=1');
+      await page.locator('#tutorial-overlay .lesson').first().waitFor();
+      await page.keyboard.press('Enter');
+      await page.locator('#tutorial-overlay h2').first().waitFor();
+      await shot(page, '32-tutoriel-carte');
+      await page.keyboard.press('Enter');
+      await page.locator('#tutorial-status', { hasText: 'Démo' }).waitFor();
+      await page.waitForTimeout(1500);
+      await shot(page, '33-tutoriel-demo');
     });
   });
 }

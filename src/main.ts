@@ -1,3 +1,5 @@
+// Variables communes de l'interface, avant toute autre feuille de style.
+import './ui/theme.css';
 import { startAnimations } from './modes/animations';
 import { startDuel } from './modes/duel';
 import { startHome } from './modes/home';

@@ -105,6 +105,17 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
 2. **Tokens et nettoyage.** `src/ui/theme.css` (variables communes), échelle unique du §4, police embarquée.
    `menu.css` passe sur ces variables. Les styles écrits dans le code du HUD et des écrans annexes deviennent des
    classes (`hud.css`…), **sans changer leur apparence** : les captures doivent rester quasi identiques.
+   *Fait.* `src/ui/theme.css` (variables, tons, couleur par place `data-player`), `hud.css` (HUD de match, icônes de
+   boutons, effets, ralenti, décompte, encart réseau), `annexes.css` (tutoriel, panneau du labo et de la machine à
+   balles, test manette). Règle suivie : le code ne garde que le comportement (afficher/cacher, positions calculées,
+   fondus) ; une couleur qui est une donnée (symbole d'une manette) passe par la variable `--glyph`. Archivo est dans
+   `src/ui/fonts/` (et non `public/`) pour que Vite gère le chemin, même sous un sous-dossier comme sur itch.io ;
+   l'échelle `--ui-px` est définie mais pas encore appliquée. Restent hors de cette étape : les couleurs d'équipe
+   communes avec la 3D (`TEAM_COLORS` de `duelScene.ts`, à unifier à l'étape 3 puisque les teintes changent), et les
+   outils de développement (`perfMeter.ts`, `modes/animations.ts`, textes de la machine à balles dans `index.html`).
+   Vérification : captures identiques au pixel pour tous les menus et le test manette ; en match, seules la 3D et
+   les nombres changent. Le script de captures couvre aussi le bandeau des effets, le ralenti, le décompte,
+   l'encart réseau, la carte et la démo du tutoriel.
 3. **Composants du menu commun** en Grillage : entrée, entrée principale, choix à flèches, interrupteur, saisie et
    lettres, titres, aides manette en bas d'écran. États : repos, focus, désactivé, allumé, édition.
 4. **Accueil** : titre en typo seule, fond fixe avec le motif de maille, disposition en tuiles.

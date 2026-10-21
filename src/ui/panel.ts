@@ -1,3 +1,4 @@
+import './annexes.css';
 import { EXERCISES } from '../sim/exercises';
 import { MAX_INTERVAL, MIN_INTERVAL } from '../sim/machine';
 import type { World } from '../sim/world';

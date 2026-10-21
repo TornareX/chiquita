@@ -1,3 +1,4 @@
+import './annexes.css';
 import { connectedGamepads } from '../input/gamepad';
 import { KEY_LAYOUTS } from '../input/keyboardArcade';
 import {
@@ -34,6 +35,12 @@ type Step = 'detect' | 'buttons' | 'stick' | 'done';
 
 const BUTTON_XY: Record<ButtonPosition, [number, number]> = { bottom: [60, 98], right: [98, 60], left: [22, 60], top: [60, 22] };
 
+function div(className: string): HTMLDivElement {
+  const element = document.createElement('div');
+  element.className = className;
+  return element;
+}
+
 /**
  * « Teste ta manette » (TUTORIEL_PLAN.md §1) : on détecte la manette et on affiche ses symboles (choix
  * forcé possible), on fait appuyer sur chacun des 4 boutons de coup dans l'ordre en disant lequel a été
@@ -44,23 +51,16 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
   const overlay = document.createElement('div');
   overlay.id = 'pad-test';
   overlay.hidden = true;
-  overlay.style.cssText =
-    'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:20';
-  const panel = document.createElement('div');
-  panel.style.cssText =
-    'width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow-y:auto;box-sizing:border-box;padding:18px 20px;' +
-    'border-radius:12px;background:rgba(12,18,26,.97);color:#f2f5f7;font:14px/1.45 system-ui,sans-serif;text-align:center';
+  // Apparence dans `annexes.css`.
+  const panel = div('pad-test-panel');
   overlay.append(panel);
 
   const title = document.createElement('h1');
-  title.style.cssText = 'margin:0 0 4px;font-size:20px';
   title.textContent = 'Teste ta manette';
-  const detected = document.createElement('div');
-  detected.style.cssText = 'color:#9fb0bf;font-size:13px;min-height:20px';
+  const detected = div('pad-test-detected');
   const styleRow = document.createElement('label');
-  styleRow.style.cssText = 'display:inline-flex;gap:8px;align-items:center;font-size:12px;color:#9fb0bf;margin:4px 0 8px';
+  styleRow.className = 'pad-test-style';
   const styleSelect = document.createElement('select');
-  styleSelect.style.cssText = 'padding:3px;background:#1c2833;color:#f2f5f7;border:1px solid #3a4a58;border-radius:6px';
   for (const style of PAD_STYLES) {
     const option = document.createElement('option');
     option.value = style;
@@ -68,10 +68,8 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
     styleSelect.append(option);
   }
   styleRow.append('Ce n’est pas ta manette ? Symboles :', styleSelect);
-  const instruction = document.createElement('div');
-  instruction.style.cssText = 'font-size:18px;font-weight:600;margin:10px 0 4px;min-height:28px';
-  const feedback = document.createElement('div');
-  feedback.style.cssText = 'font-size:14px;min-height:22px';
+  const instruction = div('pad-test-instruction');
+  const feedback = div('pad-test-feedback');
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const make = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] => {
@@ -79,8 +77,7 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
     return el;
   };
-  const drawing = make('svg', { width: 280, height: 130, viewBox: '0 0 280 130' });
-  drawing.style.cssText = 'display:block;margin:6px auto;max-width:100%';
+  const drawing = make('svg', { class: 'pad-test-drawing', width: 280, height: 130, viewBox: '0 0 280 130' });
   // Stick à gauche, secteurs autour.
   const stickGroup = make('g', { transform: 'translate(10,5)' });
   const sectors: SVGPathElement[] = [];
@@ -89,15 +86,14 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
     const a1 = (s + 0.5) * ((2 * Math.PI) / SECTORS) - Math.PI / 2;
     const p = (a: number, r: number): string => `${(60 + Math.cos(a) * r).toFixed(1)} ${(60 + Math.sin(a) * r).toFixed(1)}`;
     const path = make('path', {
+      class: 'sector',
       d: `M ${p(a0, 46)} A 46 46 0 0 1 ${p(a1, 46)} L ${p(a1, 56)} A 56 56 0 0 0 ${p(a0, 56)} Z`,
-      fill: 'rgba(255,255,255,.08)',
-      stroke: '#3a4a58',
     });
     sectors.push(path);
     stickGroup.append(path);
   }
-  stickGroup.append(make('circle', { cx: 60, cy: 60, r: 44, fill: 'rgba(255,255,255,.05)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
-  const stickDot = make('circle', { cx: 60, cy: 60, r: 9, fill: '#6fb2ff' });
+  stickGroup.append(make('circle', { class: 'ring', cx: 60, cy: 60, r: 44 }));
+  const stickDot = make('circle', { class: 'stick-dot', cx: 60, cy: 60, r: 9 });
   stickGroup.append(stickDot);
   // Boutons à droite.
   const buttonGroup = make('g', { transform: 'translate(150,5)' });
@@ -105,34 +101,20 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
   const labels = {} as Record<ShotKind, SVGTextElement>;
   for (const kind of ORDER) {
     const [x, y] = BUTTON_XY[SHOT_POSITIONS[kind]];
-    circles[kind] = make('circle', { cx: x, cy: y, r: 17, fill: 'rgba(255,255,255,.06)', stroke: '#9fb0bf', 'stroke-width': 2 });
-    labels[kind] = make('text', {
-      x,
-      y: y + 6,
-      'text-anchor': 'middle',
-      'font-size': 17,
-      'font-weight': 700,
-      'font-family': 'system-ui,sans-serif',
-      fill: '#e8edf1',
-    });
+    circles[kind] = make('circle', { class: 'button', cx: x, cy: y, r: 17 });
+    labels[kind] = make('text', { class: 'button-label', x, y: y + 6, 'text-anchor': 'middle' });
     buttonGroup.append(circles[kind], labels[kind]);
   }
   drawing.append(stickGroup, buttonGroup);
 
-  const summary = document.createElement('div');
-  summary.style.cssText = 'font-size:13px;color:#c9d3db;margin-top:6px';
-  const actions = document.createElement('div');
-  actions.style.cssText = 'display:flex;gap:8px;justify-content:center;margin-top:12px';
-  const buttonStyle =
-    'padding:6px 14px;border-radius:6px;border:1px solid #3a4a58;background:#1c2833;color:#f2f5f7;font:inherit;cursor:pointer';
+  const summary = div('pad-test-summary');
+  const actions = div('pad-test-actions');
   const restart = document.createElement('button');
   restart.type = 'button';
   restart.textContent = 'Recommencer';
-  restart.style.cssText = buttonStyle;
   const close = document.createElement('button');
   close.type = 'button';
   close.textContent = 'Fermer (Échap, Start)';
-  close.style.cssText = buttonStyle;
   actions.append(restart, close);
   panel.append(title, detected, styleRow, instruction, feedback, drawing, summary, actions);
   document.body.append(overlay);
@@ -187,20 +169,22 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
     for (const kind of ORDER) {
       const glyph = src.kind === 'pad' ? BUTTON_GLYPHS[src.family][SHOT_POSITIONS[kind]] : null;
       labels[kind].textContent = glyph?.text ?? '';
-      labels[kind].setAttribute('fill', glyph?.color ?? '#e8edf1');
+      // Couleur du symbole sur cette manette (une donnée) ; sinon celle du texte.
+      if (glyph) labels[kind].style.setProperty('--glyph', glyph.color);
+      else labels[kind].style.removeProperty('--glyph');
     }
     if (step === 'detect') {
       instruction.textContent = 'Appuie sur n’importe quel bouton de ta manette';
       summary.innerHTML = `Pas de manette ? Au clavier :<br>${keyboardSummary()}`;
     } else if (step === 'buttons') {
       const kind = ORDER[target]!;
-      instruction.innerHTML = `${target + 1}/4 · Appuie sur ${buttonIcon(kind, src)} <span style="color:#9fb0bf">(${SHOT_NAMES[kind]})</span>`;
+      instruction.innerHTML = `${target + 1}/4 · Appuie sur ${buttonIcon(kind, src)} <span class="tone-muted">(${SHOT_NAMES[kind]})</span>`;
       summary.innerHTML = '';
     } else if (step === 'stick') {
       instruction.textContent = 'Fais un tour complet avec le stick gauche, poussé à fond';
       summary.innerHTML = '';
     } else {
-      instruction.innerHTML = '<span style="color:#5fd35a">Tout fonctionne !</span>';
+      instruction.innerHTML = '<span class="tone-good">Tout fonctionne !</span>';
       summary.innerHTML = `Sur ta manette :<br>${mapping(src)}<br><br>${formatButtons(
         'Maintiens le bouton, relâche quand la balle arrive à côté de toi. Le stick, au moment de la frappe, choisit la direction.',
         src,
@@ -237,17 +221,17 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
         const want = ORDER[target]!;
         const position = (Object.keys(POSITION_INDEX) as ButtonPosition[]).find((p) => POSITION_INDEX[p] === i);
         if (i === POSITION_INDEX[SHOT_POSITIONS[want]]) {
-          feedback.innerHTML = `<span style="color:#5fd35a">Oui : ${buttonIcon(want, src)} c’est le ${SHOT_NAMES[want]}.</span>`;
+          feedback.innerHTML = `<span class="tone-good">Oui : ${buttonIcon(want, src)} c’est le ${SHOT_NAMES[want]}.</span>`;
           target++;
           if (target >= ORDER.length) step = 'stick';
           renderStatic();
         } else if (position) {
           const got = ORDER.find((k) => SHOT_POSITIONS[k] === position)!;
           feedback.innerHTML =
-            `<span style="color:#ffb35c">Ça, c’est ${buttonIcon(got, src)} (${SHOT_NAMES[got]}).</span> ` +
+            `<span class="tone-off">Ça, c’est ${buttonIcon(got, src)} (${SHOT_NAMES[got]}).</span> ` +
             `Cherche ${buttonIcon(want, src)} : le ${POSITION_NAMES[SHOT_POSITIONS[want]]}.`;
         } else if (i !== START_BUTTON) {
-          feedback.innerHTML = `<span style="color:#ffb35c">Ce bouton (n° ${i}) ne sert pas à frapper.</span> Cherche ${buttonIcon(want, src)}.`;
+          feedback.innerHTML = `<span class="tone-off">Ce bouton (n° ${i}) ne sert pas à frapper.</span> Cherche ${buttonIcon(want, src)}.`;
         }
       }
       held = pressed;
@@ -257,9 +241,11 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
         const done = step !== 'detect' && (step !== 'buttons' || ORDER.indexOf(kind) < target);
         const wanted = step === 'buttons' && ORDER[target] === kind;
         const pulse = 0.5 + 0.5 * Math.sin(frame / 6);
-        circles[kind].setAttribute('fill', pressed.has(index) ? 'rgba(255,255,255,.6)' : done ? 'rgba(95,211,90,.35)' : 'rgba(255,255,255,.06)');
-        circles[kind].setAttribute('stroke', wanted ? `rgba(255,226,122,${0.4 + 0.6 * pulse})` : done ? '#5fd35a' : '#9fb0bf');
-        circles[kind].setAttribute('stroke-width', wanted ? '3' : '2');
+        const circle = circles[kind];
+        circle.classList.toggle('is-pressed', pressed.has(index));
+        circle.classList.toggle('is-done', done);
+        circle.classList.toggle('is-wanted', wanted);
+        circle.style.setProperty('--pulse', pulse.toFixed(3));
       }
 
       // Stick brut (sans zone morte) : on voit aussi un stick qui dérive au repos.
@@ -278,7 +264,7 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
         const count = reached.filter(Boolean).length;
         feedback.innerHTML =
           magnitude < 0.3 && magnitude > 0.12
-            ? `<span style="color:#ffb35c">Au repos, ton stick indique ${Math.round(magnitude * 100)} % : il dérive un peu (le jeu ignore jusqu’à 22 %).</span>`
+            ? `<span class="tone-off">Au repos, ton stick indique ${Math.round(magnitude * 100)} % : il dérive un peu (le jeu ignore jusqu’à 22 %).</span>`
             : `${count}/${SECTORS} directions`;
         if (count === SECTORS) {
           step = 'done';
@@ -286,7 +272,7 @@ export function createPadTest(getStyle: () => PadStyle, setStyle: (style: PadSty
           renderStatic();
         }
       }
-      sectors.forEach((path, s) => path.setAttribute('fill', reached[s] ? 'rgba(95,211,90,.6)' : 'rgba(255,255,255,.08)'));
+      sectors.forEach((path, s) => path.classList.toggle('is-reached', reached[s]!));
     }
     frame++;
     requestAnimationFrame(tick);

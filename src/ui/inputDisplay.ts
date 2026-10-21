@@ -44,12 +44,6 @@ export interface ReleaseNote {
 /** Le coup tenu vient du geste du stick droit (pas d'un bouton). */
 const swingHeld = (state: PadState): boolean => state.shot !== null && state.swing?.shot === state.shot;
 
-const QUALITY_COLORS: Record<ReleaseQuality, string> = {
-  perfect: '#ffd23f',
-  good: '#5fd35a',
-  off: '#ffb35c',
-  miss: '#ff6b6b',
-};
 
 const OVERHEAD_NAMES: Record<OverheadKind, string> = {
   bandeja: 'bandeja',
@@ -179,8 +173,6 @@ export interface InputDisplay {
   render(duel: Duel, states: readonly (PadState | null)[], sources: readonly (InputSource | null)[], mode: InputDisplayMode): void;
 }
 
-/** Couleur de chaque joueur : celle de son équipe, plus claire pour le partenaire en double. */
-const TEAM = ['#6fb2ff', '#ff8a94', '#b5d8ff', '#ffc2c8'] as const;
 /** Joueurs suivis au plus (double). */
 const MAX_PLAYERS = 4;
 const BUTTON_XY: Record<ButtonPosition, [number, number]> = { bottom: [30, 50], right: [50, 30], left: [10, 30], top: [30, 10] };
@@ -202,11 +194,19 @@ interface Widget {
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
-const SWING_BADGE = '<span style="display:inline-block;padding:0 4px;border-radius:4px;background:#ffd23f;color:#111;font-weight:700;font-size:10px">R</span>';
+const SWING_BADGE = '<span class="swing-badge">R</span>';
+/** Texte coloré selon la qualité d'un relâcher : doré parfait, vert réussi, orange imprécis, rouge raté (`theme.css`). */
+const toned = (quality: ReleaseQuality, text: string): string => `<span class="tone-${quality}">${escapeHtml(text)}</span>`;
 function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
   const el = document.createElementNS(SVG, tag);
   for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, String(value));
   return el;
+}
+
+function div(className: string): HTMLDivElement {
+  const element = document.createElement('div');
+  element.className = className;
+  return element;
 }
 
 /** Libellé court d'un bouton dans le losange : symbole de la manette, ou touche du clavier. */
@@ -230,66 +230,49 @@ function createWidget(index: number, compact: boolean): Widget {
   const withButtons = buttonsEnabled();
   const SWING_X = swingX();
   const root = document.createElement('div');
-  root.className = 'input-display';
+  // Apparence dans `hud.css` ; `data-player` donne la couleur de sa place (bord, point du stick).
+  root.className = compact ? 'input-display is-compact' : 'input-display';
   root.dataset.player = String(index);
-  root.style.cssText =
-    'position:fixed;left:16px;display:flex;gap:10px;align-items:flex-start;border-radius:10px;' +
-    'color:#f2f5f7;font:12px/1.35 system-ui,sans-serif;pointer-events:none;box-sizing:border-box;' +
-    `border-left:3px solid ${TEAM[index]!};` +
-    (compact ? 'padding:3px 5px;background:rgba(10,16,24,.45);opacity:.85' : 'padding:8px 10px;background:rgba(10,16,24,.6);width:min(400px,calc(100vw - 32px))');
-  const pads = document.createElement('div');
-  pads.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px';
+  const pads = div('input-pads');
   const width = SWING_X + 30;
   const scale = compact ? COMPACT_SCALE : 1;
   const row = svg('svg', { width: Math.round(width * scale), height: Math.round(60 * scale), viewBox: `0 0 ${width} 60` });
   // Stick : cercle et point.
-  row.append(svg('circle', { cx: 30, cy: 30, r: 26, fill: 'rgba(255,255,255,.06)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
-  row.append(svg('line', { x1: 30, y1: 6, x2: 30, y2: 54, stroke: '#3a4a58', 'stroke-width': 1 }));
-  row.append(svg('line', { x1: 6, y1: 30, x2: 54, y2: 30, stroke: '#3a4a58', 'stroke-width': 1 }));
-  const dot = svg('circle', { cx: 30, cy: 30, r: 7, fill: TEAM[index]! });
+  row.append(svg('circle', { class: 'ring', cx: 30, cy: 30, r: 26 }));
+  row.append(svg('line', { class: 'axis', x1: 30, y1: 6, x2: 30, y2: 54 }));
+  row.append(svg('line', { class: 'axis', x1: 6, y1: 30, x2: 54, y2: 30 }));
+  const dot = svg('circle', { class: 'stick-dot', cx: 30, cy: 30, r: 7 });
   row.append(dot);
   // Boutons de face, en losange, à droite du stick.
   const group = svg('g', { transform: 'translate(68,0)' });
   const buttons = {} as Widget['buttons'];
   for (const kind of KINDS) {
     const [x, y] = BUTTON_XY[SHOT_POSITIONS[kind]];
-    const circle = svg('circle', { cx: x, cy: y, r: 9.5, fill: 'rgba(255,255,255,.06)', stroke: '#9fb0bf', 'stroke-width': 1.5 });
-    const label = svg('text', {
-      x,
-      y: y + 4,
-      'text-anchor': 'middle',
-      'font-size': 11,
-      'font-weight': 700,
-      'font-family': 'system-ui,sans-serif',
-      fill: '#e8edf1',
-    });
+    const circle = svg('circle', { class: 'button', cx: x, cy: y, r: 9.5 });
+    const label = svg('text', { class: 'button-label', x, y: y + 4, 'text-anchor': 'middle' });
     group.append(circle, label);
     buttons[kind] = { circle, label };
   }
   // Boutons de coup cachés : tout se joue aux sticks (`?boutons=1` pour les remettre).
   if (withButtons) row.append(group);
   // Stick droit, à droite des boutons : la trace montre le geste lu.
-  row.append(svg('circle', { cx: SWING_X, cy: 30, r: 26, fill: 'rgba(255,255,255,.06)', stroke: '#5a6b7a', 'stroke-width': 1.5 }));
-  row.append(svg('circle', { cx: SWING_X, cy: 30, r: 6, fill: 'none', stroke: '#3a4a58', 'stroke-width': 1 }));
-  const swingTrail = svg('polyline', { points: '', fill: 'none', stroke: '#ffd23f', 'stroke-width': 2, 'stroke-linejoin': 'round', opacity: 0.8 });
-  const swingDot = svg('circle', { cx: SWING_X, cy: 30, r: 6, fill: '#e8edf1' });
+  row.append(svg('circle', { class: 'ring', cx: SWING_X, cy: 30, r: 26 }));
+  row.append(svg('circle', { class: 'swing-center', cx: SWING_X, cy: 30, r: 6 }));
+  const swingTrail = svg('polyline', { class: 'swing-trail', points: '' });
+  const swingDot = svg('circle', { class: 'swing-dot', cx: SWING_X, cy: 30, r: 6 });
   row.append(swingTrail, swingDot);
-  const title = document.createElement('div');
-  title.style.cssText = 'font-size:11px;color:#c9d3db;white-space:nowrap';
+  const title = div('input-title');
   // Discret : ni titre ni texte, la couleur du bord dit qui est qui.
   title.style.display = compact ? 'none' : '';
   pads.append(title, row);
-  const text = document.createElement('div');
-  text.style.cssText = 'display:flex;flex-direction:column;gap:2px;min-width:0';
-  const note = document.createElement('div');
-  note.style.cssText = 'font-size:13px;font-weight:600;min-height:18px';
-  const history = document.createElement('div');
-  history.style.cssText = 'opacity:.8';
+  const text = div('input-text');
+  const note = div('input-note');
+  const history = div('input-history');
   text.append(note, history);
   root.append(pads);
   if (compact) {
     // Discret : seulement le nom du dernier coup, à droite des sticks, le temps de le lire.
-    note.style.cssText = 'font-size:13px;font-weight:600;align-self:center;white-space:nowrap;padding-right:4px;display:none';
+    note.style.display = 'none';
     root.append(note);
   } else root.append(text);
   document.body.append(root);
@@ -298,8 +281,8 @@ function createWidget(index: number, compact: boolean): Widget {
 
 function noteHtml(note: ReleaseNote, source: InputSource): string {
   return (
-    `${note.bySwing || !buttonsEnabled() ? SWING_BADGE : buttonIcon(note.button, source)} <span style="color:${QUALITY_COLORS[note.quality]}">${escapeHtml(note.text)}</span>` +
-    ` <span style="opacity:.7">· ${escapeHtml(note.stick)}</span>`
+    `${note.bySwing || !buttonsEnabled() ? SWING_BADGE : buttonIcon(note.button, source)} ${toned(note.quality, note.text)}` +
+    ` <span class="input-stick">· ${escapeHtml(note.stick)}</span>`
   );
 }
 
@@ -354,13 +337,15 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
         if (key !== w.key) {
           w.key = key;
           w.historyHtml = '';
-          w.title.innerHTML = `<span style="color:${TEAM[i]!}">●</span> ${playerName(i, duel.doubles)} · ${escapeHtml(sourceName(source))}`;
+          w.title.innerHTML = `<span class="player-color">●</span> ${playerName(i, duel.doubles)} · ${escapeHtml(sourceName(source))}`;
           for (const kind of KINDS) {
             const label = shortLabel(kind, source);
-            w.buttons[kind].label.textContent = label;
-            w.buttons[kind].label.setAttribute('font-size', label.length > 1 ? '8' : '11');
-            const color = source.kind === 'pad' ? BUTTON_GLYPHS[source.family][SHOT_POSITIONS[kind]].color : '#e8edf1';
-            w.buttons[kind].label.setAttribute('fill', color);
+            const text = w.buttons[kind].label;
+            text.textContent = label;
+            text.classList.toggle('is-long', label.length > 1);
+            // Couleur du symbole sur cette manette (une donnée) ; au clavier, celle du texte.
+            if (source.kind === 'pad') text.style.setProperty('--glyph', BUTTON_GLYPHS[source.family][SHOT_POSITIONS[kind]].color);
+            else text.style.removeProperty('--glyph');
           }
         }
 
@@ -372,7 +357,7 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
         if (swing) {
           w.swingDot.setAttribute('cx', (SWING_X + swing.right * 20).toFixed(1));
           w.swingDot.setAttribute('cy', (30 - swing.up * 20).toFixed(1));
-          w.swingDot.setAttribute('fill', swing.shot ? '#ffd23f' : '#e8edf1');
+          w.swingDot.classList.toggle('is-shot', Boolean(swing.shot));
         }
         const recognizer = swings?.[i];
         const points = recognizer ? recognizer.trail.map((p) => `${(SWING_X + p.right * 20).toFixed(1)},${(30 - p.up * 20).toFixed(1)}`).join(' ') : '';
@@ -382,28 +367,23 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
         const last = tracker.history[0];
         const flash = last && since < FLASH_TIME ? last : null;
         for (const kind of KINDS) {
+          // Bouton tenu, ou couleur du résultat juste après le relâcher.
           const { circle } = w.buttons[kind];
-          let fill = 'rgba(255,255,255,.06)';
-          let stroke = '#9fb0bf';
-          if (state.shot === kind && !swingHeld(state)) {
-            fill = 'rgba(255,255,255,.55)';
-            stroke = '#ffffff';
-          } else if (flash?.button === kind && !flash.bySwing) {
-            fill = QUALITY_COLORS[flash.quality];
-            stroke = QUALITY_COLORS[flash.quality];
-          }
-          circle.setAttribute('fill', fill);
-          circle.setAttribute('stroke', stroke);
+          const held = state.shot === kind && !swingHeld(state);
+          circle.classList.toggle('is-held', held);
+          const quality = !held && flash?.button === kind && !flash.bySwing ? flash.quality : null;
+          if (quality) circle.dataset.quality = quality;
+          else delete circle.dataset.quality;
         }
 
         // Pendant le maintien : quel bouton est armé. Sinon : le dernier relâcher, un court instant.
         let note = '';
         if (compact) {
-          note = last && since < NOTE_TIME ? `<span style="color:${QUALITY_COLORS[last.quality]}">${escapeHtml(last.text)}</span>` : '';
+          note = last && since < NOTE_TIME ? toned(last.quality, last.text) : '';
           w.note.style.display = note ? '' : 'none';
         } else if (state.shot && swingHeld(state)) {
-          note = `${SWING_BADGE} <span style="color:#c9d3db">armé ${source.kind === 'keyboard' ? 'au clavier' : 'au stick droit'} : choisis la fin du geste</span>`;
-        } else if (state.shot && buttonsEnabled()) note = `${buttonIcon(state.shot, source)} <span style="color:#c9d3db">${SHOT_NAMES[state.shot]} : armé, relâche au bon moment</span>`;
+          note = `${SWING_BADGE} <span class="tone-soft">armé ${source.kind === 'keyboard' ? 'au clavier' : 'au stick droit'} : choisis la fin du geste</span>`;
+        } else if (state.shot && buttonsEnabled()) note = `${buttonIcon(state.shot, source)} <span class="tone-soft">${SHOT_NAMES[state.shot]} : armé, relâche au bon moment</span>`;
         else if (last && since < NOTE_TIME) note = noteHtml(last, source);
         if (w.note.innerHTML !== note) w.note.innerHTML = note;
 

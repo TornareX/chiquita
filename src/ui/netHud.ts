@@ -1,3 +1,4 @@
+import './hud.css';
 import { SIM_DT } from '../sim/constants';
 
 /** Ce que l'encart du faux réseau affiche, mesuré par image. */
@@ -28,9 +29,8 @@ declare global {
  */
 export function createNetHud(describe: () => string, extra?: () => string): { frame(stats: NetFrame): void } {
   const box = document.createElement('div');
+  // Apparence dans `hud.css`.
   box.id = 'net-hud';
-  box.style.cssText =
-    'position:fixed;right:12px;bottom:12px;text-align:right;padding:4px 8px;font:12px/1.4 monospace;color:#cfe;background:#0008;border-radius:4px;pointer-events:none;white-space:pre;z-index:50';
   document.body.append(box);
   box.textContent = describe();
 

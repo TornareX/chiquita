@@ -152,20 +152,8 @@ export function createReplayBadge(): { show(on: boolean): void } {
   const badge = document.createElement('div');
   badge.id = 'replay-badge';
   badge.textContent = 'RALENTI';
-  Object.assign(badge.style, {
-    position: 'fixed',
-    top: '18px',
-    right: '24px',
-    padding: '4px 14px',
-    font: 'italic 800 20px system-ui, sans-serif',
-    letterSpacing: '0.12em',
-    color: '#ffffff',
-    background: 'rgba(10,16,24,0.7)',
-    borderLeft: '4px solid #ffd23f',
-    pointerEvents: 'none',
-    display: 'none',
-    zIndex: '6',
-  });
+  // Apparence dans `ui/hud.css` (chargée par le HUD du match). Ce module reste sans CSS : le serveur le compile aussi.
+  badge.style.display = 'none';
   document.body.append(badge);
   return {
     show(on: boolean): void {

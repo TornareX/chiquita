@@ -1,0 +1,105 @@
+/*
+ * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étape 2. Les valeurs
+ * sont encore celles du style neutre provisoire ; la passe design les remplace ici, sans toucher aux écrans.
+ * `menu.css`, `hud.css` et `annexes.css` n'utilisent que ces variables pour les couleurs et les polices.
+ */
+
+/* Archivo (licence OFL, `fonts/ARCHIVO-OFL.txt`), variable en largeur (62-125 %) et en graisse (100-900), latin. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('./fonts/archivo-latin-wdth-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('./fonts/archivo-latin-wdth-italic.woff2') format('woff2');
+}
+
+:root {
+  /* Polices. `--ui-font-brand` est embarquée, pas encore utilisée par les écrans. */
+  --ui-font: system-ui, sans-serif;
+  --ui-font-mono: monospace;
+  --ui-font-brand: 'Archivo', system-ui, sans-serif;
+
+  /*
+   * Échelle unique : l'interface est pensée en 1920×1080 ; 1 `--ui-px` vaut 1 px à cette taille et suit la fenêtre
+   * (le plus petit des deux côtés, en 16:9). Pas encore utilisée par les écrans.
+   */
+  --ui-px: calc(min(100vw, 100vh * 16 / 9) / 1920);
+
+  /* Texte. */
+  --ui-fg: #f2f5f7;
+  --ui-soft: #c9d3db;
+  --ui-muted: #9fb0bf;
+  --ui-glyph: #e8edf1;
+  --ui-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+
+  /* Accents : annonces et service, focus et action principale. */
+  --ui-call: #ffe27a;
+  --ui-gold: #ffd23f;
+
+  /* Qualité d'une frappe ou d'un essai. */
+  --ui-good: #5fd35a;
+  --ui-warn: #ffb35c;
+  --ui-bad: #ff6b6b;
+
+  /* Surfaces et traits. */
+  --ui-pill-bg: rgba(10, 16, 24, 0.6);
+  --ui-panel-bg: rgba(12, 18, 26, 0.97);
+  --ui-control-bg: #1c2833;
+  --ui-control-hover: #263645;
+  --ui-line: #3a4a58;
+  --ui-line-soft: #5a6b7a;
+
+  /* Équipes : nom au score, et pastille de chaque joueur (le partenaire en plus clair). */
+  --team-blue: #8cc4ff;
+  --team-red: #ff9aa3;
+  --player-1: #6fb2ff;
+  --player-2: #ff8a94;
+  --player-3: #b5d8ff;
+  --player-4: #ffc2c8;
+}
+
+/* Couleur d'un joueur selon sa place (`data-player`, de 0 à 3), lue par `var(--player)`. */
+[data-player='0'] {
+  --player: var(--player-1);
+}
+[data-player='1'] {
+  --player: var(--player-2);
+}
+[data-player='2'] {
+  --player: var(--player-3);
+}
+[data-player='3'] {
+  --player: var(--player-4);
+}
+
+/* Tons partagés : qualité d'une frappe, pastilles de joueur. */
+.tone-perfect {
+  color: var(--ui-gold);
+}
+.tone-good {
+  color: var(--ui-good);
+}
+.tone-off {
+  color: var(--ui-warn);
+}
+.tone-miss {
+  color: var(--ui-bad);
+}
+.tone-soft {
+  color: var(--ui-soft);
+}
+.tone-muted {
+  color: var(--ui-muted);
+}
+.player-color {
+  color: var(--player);
+}

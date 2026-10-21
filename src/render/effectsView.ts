@@ -1,3 +1,4 @@
+import '../ui/hud.css';
 import * as THREE from 'three';
 import { BANNER_LIFE, Effects, fade, FLASH_LIFE, meshOffset, ringOpening, type Effect } from './effects';
 
@@ -95,34 +96,12 @@ const POINT_FRAGMENT = /* glsl */ `
 
 const POINT_ATTRIBUTES = ['position', 'aColor', 'aAlpha', 'aSize'] as const;
 
+/** Flash et grand bandeau des coups marquants ; leur apparence est dans `ui/hud.css`, le fondu ici. */
 function createOverlay(): { flash: HTMLDivElement; banner: HTMLDivElement } {
   const flash = document.createElement('div');
   flash.id = 'effect-flash';
-  Object.assign(flash.style, {
-    position: 'fixed',
-    inset: '0',
-    background: 'radial-gradient(circle, rgba(255,255,255,0.95), rgba(255,236,170,0.7))',
-    pointerEvents: 'none',
-    opacity: '0',
-    zIndex: '5',
-  });
   const banner = document.createElement('div');
   banner.id = 'effect-banner';
-  Object.assign(banner.style, {
-    position: 'fixed',
-    left: '0',
-    right: '0',
-    top: '26%',
-    textAlign: 'center',
-    font: 'italic 900 clamp(48px, 9vw, 120px) system-ui, sans-serif',
-    letterSpacing: '0.02em',
-    color: '#ffd23f',
-    textShadow: '0 0 18px rgba(255,170,30,0.8), 0 5px 0 #b04a00, 0 8px 18px rgba(0,0,0,0.6)',
-    WebkitTextStroke: '3px #3a1800',
-    pointerEvents: 'none',
-    opacity: '0',
-    zIndex: '6',
-  });
   document.body.append(flash, banner);
   return { flash, banner };
 }

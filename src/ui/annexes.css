@@ -1,0 +1,382 @@
+/*
+ * Apparence des écrans annexes : tutoriel (`tutorialPanel.ts`), panneau latéral du labo et de la machine à balles
+ * (`laboPanel.ts`, `panel.ts`), test de la manette (`padTest.ts`). Couleurs et polices de `theme.css`.
+ * Les autres textes de la machine à balles (outil de développement) restent dans `index.html`.
+ */
+
+/* --- Tutoriel : carte des leçons --- */
+
+/* Ouvert par le code (`display: flex`). */
+#tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+#tutorial-overlay .card {
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: var(--ui-panel-bg);
+  color: var(--ui-fg);
+  font: 14px/1.5 var(--ui-font);
+}
+#tutorial-overlay h1 {
+  margin: 0 0 4px;
+  font-size: 21px;
+}
+#tutorial-overlay h2 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+#tutorial-overlay ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+#tutorial-overlay .when {
+  margin: 0;
+}
+#tutorial-overlay .lesson {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 4px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-control-bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#tutorial-overlay .lesson.selected {
+  border-color: var(--ui-call);
+  background: #2a3542;
+}
+#tutorial-overlay .stars {
+  color: var(--ui-gold);
+  white-space: nowrap;
+}
+#tutorial-overlay .stars-big {
+  margin: 6px 0;
+  font-size: 26px;
+}
+#tutorial-overlay .row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+#tutorial-overlay .row button {
+  padding: 7px 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-control-bg);
+  color: var(--ui-fg);
+  font: inherit;
+  cursor: pointer;
+}
+#tutorial-overlay .row button.primary {
+  border-color: var(--ui-call);
+}
+#tutorial-overlay .muted {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+/* --- Tutoriel : bandeau, consigne, verdict et gros indice pendant l'essai --- */
+
+.tutorial-text {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--ui-fg);
+  font-family: var(--ui-font);
+  text-align: center;
+  text-shadow: var(--ui-text-shadow);
+  pointer-events: none;
+}
+#tutorial-status {
+  top: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--ui-pill-bg);
+  font-size: 15px;
+  font-weight: 600;
+}
+#tutorial-instruction {
+  top: 52px;
+  width: min(720px, calc(100vw - 32px));
+  font-size: 16px;
+}
+#tutorial-message {
+  top: 22%;
+  width: min(720px, calc(100vw - 32px));
+  font-size: 20px;
+  font-weight: 700;
+}
+#tutorial-message[data-tone='ok'] {
+  color: var(--ui-good);
+}
+#tutorial-message[data-tone='fail'] {
+  color: var(--ui-warn);
+}
+#tutorial-prompt {
+  top: 34%;
+  color: var(--ui-call);
+  font-size: 30px;
+  font-weight: 800;
+}
+
+/* --- Panneau latéral : labo et machine à balles --- */
+
+#panel {
+  position: fixed;
+  top: 44px;
+  left: 18px;
+  box-sizing: border-box;
+  width: 250px;
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(10, 16, 22, 0.82);
+  color: var(--ui-fg);
+  font: 13px/1.4 var(--ui-font);
+}
+#panel[hidden] {
+  display: none;
+}
+#panel h2 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+#panel h2:first-child {
+  margin-top: 0;
+}
+#panel .exercises,
+#panel .actions {
+  display: grid;
+  gap: 4px;
+}
+#panel .actions {
+  margin-top: 12px;
+}
+#panel button {
+  padding: 6px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-control-bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#panel button:hover {
+  background: var(--ui-control-hover);
+}
+#panel button.selected {
+  border-color: #6cb4e8;
+  background: #1f4260;
+}
+#panel label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  margin-top: 10px;
+}
+#panel label input {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+}
+#panel label .value {
+  grid-row: 1;
+  grid-column: 2;
+  color: var(--ui-muted);
+}
+#panel label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  cursor: pointer;
+}
+#panel label.check input {
+  width: auto;
+}
+#panel .speeds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+#panel .speeds button {
+  text-align: center;
+}
+#panel .labo-hint {
+  margin: 8px 0 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+#panel .labo-score {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+#panel select {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-control-bg);
+  color: inherit;
+}
+#panel textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: #0f171f;
+  color: #cfe3f2;
+  font: 11px var(--ui-font-mono);
+}
+
+/* --- Test de la manette (padTest.ts) --- */
+
+/* Ouvert par le code (`display: flex`). */
+#pad-test {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.pad-test-panel {
+  box-sizing: border-box;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: var(--ui-panel-bg);
+  color: var(--ui-fg);
+  font: 14px/1.45 var(--ui-font);
+  text-align: center;
+}
+.pad-test-panel h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+.pad-test-detected {
+  min-height: 20px;
+  color: var(--ui-muted);
+  font-size: 13px;
+}
+.pad-test-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.pad-test-style select {
+  padding: 3px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-control-bg);
+  color: var(--ui-fg);
+}
+.pad-test-instruction {
+  min-height: 28px;
+  margin: 10px 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.pad-test-feedback {
+  min-height: 22px;
+  font-size: 14px;
+}
+.pad-test-drawing {
+  display: block;
+  max-width: 100%;
+  margin: 6px auto;
+}
+.pad-test-summary {
+  margin-top: 6px;
+  color: var(--ui-soft);
+  font-size: 13px;
+}
+.pad-test-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pad-test-actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-control-bg);
+  color: var(--ui-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Dessin : secteurs du stick, stick, boutons de face. */
+.pad-test-drawing .sector {
+  fill: rgba(255, 255, 255, 0.08);
+  stroke: var(--ui-line);
+}
+.pad-test-drawing .sector.is-reached {
+  fill: rgba(95, 211, 90, 0.6);
+}
+.pad-test-drawing .ring {
+  fill: rgba(255, 255, 255, 0.05);
+  stroke: var(--ui-line-soft);
+  stroke-width: 1.5;
+}
+.pad-test-drawing .stick-dot {
+  fill: var(--player-1);
+}
+.pad-test-drawing .button {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: var(--ui-muted);
+  stroke-width: 2;
+}
+.pad-test-drawing .button.is-done {
+  fill: rgba(95, 211, 90, 0.35);
+  stroke: var(--ui-good);
+}
+.pad-test-drawing .button.is-pressed {
+  fill: rgba(255, 255, 255, 0.6);
+}
+/* Le bouton demandé clignote (`--pulse` de 0 à 1, mis à jour à chaque image). */
+.pad-test-drawing .button.is-wanted {
+  stroke: rgba(255, 226, 122, calc(0.4 + 0.6 * var(--pulse, 1)));
+  stroke-width: 3;
+}
+.pad-test-drawing .button-label {
+  fill: var(--glyph, var(--ui-glyph));
+  font-family: var(--ui-font);
+  font-size: 17px;
+  font-weight: 700;
+}

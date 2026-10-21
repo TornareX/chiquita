@@ -1,3 +1,4 @@
+import './hud.css';
 import { buttonsEnabled } from '../input/gamepad';
 import type { OverheadKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
@@ -48,11 +49,10 @@ const SERVE_FAULTS: Record<ServeFault, string> = {
   wall: 'vitre ou grillage',
 };
 
-const COLORS = ['#8cc4ff', '#ff9aa3'] as const;
-/** Fond des annonces au centre : lisibles sur le terrain comme sur les bandeaux. */
-const PILL = 'background:rgba(10,16,24,.6);padding:4px 14px;border-radius:8px;white-space:nowrap;';
-/** Couleur des pastilles de joueur : celle de l'équipe, plus claire pour le partenaire (joueurs 2 et 3). */
-const DOTS = ['#6fb2ff', '#ff8a94', '#b5d8ff', '#ffc2c8'] as const;
+/** Classe de couleur de chaque équipe (`hud.css`). */
+const TEAM_CLASSES = ['blue', 'red'] as const;
+/** Pastille ou nom d'un joueur, à la couleur de sa place (l'équipe, plus claire pour le partenaire). */
+const playerColor = (index: number, html: string): string => `<span class="player-color" data-player="${index}">${html}</span>`;
 
 /** Aide en bas à droite, tout aux sticks (les boutons sont cachés). */
 const STICK_HELP = [
@@ -126,35 +126,24 @@ function shotLabel(shot: DuelShot, detailed: boolean): string | null {
   return shot.perfect ? 'parfait !' : null;
 }
 
-function element(id: string, css: string): HTMLDivElement {
+/** Un texte du HUD : son apparence est dans `hud.css`, sous son `id` et ses classes. */
+function element(id: string, classes = ''): HTMLDivElement {
   const div = document.createElement('div');
   div.id = id;
-  div.style.cssText =
-    'position:fixed;color:#f2f5f7;font:15px/1.4 system-ui,sans-serif;' +
-    'text-shadow:0 1px 3px rgba(0,0,0,.85);pointer-events:none;' +
-    css;
+  div.className = `hud-text ${classes}`.trim();
   document.body.append(div);
   return div;
 }
 
 export function createDuelHud(): DuelHud {
-  const rally = element('rally', 'top:14px;left:50%;transform:translateX(-50%);font-size:22px;font-weight:600;text-align:center');
-  const score = element(
-    'score',
-    'top:12px;left:16px;font-size:17px;font-weight:600;background:rgba(10,16,24,.55);' +
-      'padding:6px 10px;border-radius:6px;font-variant-numeric:tabular-nums',
-  );
-  const message = element('point', `top:16%;left:50%;transform:translateX(-50%);font-size:22px;font-weight:600;text-align:center;${PILL}`);
-  const feedback = element(
-    'feedback',
-    `top:26%;left:50%;transform:translateX(-50%);font-size:18px;font-weight:700;text-align:center;transition:opacity .25s;${PILL}`,
-  );
+  const rally = element('rally', 'hud-centered');
+  const score = element('score');
+  // Annonces au centre, sur un fond : lisibles sur le terrain comme sur les bandeaux.
+  const message = element('point', 'hud-centered hud-pill');
+  const feedback = element('feedback', 'hud-centered hud-pill');
   // Sous le score : qui joue avec quoi, entre les points seulement (en mode détaillé, tout le temps).
-  const players = element('players', 'left:16px;font-size:12px;color:#c9d3db;transition:opacity .3s');
-  const help = element(
-    'help',
-    'bottom:14px;right:18px;font-size:12px;text-align:right;color:#c9d3db;max-width:min(680px,calc(100vw - 390px))',
-  );
+  const players = element('players');
+  const help = element('help');
   let helpKey = '';
 
   return {
@@ -178,41 +167,35 @@ export function createDuelHud(): DuelHud {
         const over = duel.phase === 'over';
         const rows = ([0, 1] as const).map((i) => {
           const serving = duel.phase !== 'over' && match.server === i ? '●' : '&nbsp;';
-          const sets = match.sets.map((set) => `<td style="padding:0 6px;opacity:.75">${set[i]}</td>`).join('');
+          const sets = match.sets.map((set) => `<td class="set">${set[i]}</td>`).join('');
           return (
-            `<tr><td style="color:#ffe27a;width:14px">${serving}</td>` +
-            `<td style="color:${COLORS[i]};padding-right:10px">${teamName(i, doubles)}</td>${sets}` +
-            (over
-              ? ''
-              : `<td style="padding:0 6px">${match.games[i]}</td>` +
-                `<td style="padding-left:8px;min-width:30px;text-align:right">${labels[i]}</td>`) +
+            `<tr><td class="serve">${serving}</td>` +
+            `<td class="team ${TEAM_CLASSES[i]}">${teamName(i, doubles)}</td>${sets}` +
+            (over ? '' : `<td class="games">${match.games[i]}</td><td class="points">${labels[i]}</td>`) +
             '</tr>'
           );
         });
         const call = match.call();
-        score.innerHTML =
-          `<table style="border-collapse:collapse">${rows.join('')}</table>` +
-          (call ? `<div style="font-size:13px;color:#ffe27a;margin-top:3px">${call}</div>` : '');
-        rally.innerHTML = duel.hits > 1 && !over ? `<span style="font-size:15px">Échange : ${duel.hits} coups</span>` : '';
+        score.innerHTML = `<table class="hud-score-table">${rows.join('')}</table>` + (call ? `<div class="hud-call">${call}</div>` : '');
+        rally.innerHTML = duel.hits > 1 && !over ? `<span class="hud-rally-count">Échange : ${duel.hits} coups</span>` : '';
       } else {
         rally.innerHTML =
-          `Échange : ${duel.hits} coup${duel.hits > 1 ? 's' : ''}<br>` +
-          `<span style="font-size:13px;font-weight:400">Record : ${duel.bestRally}</span>`;
+          `Échange : ${duel.hits} coup${duel.hits > 1 ? 's' : ''}<br>` + `<span class="hud-record">Record : ${duel.bestRally}</span>`;
       }
       players.style.top = `${(match ? score.getBoundingClientRect().bottom : 4) + 8}px`;
       players.style.opacity = detailed || duel.phase !== 'rally' ? '1' : '0';
       players.innerHTML = sources
         .slice(0, duel.players.length)
-        .map((source, i) => `<span style="color:${DOTS[i]}">●</span> ${name(i)} : ${source} · ` + ASSIST_LABELS[duel.players[i]!.assist])
+        .map((source, i) => `${playerColor(i, '●')} ${name(i)} : ${source} · ` + ASSIST_LABELS[duel.players[i]!.assist])
         .join('<br>');
 
       // Retour sur la dernière frappe ou le dernier coup raté, pendant un court instant. Épuré : une seule ligne,
       // la frappe marquante la plus récente, qui s'efface en fondu.
       const recent = (tick: number): boolean => (duel.tick - tick) * SIM_DT < FEEDBACK_TIME;
       const notes = duel.players.map((player, i) => {
-        if (detailed && recent(player.lastWhiffTick)) return { tick: player.lastWhiffTick, html: `<span style="color:#ffb35c">${name(i)} : dans le vide !</span>` };
+        if (detailed && recent(player.lastWhiffTick)) return { tick: player.lastWhiffTick, html: `<span class="tone-off">${name(i)} : dans le vide !</span>` };
         const label = player.lastHit && recent(player.lastHitTick) ? shotLabel(player.lastHit, detailed) : null;
-        if (label) return { tick: player.lastHitTick, html: `<span style="color:${DOTS[i]}">${name(i)}</span> ${label}` };
+        if (label) return { tick: player.lastHitTick, html: `${playerColor(i, name(i))} ${label}` };
         return null;
       });
       const shown = notes.filter((n) => n !== null).sort((a, b) => b.tick - a.tick);
@@ -223,32 +206,32 @@ export function createDuelHud(): DuelHud {
 
       const call = duel.lastServeCall;
       if (duel.phase === 'serve') {
-        message.style.color = '#f2f5f7';
+        message.dataset.tone = '';
         const second = duel.serveNumber === 2 ? ' (second service)' : '';
         const server = buttons[duel.server] ?? main;
         const how = buttonsEnabled() ? `maintiens ${buttonIcon('normal', server)}` : formatButtons('tire le stick droit vers toi', server);
-        message.innerHTML = `${name(duel.server)} au service${second}<br><span style="font-size:13px;font-weight:400;color:#c9d3db">${how}</span>`;
+        message.innerHTML = `${name(duel.server)} au service${second}<br><span class="hud-sub">${how}</span>`;
       } else if (duel.phase === 'dead' && call) {
-        message.style.color = '#ffe27a';
+        message.dataset.tone = 'call';
         message.textContent = call.call === 'let' ? 'Let : service à rejouer' : `Faute : ${SERVE_FAULTS[call.reason!]}`;
       } else if (duel.phase === 'dead' && duel.lastResult) {
         const { winner, reason, hits } = duel.lastResult;
         const outcome = duel.lastOutcome;
         const won = outcome?.set ? ` · set ${teamName(winner, doubles)}` : outcome?.game ? ` · jeu ${teamName(winner, doubles)}` : '';
-        message.style.color = COLORS[winner];
+        message.dataset.tone = TEAM_CLASSES[winner];
         message.textContent = `Point ${teamName(winner, doubles)} : ${REASONS[reason]} (${hits} coups)${won}`;
       } else if (duel.phase === 'rally' && duel.exit) {
         // Balle sortie après son rebond : encore jouable dehors, jusqu'à ce qu'elle touche le sol.
         const side = duel.exit.wall === 'sidePosX' || duel.exit.wall === 'sideNegX';
-        message.style.color = '#ffe27a';
+        message.dataset.tone = 'call';
         message.textContent = side ? 'Por tres !' : 'Por cuatro !';
       } else if (duel.phase === 'over' && duel.match?.winner != null) {
         const winner = duel.match.winner;
         const sets = duel.match.sets.map((set) => `${set[winner]}-${set[winner === 0 ? 1 : 0]}`).join(' ');
-        message.style.color = COLORS[winner];
+        message.dataset.tone = TEAM_CLASSES[winner];
         message.innerHTML =
           `${teamName(winner, doubles)} ${doubles ? 'gagnent' : 'gagne'} le match ${sets}<br>` +
-          '<span style="font-size:15px;color:#f2f5f7">Appuie sur un bouton de coup pour rejouer</span>';
+          '<span class="hud-again">Appuie sur un bouton de coup pour rejouer</span>';
       } else {
         message.textContent = '';
       }

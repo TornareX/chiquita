@@ -1,3 +1,4 @@
+import './annexes.css';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { FEEL_LIMITS, FEEL_PRESETS, type FeelTuning } from '../sim/feel';
 import { ARCADE } from '../sim/profile';
@@ -67,9 +68,9 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
   list.className = 'exercises';
   panel.append(list);
   const hint = document.createElement('p');
-  hint.style.cssText = 'margin:8px 0 0;color:#9fb0bf;font-size:12px';
+  hint.className = 'labo-hint';
   const score = document.createElement('p');
-  score.style.cssText = 'margin:6px 0 0;font-size:12px';
+  score.className = 'labo-score';
   const situationButtons = SITUATIONS.map((situation) => {
     const b = button(situation.name, () => select(situation), list);
     b.dataset.situation = situation.id;
@@ -91,7 +92,6 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
 
   heading('Adversaire');
   const levelSelect = document.createElement('select');
-  levelSelect.style.cssText = 'width:100%;padding:4px;background:#1c2833;color:inherit;border:1px solid #3a4a58;border-radius:6px';
   for (const name of AI_LEVEL_NAMES) {
     const option = document.createElement('option');
     option.value = name;
@@ -167,7 +167,6 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
   copied.readOnly = true;
   copied.rows = 4;
   copied.hidden = true;
-  copied.style.cssText = 'width:100%;box-sizing:border-box;margin-top:8px;font:11px monospace;background:#0f171f;color:#cfe3f2;border:1px solid #3a4a58;border-radius:6px';
   const bottom = document.createElement('div');
   bottom.className = 'actions';
   panel.append(bottom);

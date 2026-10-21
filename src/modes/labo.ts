@@ -1,3 +1,4 @@
+import '../ui/hud.css';
 import { createSounds } from '../audio/sounds';
 import { applySwing, connectedGamepads, IDLE_PAD, mergePads, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
@@ -31,9 +32,8 @@ const COUNTDOWN = 2;
 function createCountdown(): HTMLDivElement {
   const div = document.createElement('div');
   div.id = 'countdown';
-  div.style.cssText =
-    'position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font:800 96px system-ui,sans-serif;color:#fff;' +
-    'text-shadow:0 4px 18px rgba(0,0,0,.6);pointer-events:none;display:none;z-index:5';
+  // Apparence dans `ui/hud.css`.
+  div.style.display = 'none';
   document.body.append(div);
   return div;
 }
