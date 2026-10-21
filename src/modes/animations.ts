@@ -3,6 +3,9 @@ import { CHARACTERS, createCharacter, SWEET_SPOT, type CharacterRig } from '../r
 import { createCourt } from '../render/court';
 import { PARTNER_COLORS, TEAM_COLORS } from '../render/duelScene';
 import { bodyYawTarget, computePose, FOLLOW_TIME, RECOVER_TIME, strikeReach, STRIDE, SWING_FAMILIES, SWING_IN, type SwingFamily } from '../render/pose';
+import { createPadTest } from '../ui/padTest';
+import { createPauseMenu } from '../ui/pauseMenu';
+import { loadSettings, saveSettings } from '../ui/settingsStore';
 
 /**
  * Visionneur d'animations (`?mode=animations`) : un personnage seul, qui joue en boucle le geste choisi, sans
@@ -257,9 +260,29 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
     state.time = (Number(slider.value) / 1000) * clipLength();
     refresh();
   });
-  const back = link('Retour au match', '/');
+  const back = link('Retour à l’accueil', '/');
   panel.append(play, slider, back);
   document.body.append(panel);
+
+  const settings = loadSettings(new URLSearchParams());
+  const padTest = createPadTest(
+    () => settings.padStyle,
+    (style) => {
+      settings.padStyle = style;
+      saveSettings(settings);
+    },
+  );
+  // Pause (Échap, ou le bouton en haut à droite), la même qu'en match : « Recommencer » reprend le geste au début.
+  const pause = createPauseMenu(settings, {
+    online: false,
+    onChange: (_, restart) => {
+      if (restart) state.time = 0;
+    },
+    onTestPad: () => padTest.open(),
+    onQuit: () => (location.search = ''),
+    blocked: () => padTest.isOpen,
+  });
+  const paused = (): boolean => pause.isOpen || padTest.isOpen;
 
   // Nom de la phase en cours, en grand, en bas de l'écran.
   const phaseLabel = document.createElement('div');
@@ -327,9 +350,10 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
   const frame = (now: number): void => {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (state.playing) state.time = (state.time + dt * state.speed) % clipLength();
+    const playing = state.playing && !paused();
+    if (playing) state.time = (state.time + dt * state.speed) % clipLength();
     const t = state.time;
-    const pose = poseAt(t, state.playing ? dt * state.speed : 0);
+    const pose = poseAt(t, playing ? dt * state.speed : 0);
     const offset = state.clip.kind === 'swing' ? CONTACTS[state.contact] : null;
     ballMesh.visible = offset !== null && t >= state.prep - 0.15 && t < state.prep + SWING_IN + 0.15;
     if (rig && offset && state.clip.kind === 'swing') {

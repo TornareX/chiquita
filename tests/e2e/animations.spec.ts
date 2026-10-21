@@ -26,3 +26,17 @@ test('le visionneur joue chaque coup et chaque déplacement, phase par phase, sa
   }
   expect(errors).toEqual([]);
 });
+
+test('visionneur : Échap met en pause (le geste s’arrête), Échap reprend', async ({ page }) => {
+  await page.goto('/?mode=animations&coup=fore&models=off');
+  await page.waitForFunction(() => window.__anim !== undefined);
+  const pause = page.locator('#pause-menu');
+  await page.keyboard.press('Escape');
+  await expect(pause).toBeVisible();
+  const phase = await page.evaluate(() => window.__anim!.phase);
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.__anim!.phase)).toBe(phase);
+  await page.keyboard.press('Escape');
+  await expect(pause).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.__anim!.phase)).not.toBe(phase);
+});

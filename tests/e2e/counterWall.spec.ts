@@ -124,6 +124,27 @@ test('labo : une situation part après un décompte de 2 s, joueurs en place', a
   await page.waitForFunction((t) => window.__duel!.duel.tick > t + 60, before);
 });
 
+test('labo : Échap met en pause, Échap reprend, « Quitter » ramène à l’accueil', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/?mode=labo');
+  await page.waitForFunction(() => window.__duel !== undefined);
+  await expect(page.locator('#countdown')).toBeHidden({ timeout: 4000 });
+  const pause = page.locator('#pause-menu');
+  await page.keyboard.press('Escape');
+  await expect(pause).toBeVisible();
+  await expect(pause.locator('[data-item]')).toHaveText([/Reprendre/, /Réglages/, /Recommencer/, /Quitter/]);
+  // En pause, le jeu attend.
+  const before = await page.evaluate(() => window.__duel!.duel.tick);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__duel!.duel.tick)).toBe(before);
+  await page.keyboard.press('Escape');
+  await expect(pause).toBeHidden();
+  await page.waitForFunction((t) => window.__duel!.duel.tick > t, before);
+  await page.keyboard.press('Escape');
+  await pause.locator('[data-item="quitter"] button').click();
+  await expect(page.locator('#accueil')).toBeVisible();
+});
+
 /**
  * Le geste de contre-vitre au stick droit, proposé par Xavier (18/10) : tourné vers sa vitre, stick poussé vers
  * l'avant pour préparer, ramené vers soi (vers sa vitre) pour frapper. Il court vers sa vitre au stick gauche.

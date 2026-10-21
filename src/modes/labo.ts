@@ -14,10 +14,14 @@ import type { Situation } from '../sim/situations';
 import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
 import { createInputDisplay } from '../ui/inputDisplay';
-import { isHuman, loadPreferences, loadSettings } from '../ui/settingsStore';
+import { isHuman, loadPreferences, loadSettings, saveSettings } from '../ui/settingsStore';
 import { loadFeel, saveFeel } from '../ui/feelStorage';
 import { createLaboPanel } from '../ui/laboPanel';
+import { createPadTest } from '../ui/padTest';
+import { createPauseMenu } from '../ui/pauseMenu';
 
+/** Bouton Start (Menu) : ouvre ou ferme la pause. */
+const START_BUTTON = 9;
 /** Pause entre la fin d'un point et la reprise de la situation (s). */
 const REPLAY_DELAY = 1;
 /** Décompte avant que la situation parte : les joueurs sont en place, le jeu attend (s). */
@@ -98,8 +102,27 @@ export function startLabo(canvas: HTMLCanvasElement): void {
       saveFeel(stored);
     },
   });
+  const padTest = createPadTest(
+    () => settings.padStyle,
+    (style) => {
+      settings.padStyle = style;
+      saveSettings(settings);
+    },
+  );
+  // Pause (Échap, Start, ou le bouton en haut à droite), la même qu'en match : « Recommencer » rejoue la situation.
+  const pause = createPauseMenu(settings, {
+    online: false,
+    onChange: (s, restart) => {
+      duel.players[0].prepMove = s.prepMove;
+      if (restart) replay();
+    },
+    onTestPad: () => padTest.open(),
+    onQuit: () => (location.search = ''),
+    blocked: () => padTest.isOpen,
+  });
+  const paused = (): boolean => pause.isOpen || padTest.isOpen;
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyR' && !event.repeat) replay();
+    if (event.code === 'KeyR' && !event.repeat && !paused()) replay();
   });
 
   /** Frappe au geste du stick droit, une par manette. */
@@ -147,17 +170,24 @@ export function startLabo(canvas: HTMLCanvasElement): void {
 
   let last = performance.now();
   let alpha = 0;
+  let startHeld = false;
   const frame = (now: number): void => {
     const frameTime = (now - last) / 1000;
     last = now;
+    // Start sur n'importe quelle manette : ouvre ou ferme la pause.
+    const start = connectedGamepads().some((pad) => pad.buttons[START_BUTTON]?.pressed ?? false);
+    if (start && !startHeld && !padTest.isOpen) pause.toggle();
+    startHeld = start;
+    // En pause, le décompte attend aussi.
+    if (paused()) countdownUntil += frameTime * 1000;
     const waiting = now < countdownUntil;
     countdown.style.display = waiting ? '' : 'none';
     if (waiting) countdown.textContent = String(Math.ceil((countdownUntil - now) / 1000));
-    if (now >= hitstopUntil && !waiting) alpha = loop.advance(frameTime);
-    view.render(alpha, frameTime, now < hitstopUntil);
+    if (now >= hitstopUntil && !waiting && !paused()) alpha = loop.advance(frameTime);
+    view.render(alpha, frameTime, now < hitstopUntil || paused());
     hud.update(duel, sources, buttons, true);
     panel.update(won, played, buttons[0]);
-    inputs.render(duel, states, buttons, settings.inputDisplay === 'off' ? 'off' : 'full');
+    inputs.render(duel, states, buttons, paused() || settings.inputDisplay === 'off' ? 'off' : 'full');
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

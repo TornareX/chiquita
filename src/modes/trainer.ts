@@ -8,7 +8,10 @@ import { DEFAULT_DIFFICULTY } from '../sim/machine';
 import { World } from '../sim/world';
 import { createAids } from '../ui/aids';
 import { createHud } from '../ui/hud';
+import { createPadTest } from '../ui/padTest';
 import { createPanel } from '../ui/panel';
+import { createPauseMenu } from '../ui/pauseMenu';
+import { loadSettings, saveSettings } from '../ui/settingsStore';
 
 /**
  * Mode « Padel Trainer » : première personne face à la machine à balles.
@@ -24,6 +27,7 @@ export function startTrainer(canvas: HTMLCanvasElement): void {
   for (const type of ['pointerdown', 'keydown'] as const) {
     window.addEventListener(type, () => sounds.unlock(), { once: true });
   }
+  const settings = loadSettings(new URLSearchParams());
 
   /** Micro-pause sur un contact propre : fin de la pause, en temps réel (ms). */
   let hitstopUntil = 0;
@@ -34,10 +38,10 @@ export function startTrainer(canvas: HTMLCanvasElement): void {
     world.step(script ? { ...commands, ...script(world) } : commands);
 
     // Retours immédiats sur les événements du pas.
-    for (const contact of world.contacts) sounds.contact(contact);
+    if (settings.sound) for (const contact of world.contacts) sounds.contact(contact);
     if (world.shot) {
       const { shot } = world;
-      sounds.shot(shot);
+      if (settings.sound) sounds.shot(shot);
       hud.showShot(shot);
       view.kick(shot.quality);
       // 30 à 50 ms selon la qualité, rien sur un contact au bord du tamis. [à calibrer]
@@ -45,7 +49,7 @@ export function startTrainer(canvas: HTMLCanvasElement): void {
     }
     if (world.swingMiss) hud.showMiss(world.swingMiss);
     if (world.result) {
-      sounds.result(world.result);
+      if (settings.sound) sounds.result(world.result);
       hud.showResult(world.result);
     }
   });
@@ -54,9 +58,11 @@ export function startTrainer(canvas: HTMLCanvasElement): void {
 
   // La difficulté choisie est conservée d'un exercice à l'autre.
   let difficulty = DEFAULT_DIFFICULTY;
+  let exercise: string | null = null;
   const actions = {
     /** `?seed=N` fixe la suite de balles ; sinon elle change à chaque démarrage. */
     startExercise(id: string): void {
+      exercise = id;
       const seed = params.has('seed') ? Number(params.get('seed')) : Date.now() % 1_000_000;
       world.startExercise(findExercise(id), seed);
       world.machine?.setDifficulty(difficulty);
@@ -86,8 +92,31 @@ export function startTrainer(canvas: HTMLCanvasElement): void {
   };
   const panel = createPanel(actions, aids);
 
+  const padTest = createPadTest(
+    () => settings.padStyle,
+    (style) => {
+      settings.padStyle = style;
+      saveSettings(settings);
+    },
+  );
+  // Pause (Échap, ou le bouton en haut à droite), la même qu'en match : « Recommencer » relance l'exercice.
+  const pause = createPauseMenu(settings, {
+    online: false,
+    onChange: (_, restart) => {
+      if (restart && exercise) actions.startExercise(exercise);
+    },
+    onTestPad: () => padTest.open(),
+    onQuit: () => (location.search = ''),
+    blocked: () => padTest.isOpen,
+  });
+  const paused = (): boolean => pause.isOpen || padTest.isOpen;
+  // Souris capturée, le navigateur garde Échap pour la libérer : la libérer ouvre donc la pause.
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement === null && !paused()) pause.toggle();
+  });
+
   window.addEventListener('keydown', (event) => {
-    if (event.repeat) return;
+    if (event.repeat || paused()) return;
     const digit = /^Digit([1-9])$/.exec(event.code);
     const exercise = digit ? EXERCISES[Number(digit[1]) - 1] : undefined;
     if (exercise) actions.startExercise(exercise.id);
@@ -110,7 +139,9 @@ export function startTrainer(canvas: HTMLCanvasElement): void {
     last = now;
     // Pendant la micro-pause, la simulation est figée ; le temps réel écoulé n'est pas rattrapé.
     world.profile.racket.tolerance = aids.tolerance;
-    if (view.replaying) view.moveReplayCamera(input.sample(), frameTime);
+    if (paused()) {
+      // En pause, rien ne bouge.
+    } else if (view.replaying) view.moveReplayCamera(input.sample(), frameTime);
     else if (now >= hitstopUntil) alpha = loop.advance(frameTime * aids.timeScale);
     view.render(alpha, frameTime);
     hud.update(world, input.active, view.replaying);

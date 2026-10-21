@@ -21,3 +21,23 @@ test('exercice « vitre de fond » : la machine lance des balles qui touchent la
   await page.waitForFunction(() => window.__sim!.world.ball!.pos.z < -1);
   await page.screenshot({ path: 'screenshots/04-machine.png' });
 });
+
+test('machine à balles : Échap met en pause, Échap reprend, la souris libérée ouvre aussi la pause', async ({ page }) => {
+  await page.goto('/?mode=trainer&exercise=back-glass&seed=1&models=off');
+  await page.waitForFunction(() => window.__sim?.world.ball != null);
+  const pause = page.locator('#pause-menu');
+  await page.keyboard.press('Escape');
+  await expect(pause).toBeVisible();
+  await expect(pause.locator('[data-item]')).toHaveText([/Reprendre/, /Réglages/, /Recommencer/, /Quitter/]);
+  const before = await page.evaluate(() => window.__sim!.world.tick);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__sim!.world.tick)).toBe(before);
+  await page.keyboard.press('Escape');
+  await expect(pause).toBeHidden();
+  await page.waitForFunction((t) => window.__sim!.world.tick > t, before);
+  // Souris capturée, Échap la libère sans arriver à la page : la libération ouvre la pause.
+  await page.evaluate(() => document.dispatchEvent(new Event('pointerlockchange')));
+  await expect(pause).toBeVisible();
+  await pause.locator('[data-item="quitter"] button').click();
+  await expect(page.locator('#accueil')).toBeVisible();
+});
