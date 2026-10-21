@@ -285,3 +285,83 @@ test('Jouer en colonnes : la croix suit l’écran, sans sauter d’une colonne 
   await expect(focused(page)).toHaveAttribute('data-item', 'retour');
   expect([...seen].filter((id) => /^place-[13]|punto|pression|lancer/.test(id))).toEqual([]);
 });
+
+/** L'écran tient sans défiler : rien sous le pli, et la dernière entrée au-dessus de la barre d'aides. */
+async function fitsOnScreen(page: Page, root: string, last: string): Promise<boolean> {
+  return page.evaluate(
+    ([rootId, lastId]) => {
+      const panel = document.querySelector(`#${rootId} .menu-panel`)!;
+      const item = document.querySelector(`#${rootId} [data-item="${lastId}"]`)!.getBoundingClientRect();
+      const hints = document.querySelector(`#${rootId} .menu-pad-hints`)!.getBoundingClientRect();
+      return panel.scrollHeight <= panel.clientHeight && item.bottom <= hints.top;
+    },
+    [root, last] as const,
+  );
+}
+
+test('Réglages, Entraînement et situations tiennent sans défiler ; la fiche suit la situation sélectionnée', async ({ page }) => {
+  for (const size of [
+    { width: 1280, height: 720 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('/');
+    await page.locator('[data-item="reglages"] button').click();
+    await expect(page.locator('#accueil')).toHaveAttribute('data-screen', 'reglages');
+    expect(await fitsOnScreen(page, 'accueil', 'retour')).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.locator('[data-item="entrainement"] button').click();
+    expect(await fitsOnScreen(page, 'accueil', 'retour')).toBe(true);
+    await page.locator('[data-item="situations"] button').click();
+    await expect(page.locator('#accueil')).toHaveAttribute('data-layout', 'detail');
+    expect(await fitsOnScreen(page, 'accueil', 'retour')).toBe(true);
+  }
+
+  // La fiche montre le nom et l'explication de la situation sélectionnée, boutons écrits en clair.
+  const detail = page.locator('.menu-detail');
+  await expect(focused(page)).toHaveAttribute('data-item', 'situation-echange-fond');
+  await expect(page.locator('.menu-detail-title')).toHaveText('Échange de fond');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.menu-detail-title')).toHaveText('Balle flottante au filet');
+  await expect(page.locator('.menu-detail-text')).toContainText('de volée');
+  await expect(page.locator('.menu-detail-text')).not.toContainText('{');
+  // Liste ordinaire : droite ne bouge pas le focus, la fiche est à côté de la liste.
+  await page.keyboard.press('ArrowRight');
+  await expect(focused(page)).toHaveAttribute('data-item', 'situation-balle-flottante');
+  const list = (await focused(page).boundingBox())!;
+  const box = (await detail.boundingBox())!;
+  expect(box.x).toBeGreaterThan(list.x + list.width);
+  // « Retour » n'a pas d'explication : pas de fiche.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(focused(page)).toHaveAttribute('data-item', 'retour');
+  await expect(detail).toBeHidden();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#accueil')).toHaveAttribute('data-screen', 'entrainement');
+});
+
+test('pause : bandeau à gauche, Reprendre en premier, la pause et ses réglages tiennent sans défiler', async ({ page }) => {
+  for (const size of [
+    { width: 1280, height: 720 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('/?ai=normal&bot=both&seed=7');
+    await page.waitForFunction(() => (window as unknown as { __duel?: unknown }).__duel !== undefined);
+    await page.keyboard.press('Escape');
+    const pause = page.locator('#pause-menu');
+    await expect(pause).toHaveAttribute('data-screen', 'pause');
+    await expect(pause.locator('.menu-item.is-focused')).toHaveAttribute('data-item', 'reprendre');
+    expect(await fitsOnScreen(page, 'pause-menu', 'quitter')).toBe(true);
+    // Le menu dans la moitié gauche : le match reste visible à droite.
+    const panel = (await pause.locator('.menu-panel').boundingBox())!;
+    expect(panel.x + panel.width).toBeLessThan(size.width * 0.6);
+    await pause.locator('[data-item="reglages"] button').click();
+    await expect(pause).toHaveAttribute('data-screen', 'reglages');
+    expect(await fitsOnScreen(page, 'pause-menu', 'retour')).toBe(true);
+  }
+});

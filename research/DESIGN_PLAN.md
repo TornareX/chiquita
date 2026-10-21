@@ -216,6 +216,33 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    (à raccourcir avec `clarify`, étape 10) ; symboles LB/RB selon la manette ; le jugement depuis le canapé, à la
    manette, surtout le saut LB/RB et la lisibilité de l'allumage.
 6. **Pause, Réglages, Entraînement.**
+   *Fait.* Les trois restent des listes, sauf les situations de match : douze entrées dont certaines ont trois lignes
+   d'explication ne tenaient pas. Deux organisations proposées (liste et fiche, grille de deux colonnes) ; Xavier a
+   choisi **la liste et sa fiche**. Décisions :
+   - Nouvelle disposition du menu commun, `layout: 'detail'` (`data-layout`) : les noms en liste courte à gauche,
+     l'explication de l'entrée sélectionnée dans une grande plaque maillée à droite (`.menu-detail`, titre et texte,
+     mise à jour avec le focus, cachée sur « Retour » qui n'en a pas). Les explications sous les entrées restent dans
+     la page (cachées). Navigation d'une liste : haut et bas seulement, rien ne défile, en 720p comme en 1080p.
+   - Les explications des situations écrivaient les jetons de boutons tels quels (« {slice} de volée ») : ils
+     passent par `plainButtons` avec la famille de la première manette (« bouton du haut » sans manette reconnue).
+   - Réglages et Entraînement partent du coin en haut à gauche de la zone de sécurité, comme les titres de l'accueil
+     et de Jouer (avant : liste centrée). L'accent d'« ENTRAÎNEMENT » n'est plus coupé (marge au-dessus du titre).
+   - **Réglages** tient sans défiler (la ligne vide du message ne prend plus de place) ; intertitres plus gros et
+     blancs ; « Tester ma manette » liseré de blanc et écrit comme un titre. Pas de regroupement en colonnes : la
+     liste tient, et la navigation reste haut/bas.
+   - **Entraînement** : Tutoriel et Situations en grandes plaques (76 `--ui-px`), nom en Archivo étroite italique 900.
+   - **Pause** : un bandeau d'encre presque opaque à gauche, au bord coupé en biais et liseré de violet, porte le
+     menu ; le match reste visible à droite, à peine assombri. Plaques non sélectionnées plus claires
+     (`--plate-raised`), plus hautes, texte plus gros ; titre « PAUSE » en grand ; « Reprendre » en grande plaque
+     comme « Lancer ». En ligne, un losange rouge qui bat précède « Le match continue pour les autres… » (repérée par
+     l'absence de « Recommencer »). Les réglages ouverts depuis la pause gardent le bandeau, plus large.
+   - Tests du navigateur ajoutés (`menu.spec.ts`) : Réglages, Entraînement, situations, pause et ses réglages tiennent
+     sans défiler en 720p et 1080p ; la fiche suit la sélection, sans jeton, à droite de la liste ; « Retour » sans
+     fiche. Captures ajoutées : `07b-situations-fiche-longue`, `13-pause-en-ligne`, `22b-pause-reglages`.
+   Restent : le bandeau de la pause cache le score du HUD en haut à gauche (à revoir avec le HUD, étape 8 : le score
+   en pause se lit-il ailleurs ?) ; la moitié droite de Réglages et d'Entraînement est vide ; l'intertitre « Mes
+   places (pré-remplies dans « Jouer » et en ligne) » est long (`clarify`, étape 10) ; le jugement depuis le canapé,
+   à la manette, surtout la lisibilité de la pause sur un match qui bouge.
 7. **En ligne** : salon, code de salle, places, erreurs (serveur introuvable, salle pleine, coupure).
 8. **HUD de match**, maquette d'abord : score et sets, service, punto de oro, annonces (point, faute, por tres,
    ralenti), étiquettes des joueurs, état réseau en ligne. Simple et double, les deux côtés de la caméra.

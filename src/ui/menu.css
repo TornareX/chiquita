@@ -11,7 +11,8 @@
  *   (.is-current), .menu-hint
  *   .menu-pad-hints, .menu-pad-hint (.is-back, .is-jump), .menu-pad-key (aides manette en bas d'écran ;
  *   [data-back='non'] : B ne fait rien sur cet écran)
- *   [data-layout] (list, tiles, columns), .menu-group[data-group] (entrées rangées ensemble, en colonnes)
+ *   [data-layout] (list, tiles, columns, detail), .menu-group[data-group] (entrées rangées ensemble, en colonnes)
+ *   .menu-detail, .menu-detail-title, .menu-detail-text (fiche de l'entrée sélectionnée, disposition detail)
  */
 :root {
   --u: var(--ui-px);
@@ -839,6 +840,265 @@
   padding: 0 calc(36 * var(--u));
 }
 
+/*
+ * Réglages et Entraînement (depuis l'accueil) : la liste part du coin en haut à gauche de la zone de sécurité, comme
+ * les titres de l'accueil et de Jouer, et tient sans défiler.
+ */
+.menu-opaque:is([data-screen='reglages'], [data-screen='entrainement']) {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+.menu-opaque:is([data-screen='reglages'], [data-screen='entrainement']) .menu-panel {
+  max-height: calc(100vh - 2 * var(--ui-safe-y) - 84 * var(--u));
+  margin: var(--ui-safe-y) 0 0 var(--ui-safe-x);
+  /* Place pour l'accent des capitales (« ENTRAÎNEMENT ») au-dessus d'un titre serré. */
+  padding: calc(14 * var(--u)) 0 0;
+}
+/* Entraînement : deux grands modes, en grandes plaques écrites comme des titres. */
+.menu-opaque[data-screen='entrainement'] {
+  --menu-panel-width: calc(1000 * var(--u));
+}
+.menu-opaque[data-screen='entrainement'] .menu-items {
+  gap: calc(10 * var(--u));
+}
+.menu-opaque[data-screen='entrainement'] .menu-action:not([data-item='retour']) {
+  --menu-row-height: calc(76 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: calc(40 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.menu-opaque[data-screen='entrainement'] .menu-action:not([data-item='retour']) .menu-hint {
+  margin-top: calc(-16 * var(--u));
+  margin-bottom: calc(16 * var(--u));
+  font-family: var(--ui-font-text);
+  font-size: calc(22 * var(--u));
+  font-stretch: 100%;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* Pas de message sur ces écrans : sa ligne vide ne prend pas de place. */
+.menu:is([data-screen='reglages'], [data-screen='entrainement'], [data-screen='pause']) .menu-message:empty {
+  display: none;
+}
+/* Intertitres des réglages : plus gros et blancs, lisibles depuis le canapé. */
+.menu[data-screen='reglages'] .menu-heading {
+  margin: calc(20 * var(--u)) 0 calc(4 * var(--u));
+  font-size: calc(30 * var(--u));
+  color: var(--white);
+}
+.menu[data-screen='reglages'] .menu-heading::before {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+}
+/* « Tester ma manette » : une action qui ouvre son écran, liserée de blanc et écrite comme un titre. */
+.menu-item[data-item='tester-manette'] {
+  --plate-edge: var(--ink-soft);
+}
+.menu-item[data-item='tester-manette'].is-focused {
+  --plate-edge: var(--ball);
+}
+.menu-item[data-item='tester-manette'] .menu-button {
+  font-family: var(--ui-font-brand);
+  font-size: calc(30 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/*
+ * Pause : un bandeau d'encre à gauche, au bord coupé en biais, porte le menu ; le match reste visible à droite, à
+ * peine assombri (en ligne, il continue). Les plaques sont plus claires que sur l'encre de l'accueil.
+ */
+.menu-dim {
+  --pause-band: calc(var(--ui-safe-x) + 1000 * var(--u));
+  --pause-slant: calc(150 * var(--u));
+  align-items: flex-start;
+  justify-content: flex-start;
+  background: linear-gradient(90deg, rgba(13, 11, 26, 0.5), rgba(13, 11, 26, 0.2) 75%);
+}
+.menu-dim[data-screen='pause'] {
+  --pause-band: calc(var(--ui-safe-x) + 760 * var(--u));
+}
+.menu-dim::before,
+.menu-dim::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--pause-slant)) 100%, 0 100%);
+}
+/* Le liseré violet du bord, sous le bandeau. */
+.menu-dim::before {
+  width: calc(var(--pause-band) + 6 * var(--u));
+  background: var(--violet);
+}
+.menu-dim::after {
+  width: var(--pause-band);
+  background: var(--mesh), rgba(13, 11, 26, 0.94);
+}
+.menu-dim .menu-panel {
+  position: absolute;
+  z-index: 1;
+  top: var(--ui-safe-y);
+  left: var(--ui-safe-x);
+  width: calc(var(--pause-band) - var(--ui-safe-x) - var(--pause-slant));
+  max-height: calc(100vh - 2 * var(--ui-safe-y) - 84 * var(--u));
+  padding: calc(14 * var(--u)) 0 0;
+}
+.menu-dim .menu-pad-hints {
+  z-index: 1;
+}
+.menu-dim .menu-item {
+  --plate-bg: var(--plate-raised);
+}
+.menu-dim .menu-item:hover,
+.menu-dim .menu-item.is-disabled:hover {
+  --plate-bg: color-mix(in oklab, var(--plate-raised) 82%, var(--white));
+}
+.menu-dim .menu-item.is-focused {
+  --plate-bg: var(--ball);
+}
+.menu-dim[data-screen='pause'] .menu-title {
+  font-size: calc(112 * var(--u));
+  line-height: 0.86;
+}
+.menu-dim[data-screen='pause'] .menu-screen-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(12 * var(--u));
+  margin: calc(14 * var(--u)) 0 calc(10 * var(--u));
+  color: var(--ink-soft);
+  font-size: var(--menu-text-size);
+}
+/* En ligne, le match continue : un losange rouge qui bat devant la phrase qui le dit. */
+.menu-dim[data-screen='pause']:not(:has([data-item='recommencer'])) .menu-screen-hint::before {
+  content: '';
+  flex: none;
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  margin-top: 0.4em;
+  background: var(--red);
+  transform: rotate(45deg);
+  animation: pause-live 1.2s ease-in-out infinite alternate;
+}
+@keyframes pause-live {
+  to {
+    opacity: 0.35;
+  }
+}
+.menu-dim[data-screen='pause'] .menu-items {
+  gap: calc(8 * var(--u));
+}
+.menu-dim[data-screen='pause'] .menu-item {
+  --menu-row-height: calc(64 * var(--u));
+  font-size: calc(28 * var(--u));
+}
+/* « Reprendre » : la plus grande plaque, comme « Lancer ». */
+.menu-dim[data-screen='pause'] .menu-action.is-primary {
+  --menu-row-height: calc(84 * var(--u));
+  margin-bottom: calc(10 * var(--u));
+  font-size: calc(44 * var(--u));
+}
+.menu-dim[data-screen='pause'] .menu-action .menu-hint {
+  margin-top: calc(-14 * var(--u));
+}
+
+/*
+ * Liste et fiche (`data-layout='detail'`, situations de match) : les noms en liste courte à gauche, l'explication de
+ * l'entrée sélectionnée dans une grande plaque à droite (`.menu-detail`). Tient sans défiler.
+ */
+.menu[data-layout='detail'] {
+  --menu-row-height: calc(50 * var(--u));
+}
+.menu[data-layout='detail'] .menu-panel {
+  position: absolute;
+  inset: var(--ui-safe-y) var(--ui-safe-x) calc(var(--ui-safe-y) + 84 * var(--u));
+  display: grid;
+  grid-template-columns: minmax(0, calc(780 * var(--u))) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'title title'
+    'hint hint'
+    'list detail';
+  column-gap: calc(48 * var(--u));
+  align-items: start;
+  width: auto;
+  max-height: none;
+  padding: calc(14 * var(--u)) 0 0;
+  overflow: visible;
+  mask-image: none;
+  animation: none;
+}
+.menu[data-layout='detail'] .menu-title {
+  grid-area: title;
+}
+.menu[data-layout='detail'] .menu-screen-hint {
+  grid-area: hint;
+  max-width: none;
+  margin: calc(4 * var(--u)) 0 0;
+}
+.menu[data-layout='detail'] .menu-items {
+  grid-area: list;
+  margin-top: calc(22 * var(--u));
+}
+.menu[data-layout='detail'] .menu-item .menu-hint {
+  display: none;
+}
+.menu[data-layout='detail'] .menu-action .menu-button {
+  font-weight: 700;
+}
+.menu[data-layout='detail'] [data-item='retour'] {
+  margin-top: calc(10 * var(--u));
+}
+.menu[data-layout='detail'] .menu-message {
+  display: none;
+}
+.menu-detail {
+  --bevel: calc(36 * var(--u));
+  grid-area: detail;
+  margin-top: calc(22 * var(--u));
+  padding: calc(40 * var(--u)) calc(52 * var(--u)) calc(48 * var(--u));
+  background: var(--mesh), var(--plate);
+  clip-path: polygon(
+    var(--bevel) 0,
+    100% 0,
+    100% calc(100% - var(--bevel)),
+    calc(100% - var(--bevel)) 100%,
+    0 100%,
+    0 var(--bevel)
+  );
+}
+.menu-detail[hidden] {
+  display: none;
+}
+.menu-detail-title {
+  margin: 0 0 calc(20 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: calc(52 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
+  text-wrap: balance;
+  color: var(--white);
+}
+.menu-detail-text {
+  max-width: 40ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: calc(28 * var(--u));
+  line-height: 1.45;
+}
+
 /* Bouton de pause, en haut à droite pendant un match (souris). */
 #pause-button {
   --bevel: calc(10 * var(--u));
@@ -879,7 +1139,8 @@
   .menu-item.is-lit::after {
     animation-duration: 0.01s;
   }
-  .menu-item.is-lit > :first-child::before {
+  .menu-item.is-lit > :first-child::before,
+  .menu-dim .menu-screen-hint::before {
     animation: none;
   }
 }

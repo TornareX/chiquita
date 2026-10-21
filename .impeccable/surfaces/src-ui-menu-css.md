@@ -72,5 +72,7 @@ rebond, comme une balle qui court le long du grillage.
 - ~~Organisation de l'écran Jouer~~ : tranché le 21/10/2026, **les deux moitiés du court** (`layout: 'columns'` :
   Bleu à gauche, Rouge à droite, règles dessous sur deux colonnes, « Lancer » en bas à droite ; LB/RB ou Tab changent
   de colonne). Repères des manettes affichés sur Jouer aussi.
+- ~~Situations de match trop longues~~ : tranché le 21/10/2026, **liste et fiche** (`layout: 'detail'` : noms à
+  gauche, explication de l'entrée sélectionnée dans une plaque à droite). Pause en bandeau à gauche, match visible.
 - Couleur d'équipe des repères des manettes branchées.
 - Taille minimale du texte courant, à valider depuis le canapé (cible de départ ~24 px à 1080p).

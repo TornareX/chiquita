@@ -48,15 +48,26 @@ for (const size of SIZES) {
       await shot(page, '06-entrainement');
       await menuItem(page, 'situations');
       await shot(page, '07-situations');
+      // La fiche la plus longue (contre-vitre).
+      await page.locator('[data-item="situation-lob-qui-passe"]').hover();
+      await shot(page, '07b-situations-fiche-longue');
     });
 
     test('en ligne', async ({ page }) => {
+      test.setTimeout(90_000);
       await page.goto(`/?enligne&serveur=${GAME_SERVER}`);
       await page.locator('#online-lobby[data-screen="en-ligne"]').waitFor();
       await shot(page, '10-en-ligne');
       await menuItem(page, 'creer');
       await page.locator('#online-lobby[data-screen="salle"]').waitFor();
       await shot(page, '11-salle');
+      // La pause en ligne : le match continue derrière.
+      await menuItem(page, 'lancer');
+      await page.waitForFunction(() => window.__duel?.online?.() != null, null, { timeout: 30_000 });
+      await page.waitForFunction(() => window.__duel!.duel.tick > 240, null, { timeout: 30_000 });
+      await page.keyboard.press('Escape');
+      await page.locator('#pause-menu').waitFor();
+      await shot(page, '13-pause-en-ligne');
       await page.goto('/?enligne&serveur=localhost:1');
       await page.locator('#online-lobby .menu-message').waitFor();
       await shot(page, '12-serveur-introuvable');
@@ -73,6 +84,8 @@ for (const size of SIZES) {
       await page.keyboard.press('Escape');
       await page.locator('#pause-menu').waitFor();
       await shot(page, '22-pause');
+      await menuItem(page, 'reglages');
+      await shot(page, '22b-pause-reglages');
 
       await page.goto(`${MATCH}&double=1`);
       await page.waitForFunction(() => window.__duel !== undefined);

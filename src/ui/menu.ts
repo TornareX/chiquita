@@ -96,9 +96,11 @@ export interface MenuScreen {
    * Disposition des entrées (`data-layout`) : en liste (par défaut) ; en tuiles côte à côte (accueil), où gauche et
    * droite passent aussi d'une entrée à l'autre ; ou en colonnes (Jouer), où la croix suit l'écran : haut et bas
    * restent dans la colonne, gauche et droite changent la valeur d'un choix et, ailleurs, passent à la colonne
-   * voisine, comme LB/RB (Tab au clavier) depuis n'importe quelle entrée.
+   * voisine, comme LB/RB (Tab au clavier) depuis n'importe quelle entrée ; ou en liste avec sa fiche (situations),
+   * où l'explication de l'entrée sélectionnée s'affiche à côté de la liste (`.menu-detail`) au lieu de sous chaque
+   * entrée, et la navigation reste celle d'une liste.
    */
-  layout?: 'list' | 'tiles' | 'columns';
+  layout?: 'list' | 'tiles' | 'columns' | 'detail';
   /** Les entrées, relues à chaque rafraîchissement (`Menu.refresh`). */
   items(): MenuItem[];
   /** B, Échap : revenir. Sans `back`, l'écran précédent de la pile ; à la racine, rien. */
@@ -223,6 +225,8 @@ export function createMenu(options: MenuOptions = {}): Menu {
   let messageText = '';
   /** Texte en cours d'édition à la manette : l'entrée et la position de la lettre. */
   let editing: { id: string; at: number } | null = null;
+  /** Fiche de l'entrée sélectionnée (disposition `detail`) : son nom et son explication. */
+  let detail: { title: HTMLElement; text: HTMLElement; box: HTMLElement } | null = null;
 
   const current = (): MenuScreen | null => stack[stack.length - 1] ?? null;
 
@@ -355,6 +359,13 @@ export function createMenu(options: MenuOptions = {}): Menu {
     if (id !== focusedId) returnTo = null;
     focusedId = id;
     for (const [itemId, element] of elements) element.classList.toggle('is-focused', itemId === id);
+    if (detail) {
+      const item = items.find((i) => i.id === id);
+      const hint = item && focusable(item) ? item.hint : undefined;
+      detail.box.hidden = !hint;
+      detail.title.textContent = hint && item && focusable(item) ? item.label : '';
+      detail.text.textContent = hint ?? '';
+    }
     if (!moveDom || id === null) return;
     const element = elements.get(id);
     const target = element?.querySelector<HTMLElement>('input, button') ?? element;
@@ -385,6 +396,14 @@ export function createMenu(options: MenuOptions = {}): Menu {
       parent.append(node);
     }
     children.push(list);
+    detail = null;
+    if (screen.layout === 'detail') {
+      const box = el('aside', 'menu-detail');
+      box.setAttribute('aria-live', 'polite');
+      detail = { box, title: el('h2', 'menu-detail-title'), text: el('p', 'menu-detail-text') };
+      box.append(detail.title, detail.text);
+      children.push(box);
+    }
     const message = el('p', 'menu-message', messageText);
     message.setAttribute('role', 'status');
     children.push(message);
