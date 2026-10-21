@@ -204,7 +204,7 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   top: var(--ui-safe-y);
   height: auto;
   flex-direction: column;
-  padding: calc(8 * var(--hud-u)) calc(40 * var(--hud-u));
+  padding: calc(14 * var(--hud-u)) calc(44 * var(--hud-u));
   background: var(--hud-plate);
   clip-path: polygon(var(--hud-bevel) 0, 100% 0, calc(100% - var(--hud-bevel)) 100%, 0 100%);
   color: var(--white);
@@ -305,7 +305,8 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
 }
 .players-row {
   display: flex;
-  align-items: center;
+  /* Un nom long passe à la ligne : le losange reste devant la première. */
+  align-items: flex-start;
   gap: calc(12 * var(--hud-u));
   padding: calc(4 * var(--hud-u)) calc(22 * var(--hud-u)) calc(4 * var(--hud-u)) calc(14 * var(--hud-u));
   background: var(--hud-plate);
@@ -314,6 +315,7 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
 .players-row .hud-diamond {
   width: calc(12 * var(--hud-u));
   height: calc(12 * var(--hud-u));
+  margin-top: calc(7 * var(--hud-u));
   background: var(--player);
   box-shadow: none;
 }
@@ -381,13 +383,14 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
 /* --- Retour des entrées (inputDisplay.ts) --- */
 
 /*
- * Une plaque d'encre par joueur humain, en bas à gauche ; son coin en haut à gauche est peint de la couleur de sa
- * place (`data-player`) : il dit qui est qui, même en mode discret sans titre. Position calculée par le code.
+ * Une plaque d'encre par joueur humain, en bas à gauche dans la zone de sécurité ; son coin en haut à gauche est
+ * peint de la couleur de sa place (`data-player`) : il dit qui est qui, même en mode discret sans titre. Hauteur
+ * calculée par le code.
  */
 .input-display {
   --input-corner: calc(18 * var(--hud-u));
   position: fixed;
-  left: 16px;
+  left: var(--ui-safe-x);
   display: flex;
   gap: calc(14 * var(--hud-u));
   align-items: flex-start;
@@ -403,7 +406,7 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
     calc(100% - 12 * var(--hud-u)) 100%,
     0 100%
   );
-  width: min(calc(600 * var(--hud-u)), calc(100vw - 32px));
+  width: min(calc(600 * var(--hud-u)), calc(100vw - 2 * var(--ui-safe-x)));
   color: var(--ui-fg);
   font: 500 max(12px, calc(19 * var(--hud-u))) / 1.35 var(--ui-font-text);
   pointer-events: none;
@@ -425,7 +428,7 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
 /* Le nom de la place et la manette ; un losange de sa couleur remplace la pastille. */
 .input-title {
   color: var(--ui-soft);
-  font-size: max(11px, calc(17 * var(--hud-u)));
+  font-size: max(12px, calc(17 * var(--hud-u)));
   font-weight: 600;
   white-space: nowrap;
 }
@@ -474,6 +477,15 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   font-size: 0.85em;
   font-style: italic;
   font-weight: 900;
+}
+
+/*
+ * Dessins (sticks, boutons, guide du geste) : leur taille en px à 1080p (`--svg-w`, posée par le code), et au-delà
+ * ils grandissent avec l'interface (4K) ; jamais plus petits, pour rester lisibles en 720p.
+ */
+:is(.input-display, .swing-guide) svg {
+  width: max(calc(var(--svg-w) * 1px), calc(var(--svg-w) * var(--hud-u)));
+  height: auto;
 }
 
 /* Dessin des sticks et des boutons. */
@@ -574,11 +586,11 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
 }
 .swing-hint {
   color: var(--ui-muted);
-  font-size: max(11px, calc(17 * var(--hud-u)));
+  font-size: max(12px, calc(17 * var(--hud-u)));
 }
 .swing-flick {
   color: var(--ui-soft);
-  font-size: max(11px, calc(17 * var(--hud-u)));
+  font-size: max(12px, calc(17 * var(--hud-u)));
 }
 .swing-guide .ring {
   fill: rgba(255, 255, 255, 0.04);

@@ -1,9 +1,9 @@
 import { test, type Page } from '@playwright/test';
 
 /**
- * Une capture de chaque surface hors scène 3D (`research/DESIGN_PLAN.md` §2), en 1280×720 et 1920×1080, dans
- * `screenshots/design/<CAPTURES>/` (`avant` par défaut). Sert à comparer avant/après chaque étape de la passe design ;
- * ne vérifie rien.
+ * Une capture de chaque surface hors scène 3D (`research/DESIGN_PLAN.md` §2), en 1280×720 et 1920×1080 puis aux
+ * tailles des cas limites, dans `screenshots/design/<CAPTURES>/` (`avant` par défaut). Sert à comparer avant/après
+ * chaque étape de la passe design ; ne vérifie rien.
  */
 
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
@@ -12,10 +12,17 @@ const GAME_SERVER = `localhost:${env.E2E_SERVEUR ?? 2567}`;
 // Match local rejoué à l'identique : deux IA, même graine.
 const MATCH = '/?ai=normal&bot=both&seed=7';
 
-const SIZES = [
+// Les deux tailles de référence, puis celles des cas limites (étape 10) : portable 1366×768, 4:3, 4K, ultra-large.
+// `TAILLES=720p,4k` n'en prend que certaines.
+const ALL_SIZES = [
   { name: '720p', width: 1280, height: 720 },
   { name: '1080p', width: 1920, height: 1080 },
+  { name: '768p', width: 1366, height: 768 },
+  { name: '4-3', width: 1024, height: 768 },
+  { name: '4k', width: 3840, height: 2160 },
+  { name: 'ultra-large', width: 2560, height: 1080 },
 ] as const;
+const SIZES = env.TAILLES ? ALL_SIZES.filter((s) => env.TAILLES!.split(',').includes(s.name)) : ALL_SIZES;
 
 async function menuItem(page: Page, id: string): Promise<void> {
   await page.locator(`[data-item="${id}"] button`).first().click();

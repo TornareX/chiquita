@@ -105,10 +105,17 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
   });
   panel.append(levelSelect);
 
-  heading('Sensations');
+  // Les sensations, repliées : le panneau tient sans défiler et laisse voir le haut du match. Ouvertes à la souris.
+  const feel = document.createElement('details');
+  feel.className = 'feel';
+  const feelTitle = document.createElement('summary');
+  feelTitle.textContent = 'Sensations';
+  feelTitle.addEventListener('click', () => feelTitle.blur());
+  feel.append(feelTitle);
+  panel.append(feel);
   const presets = document.createElement('div');
   presets.className = 'speeds';
-  panel.append(presets);
+  feel.append(presets);
   const sliders = (Object.keys(FEEL_LIMITS) as (keyof FeelTuning)[]).map((key) => {
     const { min, max, step } = FEEL_LIMITS[key];
     const row = document.createElement('label');
@@ -132,7 +139,7 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
     });
     input.addEventListener('change', () => input.blur());
     row.append(text, input, value);
-    panel.append(row);
+    feel.append(row);
     show();
     return show;
   });
@@ -161,15 +168,15 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
   const inMatchText = document.createElement('span');
   inMatchText.textContent = 'Utiliser ces sensations en match';
   inMatch.append(inMatchBox, inMatchText);
-  panel.append(inMatch);
+  feel.append(inMatch);
 
   const copied = document.createElement('textarea');
   copied.readOnly = true;
   copied.rows = 4;
   copied.hidden = true;
-  const bottom = document.createElement('div');
-  bottom.className = 'actions';
-  panel.append(bottom);
+  const copyRow = document.createElement('div');
+  copyRow.className = 'actions';
+  feel.append(copyRow);
   button(
     'Copier les réglages',
     () => {
@@ -178,9 +185,12 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
       copied.select();
       void navigator.clipboard?.writeText(copied.value).catch(() => undefined);
     },
-    bottom,
+    copyRow,
   );
-  panel.append(copied);
+  feel.append(copied);
+  const bottom = document.createElement('div');
+  bottom.className = 'actions';
+  panel.append(bottom);
   button('Retour à l’accueil', () => (location.search = ''), bottom);
 
   document.body.append(panel);

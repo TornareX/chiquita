@@ -550,8 +550,8 @@
 /* Aides manette en bas d'écran : A valide, B revient. */
 .menu-pad-hints {
   position: absolute;
-  left: var(--ui-safe-x);
-  right: var(--ui-safe-x);
+  left: var(--ui-frame-x);
+  right: var(--ui-frame-x);
   bottom: var(--ui-safe-y);
   display: flex;
   align-items: center;
@@ -642,7 +642,7 @@
 }
 .menu[data-layout='tiles'] .menu-panel {
   position: absolute;
-  inset: var(--ui-safe-y) var(--ui-safe-x) calc(var(--ui-safe-y) + 84 * var(--u));
+  inset: var(--ui-safe-y) var(--ui-frame-x) calc(var(--ui-safe-y) + 84 * var(--u));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -741,7 +741,7 @@
 .menu[data-layout='columns'] .menu-panel {
   --columns-gap: calc(56 * var(--u));
   position: absolute;
-  inset: var(--ui-safe-y) var(--ui-safe-x) calc(var(--ui-safe-y) + 84 * var(--u));
+  inset: var(--ui-safe-y) var(--ui-frame-x) calc(var(--ui-safe-y) + 84 * var(--u));
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: auto auto auto auto auto 1fr auto;
@@ -878,7 +878,7 @@
 }
 .menu-opaque:is([data-screen='reglages'], [data-screen='entrainement']) .menu-panel {
   max-height: calc(100vh - 2 * var(--ui-safe-y) - 84 * var(--u));
-  margin: var(--ui-safe-y) 0 0 var(--ui-safe-x);
+  margin: var(--ui-safe-y) 0 0 var(--ui-frame-x);
   /* Place pour l'accent des capitales (« ENTRAÎNEMENT ») au-dessus d'un titre serré. */
   padding: calc(14 * var(--u)) 0 0;
 }
@@ -983,6 +983,8 @@
 }
 .menu-dim .menu-pad-hints {
   z-index: 1;
+  /* Sous le bandeau, calé sur son bord gauche comme le menu, même sur un écran ultra-large. */
+  left: var(--ui-safe-x);
 }
 .menu-dim .menu-item {
   --plate-bg: var(--plate-raised);
@@ -1048,7 +1050,7 @@
 }
 .menu[data-layout='detail'] .menu-panel {
   position: absolute;
-  inset: var(--ui-safe-y) var(--ui-safe-x) calc(var(--ui-safe-y) + 84 * var(--u));
+  inset: var(--ui-safe-y) var(--ui-frame-x) calc(var(--ui-safe-y) + 84 * var(--u));
   display: grid;
   grid-template-columns: minmax(0, calc(780 * var(--u))) minmax(0, 1fr);
   grid-template-rows: auto auto 1fr;

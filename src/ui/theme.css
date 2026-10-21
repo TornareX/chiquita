@@ -67,6 +67,11 @@
   /* Zone de sécurité d'une télé : 5 % sur les bords. */
   --ui-safe-x: 5vw;
   --ui-safe-y: 5vh;
+  /*
+   * Cadre des menus : la zone de sécurité en 16:9 et en 4:3 ; sur un écran plus large (ultra-large), une largeur de
+   * 1728 `--ui-px` centrée, pour que les colonnes ne s'étirent pas d'un bord à l'autre.
+   */
+  --ui-frame-x: max(var(--ui-safe-x), (100vw - 1728 * var(--ui-px)) / 2);
 
   /* Texte des écrans annexes ; l'ombre détache un texte posé sans plaque sur la scène 3D. */
   --ui-fg: var(--ink-fg);

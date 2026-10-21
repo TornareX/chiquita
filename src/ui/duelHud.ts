@@ -12,7 +12,7 @@ export interface DuelHud {
    * `buttons` : manette ou clavier de chaque joueur humain (`null` pour une IA), pour afficher ses symboles
    * dans l'aide (celle du premier humain) et les consignes (celle du joueur concerné).
    * `detailed` : pour le labo et les tests, l'aide aux coups en bas à droite et le nom de chaque frappe. Sinon,
-   * le match reste épuré : seuls les coups marquants (frappe parfaite, salida de pista) sont annoncés.
+   * le match reste épuré : seuls les coups marquants (frappe parfaite, sortie de piste) sont annoncés.
    */
   update(duel: Duel, sources: readonly string[], buttons?: readonly (InputSource | null)[], detailed?: boolean): void;
 }
@@ -31,7 +31,7 @@ const ASSIST_LABELS: Record<AssistLevel, string> = {
 
 const REASONS: Record<PointReason, string> = {
   net: 'filet',
-  'own-ground': 'la balle n’a pas passé le filet',
+  'own-ground': 'rebond dans son camp',
   'own-mesh': 'propre grillage',
   'opponent-wall': 'mur adverse avant le rebond',
   out: 'sortie',
@@ -86,8 +86,8 @@ const HELP = [
   '{normal} coup normal · {slice} coupé · {lob} lob : maintiens, relâche quand l’anneau se referme',
   'Anneau vert : balle facile (lob, chiquita, attaque) · jaune : transition · rouge : balle dure, remets-la bas',
   '{slice} de volée sur une balle flottante : volée coupée qui meurt · {slice} stick vers soi : chiquita · appuie tôt pour armer, sinon tu bloques',
-  '{overhead} balle haute : bandeja · stick sur le côté : víbora · stick en avant près du filet : remate',
-  'Remate parfait près du filet : il peut sortir du terrain (por tres) ; sors par la porte pour la rattraper',
+  '{overhead} balle haute : bandeja · stick sur le côté : víbora · stick en avant près du filet : smash',
+  'Smash parfait près du filet : il peut sortir du terrain (por tres) ; sors par la porte pour la rattraper',
   'Balle passée qui file vers ta vitre (repère sur la vitre) : {normal} stick vers ta vitre = contre-vitre',
   'Service : maintiens pour lâcher la balle, relâche au sommet du rebond',
   'Stick : se placer, puis viser au moment de l’impact (haut = profond)',
@@ -116,7 +116,7 @@ function shotLabel(shot: DuelShot, detailed: boolean): string | null {
   // Balle lourde (smash bloqué) ou rouge, mal contrôlée : on dit pourquoi, c'est ce qui apprend le timing.
   if ((shot.miscue ?? 0) >= MISCUE_SHOWN) return `${shot.volley ? 'balle lourde' : 'balle rouge'} : trop ${shot.timing < 0 ? 'tôt' : 'tard'} !`;
   if (!detailed && !shot.perfect && !shot.outside) return null;
-  if (shot.outside) return 'salida de pista !';
+  if (shot.outside) return 'sortie de piste !';
   if (shot.overhead) return OVERHEADS[shot.overhead] + (shot.perfect ? ' parfaite !' : '');
   if (shot.style === 'punch') return 'volée de définition !';
   if (shot.style === 'cut') return shot.perfect ? 'volée coupée parfaite !' : 'volée coupée';

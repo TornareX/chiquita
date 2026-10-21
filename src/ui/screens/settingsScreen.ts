@@ -74,7 +74,7 @@ export function settingsScreen(menu: Menu, prefs: Preferences, options: Settings
       );
       if (!options.inMatch) {
         items.push(
-          { kind: 'heading', id: 'mes-places', text: 'Mes places (pré-remplies dans « Jouer » et en ligne)' },
+          { kind: 'heading', id: 'mes-places', text: 'Ma place par défaut' },
           {
             kind: 'choice',
             id: 'peripherique',

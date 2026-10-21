@@ -52,7 +52,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
         value: controller,
         options: CONTROLLERS.map((c) => {
           const pad = padOf(c);
-          return { value: c, label: CONTROLLER_LABELS[c] + (pad !== null && !pads[pad] ? ' (pas branchée)' : '') };
+          return { value: c, label: CONTROLLER_LABELS[c] + (pad !== null && !pads[pad] ? ' (absente)' : '') };
         }),
         set: (c: Controller) => {
           const wasHuman = isHuman(setup.players[i]!);

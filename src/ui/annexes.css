@@ -63,7 +63,8 @@
 
 /* Intertitre : un losange violet, le mot, puis un fil jusqu'au bord. */
 #tutorial-overlay h2,
-#panel h2 {
+#panel h2,
+#panel .feel > summary {
   display: flex;
   align-items: center;
   gap: calc(12 * var(--annex-u));
@@ -76,7 +77,8 @@
   color: var(--ink-soft);
 }
 #tutorial-overlay h2::before,
-#panel h2::before {
+#panel h2::before,
+#panel .feel > summary::before {
   content: '';
   flex: none;
   width: 0.45em;
@@ -85,7 +87,8 @@
   rotate: 45deg;
 }
 #tutorial-overlay h2::after,
-#panel h2::after {
+#panel h2::after,
+#panel .feel > summary::after {
   content: '';
   flex: 1;
   height: 1px;
@@ -250,18 +253,30 @@
 #tutorial-overlay .lesson.selected .stars {
   color: color-mix(in oklab, var(--ink) 78%, var(--ball));
 }
+/* Étoiles d'une leçon, dessinées : pleines si gagnées, éteintes sinon. */
 #tutorial-overlay .stars {
+  display: flex;
+  gap: 0.18em;
   color: var(--ink-fg);
   font-size: calc(26 * var(--annex-u));
-  letter-spacing: 0.08em;
-  white-space: nowrap;
+}
+#tutorial-overlay .star {
+  width: 1em;
+  height: 1em;
+  background: var(--ink-line);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+#tutorial-overlay .star.is-won {
+  background: currentColor;
+}
+#tutorial-overlay .lesson.selected .star:not(.is-won) {
+  background: color-mix(in oklab, var(--ink) 50%, var(--ball));
 }
 /* Leçon réussie : les étoiles gagnées, en grand, en jaune balle. */
 #tutorial-overlay .stars-big {
-  margin: calc(10 * var(--annex-u)) 0;
+  margin: calc(16 * var(--annex-u)) 0;
   color: var(--ball);
   font-size: calc(64 * var(--annex-u));
-  line-height: 1;
 }
 #tutorial-overlay .row {
   display: flex;
@@ -316,9 +331,12 @@
   width: max-content;
   max-width: min(calc(1100 * var(--annex-u)), calc(100vw - 2 * var(--ui-safe-x)));
 }
-/* Verdict : la couleur de la qualité (réussi, imprécis), un ton au-dessus du texte. */
+/*
+ * Verdict et gros indice : sous la consigne, sur le bandeau LED et le haut du mur du fond, comme les annonces du HUD
+ * (plus bas, ils passaient sur le joueur du fond et la balle). Verdict : la couleur de la qualité (réussi, imprécis).
+ */
 #tutorial-message {
-  top: 22%;
+  top: calc(var(--ui-safe-y) + 112 * var(--annex-u));
   width: max-content;
   max-width: min(calc(1100 * var(--annex-u)), calc(100vw - 2 * var(--ui-safe-x)));
   font-size: calc(32 * var(--annex-u));
@@ -332,7 +350,7 @@
 }
 /* Gros indice (« Relâche ! ») : l'instant, sur la plaque violette maillée des grandes annonces. */
 #tutorial-prompt {
-  top: 34%;
+  top: calc(var(--ui-safe-y) + 172 * var(--annex-u));
   rotate: -4deg;
   padding: calc(4 * var(--annex-u)) calc(46 * var(--annex-u)) calc(8 * var(--annex-u));
   background: var(--hud-call-mesh, none), var(--violet);
@@ -356,19 +374,21 @@
 
 /*
  * Une plaque d'encre presque opaque sur le côté gauche du match ; on s'en sert à la souris. Texte en `--ui-px` avec
- * un plancher, pour ne pas descendre sous l'ancienne taille en 720p. Le bas s'arrête au-dessus du retour des
- * entrées d'un joueur (en bas à gauche), qui le recouvrait.
+ * un plancher, pour ne pas descendre sous l'ancienne taille en 720p. Dans la zone de sécurité, sous « qui joue avec
+ * quoi » (`#players`, deux lignes au labo) qu'il cachait ; le bas s'arrête au-dessus du retour des entrées d'un
+ * joueur (en bas à gauche). Les sensations sont repliées : en 1080p, tout tient sans défiler.
  */
 #panel {
   --panel-text: max(13px, calc(17 * var(--annex-u)));
   --panel-small: max(12px, calc(15 * var(--annex-u)));
+  --panel-top: calc(var(--ui-safe-y) + 92 * var(--annex-u));
   --bevel: calc(18 * var(--annex-u));
   position: fixed;
-  top: 44px;
-  left: 18px;
+  top: var(--panel-top);
+  left: var(--ui-safe-x);
   box-sizing: border-box;
-  width: max(250px, calc(310 * var(--annex-u)));
-  max-height: calc(100vh - 44px - 14px - max(92px, 106 * var(--annex-u)) - 12px);
+  width: max(250px, calc(340 * var(--annex-u)));
+  max-height: calc(100vh - var(--panel-top) - var(--ui-safe-y) - max(92px, 106 * var(--annex-u)) - 12px);
   overflow-y: auto;
   padding: calc(16 * var(--annex-u)) calc(18 * var(--annex-u));
   background: var(--ui-panel-bg);
@@ -388,17 +408,38 @@
 #panel h2:first-child {
   margin-top: 0;
 }
+/* Sensations : l'intertitre s'ouvre à la souris ; son losange est vide quand c'est replié, plein quand c'est ouvert. */
+#panel .feel > summary {
+  margin: calc(14 * var(--annex-u)) 0 calc(6 * var(--annex-u));
+  font-size: max(13px, calc(20 * var(--annex-u)));
+  list-style: none;
+  cursor: pointer;
+  outline: none;
+}
+#panel .feel > summary::-webkit-details-marker {
+  display: none;
+}
+#panel .feel:not([open]) > summary::before {
+  background: none;
+  box-shadow: inset 0 0 0 2px var(--violet);
+}
+#panel .feel > summary:hover {
+  color: var(--white);
+}
+#panel .feel > summary:focus-visible {
+  color: var(--ball);
+}
 #panel .exercises,
 #panel .actions {
   display: grid;
-  gap: calc(4 * var(--annex-u));
+  gap: calc(3 * var(--annex-u));
 }
 #panel .actions {
-  margin-top: calc(12 * var(--annex-u));
+  margin-top: calc(10 * var(--annex-u));
 }
 #panel button {
   --bevel: calc(9 * var(--annex-u));
-  padding: calc(7 * var(--annex-u)) calc(14 * var(--annex-u));
+  padding: calc(5 * var(--annex-u)) calc(14 * var(--annex-u));
   border: 0;
   background: var(--ui-control-bg);
   color: inherit;
@@ -539,6 +580,13 @@
   color: var(--ink-fg);
   font: 600 var(--annex-small) var(--ui-font-text);
   accent-color: var(--ball);
+}
+/* Le coin coupé masquerait le contour du navigateur : le focus passe la plaque au jaune balle. */
+.pad-test-style select:focus-visible,
+#panel select:focus-visible {
+  background: var(--ball);
+  color: var(--ink);
+  outline: none;
 }
 .pad-test-instruction {
   min-height: 1.3em;

@@ -63,7 +63,7 @@ export const PREP_MOVE_LABELS: Record<PrepMove, string> = {
   libre: 'Libre (le stick déplace)',
   ralenti: 'Ralenti (petits pas, vise)',
   bloque: 'Bloqué (le stick vise)',
-  tard: 'Bloqué au dernier moment (on se place, puis le stick vise)',
+  tard: 'Bloqué au dernier moment (tu te places, puis tu vises)',
 };
 
 /**

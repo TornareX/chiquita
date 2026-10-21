@@ -227,7 +227,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     const padIndex = padOf(controller);
     const keys = keyboardOf(controller);
     const pad = padIndex === null ? undefined : pads[padIndex];
-    if (padIndex !== null && !pad) sources[index] += ' (pas branchée)';
+    if (padIndex !== null && !pad) sources[index] += ' (absente)';
     const slot = padIndex ?? (keys === null ? null : 4 + keys);
     const swing = slot === null ? null : (swings?.[slot] ?? null);
     playerSwings[index] = swing;
@@ -375,7 +375,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   if (online && onlineClient) {
     online.connection.attach(onlineClient);
     online.config.seats.forEach((seat, i) => {
-      if (!online.seats.includes(i)) sources[i] = seat.kind === 'human' ? seat.name : `IA ${seat.level}`;
+      if (!online.seats.includes(i)) sources[i] = seat.kind === 'human' ? seat.name : CONTROLLER_SHORT[seat.level];
     });
   }
   const netHud = fakeNet

@@ -134,7 +134,7 @@ const SHIRTS = [0x2a3f6e, 0x6e2a2a, 0xd8d8d8, 0x2b2b2b, 0x3d6e3a, 0xb38a2e, 0x5a
 const SKINS = [0xf1c9a5, 0xe0ac7e, 0xb57a52, 0x8d5a3b, 0x5f3a24];
 
 /** Texte des panneaux LED : des noms inventés, aucune vraie marque. */
-const LED_TEXT = 'PADEL SMASH   ·   ¡VAMOS!   ·   COPA CANAPÉ   ·   ';
+const LED_TEXT = 'PADEL SMASH   ·   ALLEZ !   ·   COPA CANAPÉ   ·   ';
 const LED_BLUE = '#1b34c9';
 
 /** Texte du panneau, écrit une fois sur toute la largeur de la texture : elle se répète sans raccord visible. */
@@ -214,7 +214,7 @@ export interface Arena {
   update(dt: number): void;
 }
 
-/** Durée d'affichage de « ¡POR TRES! » sur les panneaux (s). */
+/** Durée d'affichage de « POR TRES ! » sur les panneaux (s). */
 const POR_TRES_TIME = 3;
 
 export function createArena(): Arena {
@@ -310,9 +310,9 @@ export function createArena(): Arena {
   object.add(flashes);
 
   // Panneaux LED sur le muret de chaque tribune, seulement : l'espace autour de la piste reste libre (au moins 4 m)
-  // pour les sorties par la porte. Le texte défile ; sur un por tres, ils passent tous à « ¡POR TRES! ».
+  // pour les sorties par la porte. Le texte défile ; sur un por tres, ils passent tous à « POR TRES ! ».
   const normalLed = ledTexture(LED_TEXT, LED_BLUE, '#ffffff');
-  const porTresLed = ledTexture('¡POR TRES!   ', '#ffb000', '#1a1200');
+  const porTresLed = ledTexture('POR TRES !   ', '#ffb000', '#1a1200');
   const ledMaterial = new THREE.MeshBasicMaterial({ map: normalLed, side: THREE.DoubleSide });
   const board = (width: number, height: number, x: number, y: number, z: number, facing: number): void => {
     const geometry = new THREE.PlaneGeometry(width, height);

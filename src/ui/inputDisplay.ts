@@ -74,7 +74,7 @@ export function describeShot(shot: DuelShot, profile: PhysicsProfile): { text: s
   let name: string;
   if (shot.serve) name = 'service';
   else if (shot.counterWall) name = 'contre-vitre';
-  else if (shot.outside) name = 'salida de pista';
+  else if (shot.outside) name = 'sortie de piste';
   else if (shot.overhead) name = OVERHEAD_NAMES[shot.overhead];
   else if (shot.style === 'punch') name = 'volée de définition';
   else if (shot.style === 'cut') name = 'volée coupée';
@@ -223,6 +223,10 @@ function sourceName(source: InputSource): string {
 /** Centre du stick droit dans le dessin : après les boutons quand ils sont affichés (`?boutons=1`). */
 const swingX = (): number => (buttonsEnabled() ? 160 : 98);
 
+/** Zone de sécurité d'une télé (`--ui-safe-x`, `--ui-safe-y` de `theme.css`) : 5 % de la fenêtre, en px. */
+const safeX = (): number => window.innerWidth * 0.05;
+const safeY = (): number => window.innerHeight * 0.05;
+
 /** Échelle du dessin des sticks en mode discret. */
 const COMPACT_SCALE = 0.55;
 
@@ -237,6 +241,8 @@ function createWidget(index: number, compact: boolean): Widget {
   const width = SWING_X + 30;
   const scale = compact ? COMPACT_SCALE : 1;
   const row = svg('svg', { width: Math.round(width * scale), height: Math.round(60 * scale), viewBox: `0 0 ${width} 60` });
+  // Largeur en px à 1080p : le dessin grandit avec l'interface au-delà (`hud.css`).
+  row.style.setProperty('--svg-w', String(Math.round(width * scale)));
   // Stick : cercle et point.
   row.append(svg('circle', { class: 'ring', cx: 30, cy: 30, r: 26 }));
   row.append(svg('line', { class: 'axis', x1: 30, y1: 6, x2: 30, y2: 54 }));
@@ -305,10 +311,10 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
       const indices = trackers.map((_, i) => i);
       const shown = indices.filter((i) => mode !== 'off' && i < duel.players.length && sources[i] && states[i]);
       const compact = mode === 'compact';
-      // En bas à gauche, empilés dans l'ordre des joueurs (Bleu en bas). Détaillé, à plus de deux (double à 3 ou
-      // 4 manettes) : sans l'historique, pour ne pas cacher le score.
+      // En bas à gauche dans la zone de sécurité, empilés dans l'ordre des joueurs (Bleu en bas). Détaillé, à plus
+      // de deux (double à 3 ou 4 manettes) : sans l'historique, pour ne pas cacher le score.
       const crowded = shown.length > 2;
-      let stack = compact ? 10 : 14;
+      let stack = safeY();
       indices.forEach((i) => {
         const source = sources[i];
         const state = states[i];
@@ -331,7 +337,7 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
         const tracker = trackers[i]!;
         const lastNote = tracker.history[0];
         const recent = lastNote?.bySwing && (duel.tick - tracker.noteTick) * SIM_DT < NOTE_TIME ? lastNote.text : null;
-        guide.render(swings?.[i] ?? null, state.swing ?? null, !compact, 16 + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent, source);
+        guide.render(swings?.[i] ?? null, state.swing ?? null, !compact, safeX() + w.root.offsetWidth + 10, bottom, swingContext(duel, i), recent, source);
 
         const key = source.kind === 'pad' ? source.family : `kbd${source.player}${source.layout?.size ?? 0}`;
         if (key !== w.key) {

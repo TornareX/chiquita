@@ -70,6 +70,8 @@ function build(): Parts {
   const title = document.createElement('div');
   title.className = 'swing-title';
   const drawing = el('svg', { width: SIZE + 110, height: SIZE + 20, viewBox: `-55 -10 ${SIZE + 110} ${SIZE + 20}` });
+  // Largeur en px à 1080p : le dessin grandit avec l'interface au-delà (`hud.css`).
+  drawing.style.setProperty('--svg-w', String(SIZE + 110));
   const defs = el('defs', {});
   const marker = el('marker', { id: 'swing-head', viewBox: '0 0 10 10', refX: 5, refY: 5, markerWidth: 3, markerHeight: 3, orient: 'auto-start-reverse' });
   marker.append(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: 'context-stroke' }));

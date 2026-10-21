@@ -51,7 +51,7 @@ export function createPauseMenu(settings: DuelSettings, options: PauseOptions): 
   const root: MenuScreen = {
     id: 'pause',
     title: 'Pause',
-    hint: options.online ? 'Le match continue pour les autres : ta place ne bouge plus.' : 'Partie en pause.',
+    hint: options.online ? 'Le match continue pour les autres : ta place ne bouge plus.' : undefined,
     items: () => {
       const items: MenuItem[] = [
         { kind: 'action', id: 'reprendre', label: 'Reprendre', primary: true, run: close },

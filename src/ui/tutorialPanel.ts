@@ -27,7 +27,11 @@ export function saveProgress(progress: TutorialProgress): void {
   }
 }
 
-export const starsText = (stars: number): string => '★'.repeat(stars) + '☆'.repeat(2 - stars);
+/** Les deux étoiles d'une leçon, dessinées en CSS (`annexes.css`) ; le nombre est dit en toutes lettres. */
+const starsHtml = (stars: number, className: string): string =>
+  `<span class="${className}" role="img" aria-label="${stars} étoile${stars > 1 ? 's' : ''} sur 2">` +
+  [0, 1].map((n) => `<span class="star${n < stars ? ' is-won' : ''}"></span>`).join('') +
+  '</span>';
 
 export interface TutorialPanelActions {
   pick(index: number): void;
@@ -101,7 +105,7 @@ export function createTutorialPanel(actions: TutorialPanelActions): TutorialPane
         b.dataset.lesson = lesson.id;
         b.innerHTML =
           `<span><b>${i + 1}. ${escapeHtml(lesson.title)}</b><br><span class="muted">${formatButtons(lesson.buttons, source)}</span></span>` +
-          `<span class="stars">${starsText(progress[lesson.id] ?? 0)}</span>`;
+          starsHtml(progress[lesson.id] ?? 0, 'stars');
         b.addEventListener('click', () => actions.pick(i));
         card.append(b);
       });
@@ -127,7 +131,7 @@ export function createTutorialPanel(actions: TutorialPanelActions): TutorialPane
     showDone(lesson, stars, perfects, hasNext, source) {
       card.innerHTML =
         `<h1>${escapeHtml(lesson.title)} : réussie !</h1>` +
-        `<p class="stars stars-big">${starsText(stars)}</p>` +
+        `<p>${starsHtml(stars, 'stars stars-big')}</p>` +
         `<p>${perfects} frappe${perfects > 1 ? 's' : ''} parfaite${perfects > 1 ? 's' : ''}.` +
         (stars < 2 ? ' Deuxième étoile : réussis la leçon avec au moins 3 frappes parfaites.' : '') +
         '</p>';
