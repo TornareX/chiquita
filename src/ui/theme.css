@@ -1,8 +1,8 @@
 /*
- * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étapes 2, 3 et 8.
+ * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étapes 2, 3, 8 et 9.
  * `menu.css`, `hud.css` et `annexes.css` n'utilisent que ces variables pour les couleurs et les polices.
- * La palette « Grillage » (DA du 21/10/2026) est en tête ; menus et HUD s'en servent. Les variables `--ui-*` des
- * écrans annexes gardent les valeurs du style neutre jusqu'à leur étape (9).
+ * La palette « Grillage » (DA du 21/10/2026) est en tête ; les variables `--ui-*` des écrans annexes (tutoriel,
+ * labo, test manette, retour des entrées) la reprennent depuis l'étape 9.
  */
 
 /* Archivo (licence OFL, `fonts/ARCHIVO-OFL.txt`), variable en largeur (62-125 %) et en graisse (100-900), latin. */
@@ -53,10 +53,10 @@
     repeating-linear-gradient(-45deg, var(--mesh-wire) 0 1px, transparent 1px var(--mesh-step));
 
   /* Polices : Archivo (embarquée) pour l'interface ; titres, valeurs et chiffres en étroite italique 900. */
-  --ui-font: system-ui, sans-serif;
   --ui-font-mono: monospace;
   --ui-font-brand: 'Archivo', system-ui, sans-serif;
   --ui-font-text: 'Archivo', system-ui, sans-serif;
+  --ui-font: var(--ui-font-text);
   --ui-brand-stretch: 62%;
 
   /*
@@ -68,29 +68,36 @@
   --ui-safe-x: 5vw;
   --ui-safe-y: 5vh;
 
-  /* Texte. */
-  --ui-fg: #f2f5f7;
-  --ui-soft: #c9d3db;
-  --ui-muted: #9fb0bf;
-  --ui-glyph: #e8edf1;
-  --ui-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  /* Texte des écrans annexes ; l'ombre détache un texte posé sans plaque sur la scène 3D. */
+  --ui-fg: var(--ink-fg);
+  --ui-soft: var(--ink-soft);
+  --ui-muted: var(--ink-muted);
+  --ui-glyph: var(--ink-fg);
+  --ui-text-shadow: 0 calc(2 * var(--ui-px)) calc(6 * var(--ui-px)) rgba(13, 11, 26, 0.9);
 
-  /* Accents : annonces et service, focus et action principale. */
-  --ui-call: #ffe27a;
-  --ui-gold: #ffd23f;
+  /* Accents : l'instant et le focus (jaune balle). */
+  --ui-call: var(--ball);
+  --ui-gold: var(--ball);
 
-  /* Qualité d'une frappe ou d'un essai. */
-  --ui-good: #5fd35a;
-  --ui-warn: #ffb35c;
-  --ui-bad: #ff6b6b;
+  /*
+   * Qualité d'une frappe ou d'un essai : parfait, réussi, imprécis, raté. Teintes éloignées et clarté qui descend
+   * de l'une à l'autre (OKLab 0,95 → 0,82 → 0,75 → 0,66), pour qu'un daltonien les sépare encore ; toutes lisibles
+   * sur l'encre (contraste 5,6 au moins). Le mot (« parfait ! », « raté ») est toujours écrit à côté.
+   */
+  --ui-perfect: var(--ball);
+  --ui-good: #3fe39a;
+  --ui-warn: #ff8a1f;
+  --ui-bad: #ff3b6b;
 
-  /* Surfaces et traits. */
-  --ui-pill-bg: rgba(10, 16, 24, 0.6);
-  --ui-panel-bg: rgba(12, 18, 26, 0.97);
-  --ui-control-bg: #1c2833;
-  --ui-control-hover: #263645;
-  --ui-line: #3a4a58;
-  --ui-line-soft: #5a6b7a;
+  /* Surfaces et traits : plaques d'encre, presque opaques sur la scène. */
+  --ui-pill-bg: rgba(13, 11, 26, 0.9);
+  --ui-panel-bg: rgba(13, 11, 26, 0.94);
+  --ui-control-bg: var(--plate);
+  --ui-control-hover: var(--plate-raised);
+  --ui-line: var(--ink-line);
+  --ui-line-soft: color-mix(in oklab, var(--ink-line) 50%, var(--ink-muted));
+  /* Coin coupé des plaques des écrans annexes. */
+  --ui-bevel: calc(12 * var(--ui-px));
 
   /* Équipes : nom au score, et pastille de chaque joueur (le partenaire en plus clair), comme les maillots. */
   --team-blue: var(--blue);
@@ -117,7 +124,7 @@
 
 /* Tons partagés : qualité d'une frappe, pastilles de joueur. */
 .tone-perfect {
-  color: var(--ui-gold);
+  color: var(--ui-perfect);
 }
 .tone-good {
   color: var(--ui-good);

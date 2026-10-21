@@ -2,7 +2,147 @@
  * Apparence des écrans annexes : tutoriel (`tutorialPanel.ts`), panneau latéral du labo et de la machine à balles
  * (`laboPanel.ts`, `panel.ts`), test de la manette (`padTest.ts`). Couleurs et polices de `theme.css`.
  * Les autres textes de la machine à balles (outil de développement) restent dans `index.html`.
+ *
+ * Étape 9 de `research/DESIGN_PLAN.md` : le vocabulaire des menus (`menu.css`) sans changer l'organisation. Pas de
+ * panneau sur les écrans plein écran : les plaques posent sur l'encre maillée ; plaques aux coins coupés, focus en
+ * plaque jaune balle qui glisse, titres et intertitres en Archivo étroite italique 900, losanges pour les repères.
+ * Tout en `--ui-px` (pensé en 1920×1080) ; le panneau du labo garde un plancher en px pour rester lisible en 720p.
  */
+
+:root {
+  --annex-u: var(--ui-px);
+  --annex-text: calc(24 * var(--annex-u));
+  --annex-small: calc(20 * var(--annex-u));
+  --annex-title: calc(68 * var(--annex-u));
+  --annex-heading: calc(26 * var(--annex-u));
+  --annex-row: calc(52 * var(--annex-u));
+  --annex-shift: calc(12 * var(--annex-u));
+  --annex-edge: calc(3 * var(--annex-u));
+  --annex-bounce: cubic-bezier(0.3, 1.9, 0.55, 1);
+  /* Fond d'un écran ouvert par-dessus le jeu : l'encre maillée des menus. */
+  --annex-backdrop: var(--mesh), rgba(13, 11, 26, 0.86);
+}
+
+/* Coin coupé en haut à gauche et en bas à droite, comme les entrées des menus. */
+#tutorial-overlay .lesson,
+#tutorial-overlay .row button,
+#tutorial-overlay .row button::before,
+.pad-test-actions button,
+.pad-test-actions button::before,
+.pad-test-style select,
+#panel,
+#panel button,
+#panel select {
+  --bevel: var(--ui-bevel);
+  clip-path: polygon(
+    var(--bevel) 0,
+    100% 0,
+    100% calc(100% - var(--bevel)),
+    calc(100% - var(--bevel)) 100%,
+    0 100%,
+    0 var(--bevel)
+  );
+}
+
+/* Titres : comme ceux des menus. */
+#tutorial-overlay h1,
+.pad-test-panel h1 {
+  margin: 0 0 calc(10 * var(--annex-u));
+  font-family: var(--ui-font-brand);
+  font-size: var(--annex-title);
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  /* L'espace de l'étroite italique 900 disparaît presque entre deux mots en capitales. */
+  word-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+
+/* Intertitre : un losange violet, le mot, puis un fil jusqu'au bord. */
+#tutorial-overlay h2,
+#panel h2 {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--annex-u));
+  font-family: var(--ui-font-brand);
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+#tutorial-overlay h2::before,
+#panel h2::before {
+  content: '';
+  flex: none;
+  width: 0.45em;
+  height: 0.45em;
+  background: var(--violet);
+  rotate: 45deg;
+}
+#tutorial-overlay h2::after,
+#panel h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ink-line);
+}
+
+/*
+ * Boutons à la souris (tutoriel, test manette) : une plaque d'encre ; l'action principale a un liseré et un mot
+ * jaunes, comme « Lancer » dans les menus. `::before` peint le fond à l'intérieur du liseré.
+ */
+#tutorial-overlay .row button,
+.pad-test-actions button {
+  --plate-bg: var(--plate);
+  --plate-edge: transparent;
+  position: relative;
+  isolation: isolate;
+  min-height: calc(52 * var(--annex-u));
+  padding: 0 calc(26 * var(--annex-u));
+  border: 0;
+  background: var(--plate-edge);
+  color: var(--ink-fg);
+  font: 600 var(--annex-small) / 1.2 var(--ui-font-text);
+  cursor: pointer;
+  outline: none;
+  transition: translate 220ms var(--annex-bounce);
+}
+#tutorial-overlay .row button::before,
+.pad-test-actions button::before {
+  --bevel: calc(var(--ui-bevel) - var(--annex-edge) * 0.41);
+  content: '';
+  position: absolute;
+  inset: var(--annex-edge);
+  z-index: -1;
+  background: var(--plate-bg);
+}
+#tutorial-overlay .row button:hover,
+.pad-test-actions button:hover {
+  --plate-bg: var(--plate-raised);
+}
+#tutorial-overlay .row button.primary {
+  --plate-edge: var(--ball);
+  color: var(--ball);
+  font-family: var(--ui-font-brand);
+  font-size: calc(26 * var(--annex-u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+#tutorial-overlay .row button:focus-visible,
+.pad-test-actions button:focus-visible {
+  --plate-bg: var(--ball);
+  --plate-edge: var(--ball);
+  color: var(--ink);
+  translate: 0 calc(-4 * var(--annex-u));
+}
 
 /* --- Tutoriel : carte des leçons --- */
 
@@ -14,118 +154,175 @@
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--annex-backdrop);
 }
 #tutorial-overlay .card {
   box-sizing: border-box;
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  width: min(calc(980 * var(--annex-u)), calc(100vw - 2 * var(--ui-safe-x)));
+  max-height: calc(100vh - 2 * var(--ui-safe-y));
   overflow-y: auto;
-  padding: 18px 22px;
-  border-radius: 12px;
-  background: var(--ui-panel-bg);
+  padding: 0 calc(24 * var(--annex-u));
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-line) transparent;
   color: var(--ui-fg);
-  font: 14px/1.5 var(--ui-font);
+  font: 500 var(--annex-text) / 1.4 var(--ui-font-text);
 }
-#tutorial-overlay h1 {
-  margin: 0 0 4px;
-  font-size: 21px;
+#tutorial-overlay ::selection {
+  background: var(--ball);
+  color: var(--ink);
 }
 #tutorial-overlay h2 {
-  margin: 14px 0 4px;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ui-muted);
+  margin: calc(22 * var(--annex-u)) 0 calc(6 * var(--annex-u));
+  font-size: var(--annex-heading);
+}
+#tutorial-overlay p {
+  margin: calc(6 * var(--annex-u)) 0;
 }
 #tutorial-overlay ul {
-  margin: 4px 0;
-  padding-left: 20px;
+  margin: calc(6 * var(--annex-u)) 0;
+  padding: 0;
+  list-style: none;
+}
+/* Chaque étape de « Comment » : un petit losange violet en tête. */
+#tutorial-overlay li {
+  position: relative;
+  margin: calc(6 * var(--annex-u)) 0;
+  padding-left: calc(30 * var(--annex-u));
+}
+#tutorial-overlay li::before {
+  content: '';
+  position: absolute;
+  left: calc(4 * var(--annex-u));
+  top: 0.55em;
+  width: calc(10 * var(--annex-u));
+  height: calc(10 * var(--annex-u));
+  background: var(--violet);
+  rotate: 45deg;
 }
 #tutorial-overlay .when {
   margin: 0;
 }
+/*
+ * Une leçon : une entrée de menu sur une ligne (le nom, ses boutons, les étoiles), pour que les dix tiennent sans
+ * défiler en 720p comme en 1080p. Sélectionnée : la plaque jaune balle qui glisse.
+ */
 #tutorial-overlay .lesson {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  margin: 4px 0;
-  padding: 8px 12px;
-  border: 1px solid var(--ui-line);
-  border-radius: 8px;
-  background: var(--ui-control-bg);
-  color: inherit;
-  font: inherit;
+  gap: calc(16 * var(--annex-u));
+  box-sizing: border-box;
+  width: calc(100% - var(--annex-shift));
+  min-height: var(--annex-row);
+  margin: calc(5 * var(--annex-u)) 0;
+  padding: 0 calc(26 * var(--annex-u));
+  border: 0;
+  background: var(--plate);
+  color: var(--ink-fg);
+  font: 600 var(--annex-text) / 1.2 var(--ui-font-text);
   text-align: left;
   cursor: pointer;
+  outline: none;
+  transition: translate 220ms var(--annex-bounce);
+}
+#tutorial-overlay .lesson:hover {
+  background: var(--plate-raised);
+}
+#tutorial-overlay .lesson > span:first-child {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 calc(18 * var(--annex-u));
+  min-width: 0;
+}
+#tutorial-overlay .lesson br {
+  display: none;
+}
+#tutorial-overlay .lesson .muted {
+  font-weight: 500;
 }
 #tutorial-overlay .lesson.selected {
-  border-color: var(--ui-call);
-  background: #2a3542;
+  background: var(--ball);
+  color: var(--ink);
+  translate: var(--annex-shift) 0;
+}
+#tutorial-overlay .lesson.selected .muted,
+#tutorial-overlay .lesson.selected .stars {
+  color: color-mix(in oklab, var(--ink) 78%, var(--ball));
 }
 #tutorial-overlay .stars {
-  color: var(--ui-gold);
+  color: var(--ink-fg);
+  font-size: calc(26 * var(--annex-u));
+  letter-spacing: 0.08em;
   white-space: nowrap;
 }
+/* Leçon réussie : les étoiles gagnées, en grand, en jaune balle. */
 #tutorial-overlay .stars-big {
-  margin: 6px 0;
-  font-size: 26px;
+  margin: calc(10 * var(--annex-u)) 0;
+  color: var(--ball);
+  font-size: calc(64 * var(--annex-u));
+  line-height: 1;
 }
 #tutorial-overlay .row {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-}
-#tutorial-overlay .row button {
-  padding: 7px 14px;
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
-  background: var(--ui-control-bg);
-  color: var(--ui-fg);
-  font: inherit;
-  cursor: pointer;
-}
-#tutorial-overlay .row button.primary {
-  border-color: var(--ui-call);
+  gap: calc(10 * var(--annex-u));
+  margin-top: calc(18 * var(--annex-u));
+  padding-right: var(--annex-shift);
 }
 #tutorial-overlay .muted {
   color: var(--ui-muted);
-  font-size: 12px;
+  font-size: var(--annex-small);
 }
 
 /* --- Tutoriel : bandeau, consigne, verdict et gros indice pendant l'essai --- */
 
+/* Posés sur le match : chacun sur sa plaque d'encre, comme les annonces du HUD ; vide, rien ne s'affiche. */
 .tutorial-text {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
+  box-sizing: border-box;
+  max-width: calc(100vw - 2 * var(--ui-safe-x));
+  translate: -50% 0;
+  padding: calc(4 * var(--annex-u)) calc(30 * var(--annex-u)) calc(6 * var(--annex-u));
+  background: var(--ui-pill-bg);
+  clip-path: polygon(
+    calc(14 * var(--annex-u)) 0,
+    100% 0,
+    calc(100% - 14 * var(--annex-u)) 100%,
+    0 100%
+  );
   color: var(--ui-fg);
-  font-family: var(--ui-font);
+  font: 500 var(--annex-text) / 1.3 var(--ui-font-text);
   text-align: center;
-  text-shadow: var(--ui-text-shadow);
   pointer-events: none;
 }
+.tutorial-text:empty {
+  display: none;
+}
+/* Leçon, étape et progression : en haut, dans la zone de sécurité. */
 #tutorial-status {
-  top: 12px;
-  padding: 6px 14px;
-  border-radius: 8px;
-  background: var(--ui-pill-bg);
-  font-size: 15px;
-  font-weight: 600;
+  top: var(--ui-safe-y);
+  font-family: var(--ui-font-brand);
+  font-size: calc(30 * var(--annex-u));
+  font-stretch: 75%;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
 }
 #tutorial-instruction {
-  top: 52px;
-  width: min(720px, calc(100vw - 32px));
-  font-size: 16px;
+  top: calc(var(--ui-safe-y) + 58 * var(--annex-u));
+  width: max-content;
+  max-width: min(calc(1100 * var(--annex-u)), calc(100vw - 2 * var(--ui-safe-x)));
 }
+/* Verdict : la couleur de la qualité (réussi, imprécis), un ton au-dessus du texte. */
 #tutorial-message {
   top: 22%;
-  width: min(720px, calc(100vw - 32px));
-  font-size: 20px;
-  font-weight: 700;
+  width: max-content;
+  max-width: min(calc(1100 * var(--annex-u)), calc(100vw - 2 * var(--ui-safe-x)));
+  font-size: calc(32 * var(--annex-u));
+  font-weight: 800;
 }
 #tutorial-message[data-tone='ok'] {
   color: var(--ui-good);
@@ -133,39 +330,60 @@
 #tutorial-message[data-tone='fail'] {
   color: var(--ui-warn);
 }
+/* Gros indice (« Relâche ! ») : l'instant, sur la plaque violette maillée des grandes annonces. */
 #tutorial-prompt {
   top: 34%;
-  color: var(--ui-call);
-  font-size: 30px;
-  font-weight: 800;
+  rotate: -4deg;
+  padding: calc(4 * var(--annex-u)) calc(46 * var(--annex-u)) calc(8 * var(--annex-u));
+  background: var(--hud-call-mesh, none), var(--violet);
+  clip-path: polygon(
+    calc(28 * var(--annex-u)) 0,
+    100% 0,
+    calc(100% - 28 * var(--annex-u)) 100%,
+    0 100%
+  );
+  color: var(--ball);
+  font-family: var(--ui-font-brand);
+  font-size: calc(62 * var(--annex-u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 /* --- Panneau latéral : labo et machine à balles --- */
 
+/*
+ * Une plaque d'encre presque opaque sur le côté gauche du match ; on s'en sert à la souris. Texte en `--ui-px` avec
+ * un plancher, pour ne pas descendre sous l'ancienne taille en 720p. Le bas s'arrête au-dessus du retour des
+ * entrées d'un joueur (en bas à gauche), qui le recouvrait.
+ */
 #panel {
+  --panel-text: max(13px, calc(17 * var(--annex-u)));
+  --panel-small: max(12px, calc(15 * var(--annex-u)));
+  --bevel: calc(18 * var(--annex-u));
   position: fixed;
   top: 44px;
   left: 18px;
   box-sizing: border-box;
-  width: 250px;
-  max-height: calc(100vh - 60px);
+  width: max(250px, calc(310 * var(--annex-u)));
+  max-height: calc(100vh - 44px - 14px - max(92px, 106 * var(--annex-u)) - 12px);
   overflow-y: auto;
-  padding: 14px 16px;
-  border-radius: 10px;
-  background: rgba(10, 16, 22, 0.82);
+  padding: calc(16 * var(--annex-u)) calc(18 * var(--annex-u));
+  background: var(--ui-panel-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-line) transparent;
   color: var(--ui-fg);
-  font: 13px/1.4 var(--ui-font);
+  font: 500 var(--panel-text) / 1.35 var(--ui-font-text);
+  accent-color: var(--ball);
 }
 #panel[hidden] {
   display: none;
 }
 #panel h2 {
-  margin: 12px 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ui-muted);
+  margin: calc(14 * var(--annex-u)) 0 calc(6 * var(--annex-u));
+  font-size: max(13px, calc(20 * var(--annex-u)));
 }
 #panel h2:first-child {
   margin-top: 0;
@@ -173,33 +391,53 @@
 #panel .exercises,
 #panel .actions {
   display: grid;
-  gap: 4px;
+  gap: calc(4 * var(--annex-u));
 }
 #panel .actions {
-  margin-top: 12px;
+  margin-top: calc(12 * var(--annex-u));
 }
 #panel button {
-  padding: 6px 10px;
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
+  --bevel: calc(9 * var(--annex-u));
+  padding: calc(7 * var(--annex-u)) calc(14 * var(--annex-u));
+  border: 0;
   background: var(--ui-control-bg);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  outline: none;
 }
 #panel button:hover {
   background: var(--ui-control-hover);
 }
+/* Situation ou vitesse en cours : un losange jaune devant, sur une plaque plus claire. */
 #panel button.selected {
-  border-color: #6cb4e8;
-  background: #1f4260;
+  background: var(--plate-raised);
+  color: var(--white);
+  font-weight: 700;
+}
+#panel .exercises button.selected::before {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-right: 0.6em;
+  vertical-align: 0.1em;
+  background: var(--ball);
+  rotate: 45deg;
+}
+#panel .speeds button.selected {
+  box-shadow: inset 0 calc(-3 * var(--annex-u)) 0 var(--ball);
+}
+#panel button:focus-visible {
+  background: var(--ball);
+  color: var(--ink);
 }
 #panel label {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 2px 8px;
-  margin-top: 10px;
+  margin-top: calc(10 * var(--annex-u));
 }
 #panel label input {
   grid-column: 1 / -1;
@@ -210,12 +448,13 @@
   grid-row: 1;
   grid-column: 2;
   color: var(--ui-muted);
+  font-variant-numeric: tabular-nums;
 }
 #panel label.check {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: calc(8 * var(--annex-u));
   cursor: pointer;
 }
 #panel label.check input {
@@ -224,42 +463,44 @@
 #panel .speeds {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  gap: calc(4 * var(--annex-u));
 }
 #panel .speeds button {
   text-align: center;
 }
 #panel .labo-hint {
-  margin: 8px 0 0;
-  color: var(--ui-muted);
-  font-size: 12px;
+  margin: calc(10 * var(--annex-u)) 0 0;
+  color: var(--ui-soft);
+  font-size: var(--panel-small);
 }
 #panel .labo-score {
-  margin: 6px 0 0;
-  font-size: 12px;
+  margin: calc(6 * var(--annex-u)) 0 0;
+  color: var(--white);
+  font-size: var(--panel-small);
+  font-weight: 700;
 }
 #panel select {
+  --bevel: calc(9 * var(--annex-u));
   width: 100%;
-  padding: 4px;
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
+  padding: calc(6 * var(--annex-u)) calc(10 * var(--annex-u));
+  border: 0;
   background: var(--ui-control-bg);
   color: inherit;
+  font: inherit;
 }
 #panel textarea {
   box-sizing: border-box;
   width: 100%;
   margin-top: 8px;
   border: 1px solid var(--ui-line);
-  border-radius: 6px;
-  background: #0f171f;
-  color: #cfe3f2;
+  background: var(--ink);
+  color: var(--ink-soft);
   font: 11px var(--ui-font-mono);
 }
 
 /* --- Test de la manette (padTest.ts) --- */
 
-/* Ouvert par le code (`display: flex`). */
+/* Ouvert par le code (`display: flex`). Pas de panneau : le contenu pose sur l'encre maillée. */
 #pad-test {
   position: fixed;
   inset: 0;
@@ -267,90 +508,80 @@
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--mesh), rgba(13, 11, 26, 0.94);
 }
 .pad-test-panel {
   box-sizing: border-box;
-  width: min(520px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  width: min(calc(900 * var(--annex-u)), calc(100vw - 2 * var(--ui-safe-x)));
+  max-height: calc(100vh - 2 * var(--ui-safe-y));
   overflow-y: auto;
-  padding: 18px 20px;
-  border-radius: 12px;
-  background: var(--ui-panel-bg);
   color: var(--ui-fg);
-  font: 14px/1.45 var(--ui-font);
+  font: 500 var(--annex-text) / 1.4 var(--ui-font-text);
   text-align: center;
 }
-.pad-test-panel h1 {
-  margin: 0 0 4px;
-  font-size: 20px;
-}
 .pad-test-detected {
-  min-height: 20px;
+  min-height: 1.4em;
   color: var(--ui-muted);
-  font-size: 13px;
+  font-size: var(--annex-small);
 }
 .pad-test-style {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0 8px;
+  gap: calc(12 * var(--annex-u));
+  margin: calc(6 * var(--annex-u)) 0 calc(10 * var(--annex-u));
   color: var(--ui-muted);
-  font-size: 12px;
+  font-size: var(--annex-small);
 }
 .pad-test-style select {
-  padding: 3px;
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
-  background: var(--ui-control-bg);
-  color: var(--ui-fg);
+  padding: calc(6 * var(--annex-u)) calc(12 * var(--annex-u));
+  border: 0;
+  background: var(--plate);
+  color: var(--ink-fg);
+  font: 600 var(--annex-small) var(--ui-font-text);
+  accent-color: var(--ball);
 }
 .pad-test-instruction {
-  min-height: 28px;
-  margin: 10px 0 4px;
-  font-size: 18px;
-  font-weight: 600;
+  min-height: 1.3em;
+  margin: calc(18 * var(--annex-u)) 0 calc(6 * var(--annex-u));
+  font-size: calc(34 * var(--annex-u));
+  font-weight: 800;
+  line-height: 1.3;
 }
 .pad-test-feedback {
-  min-height: 22px;
-  font-size: 14px;
+  min-height: 1.4em;
+  font-size: var(--annex-text);
+  font-weight: 600;
 }
+/* Le dessin suit l'échelle de l'interface (le `viewBox` garde ses proportions). */
 .pad-test-drawing {
   display: block;
+  width: calc(560 * var(--annex-u));
   max-width: 100%;
-  margin: 6px auto;
+  height: auto;
+  margin: calc(10 * var(--annex-u)) auto;
 }
 .pad-test-summary {
-  margin-top: 6px;
+  margin-top: calc(6 * var(--annex-u));
   color: var(--ui-soft);
-  font-size: 13px;
+  font-size: var(--annex-small);
 }
 .pad-test-actions {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-.pad-test-actions button {
-  padding: 6px 14px;
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
-  background: var(--ui-control-bg);
-  color: var(--ui-fg);
-  font: inherit;
-  cursor: pointer;
+  gap: calc(10 * var(--annex-u));
+  margin-top: calc(18 * var(--annex-u));
 }
 
 /* Dessin : secteurs du stick, stick, boutons de face. */
 .pad-test-drawing .sector {
-  fill: rgba(255, 255, 255, 0.08);
+  fill: rgba(255, 255, 255, 0.06);
   stroke: var(--ui-line);
 }
 .pad-test-drawing .sector.is-reached {
-  fill: rgba(95, 211, 90, 0.6);
+  fill: color-mix(in srgb, var(--ui-good) 65%, transparent);
 }
 .pad-test-drawing .ring {
-  fill: rgba(255, 255, 255, 0.05);
+  fill: var(--plate);
   stroke: var(--ui-line-soft);
   stroke-width: 1.5;
 }
@@ -358,25 +589,25 @@
   fill: var(--player-1);
 }
 .pad-test-drawing .button {
-  fill: rgba(255, 255, 255, 0.06);
+  fill: var(--plate);
   stroke: var(--ui-muted);
   stroke-width: 2;
 }
 .pad-test-drawing .button.is-done {
-  fill: rgba(95, 211, 90, 0.35);
+  fill: color-mix(in srgb, var(--ui-good) 35%, var(--plate));
   stroke: var(--ui-good);
 }
 .pad-test-drawing .button.is-pressed {
-  fill: rgba(255, 255, 255, 0.6);
+  fill: var(--ink-soft);
 }
-/* Le bouton demandé clignote (`--pulse` de 0 à 1, mis à jour à chaque image). */
+/* Le bouton demandé clignote en jaune balle (`--pulse` de 0 à 1, mis à jour à chaque image). */
 .pad-test-drawing .button.is-wanted {
-  stroke: rgba(255, 226, 122, calc(0.4 + 0.6 * var(--pulse, 1)));
-  stroke-width: 3;
+  stroke: color-mix(in srgb, var(--ball) calc((40 + 60 * var(--pulse, 1)) * 1%), transparent);
+  stroke-width: 3.5;
 }
 .pad-test-drawing .button-label {
   fill: var(--glyph, var(--ui-glyph));
-  font-family: var(--ui-font);
+  font-family: var(--ui-font-text);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
 }

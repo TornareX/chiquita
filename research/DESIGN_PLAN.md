@@ -324,6 +324,50 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    lisibilité des annonces sur un match qui bouge.
 9. **Écrans annexes** : tutoriel et guides de coups, labo, test manette, affichage des entrées. Tokens et
    composants seulement, sans maquette ni passe complète.
+   *Fait.* Seuls `theme.css`, `annexes.css` et `hud.css` (icônes, retour des entrées, guide du geste, décompte)
+   changent ; aucun fichier TypeScript, aucune organisation d'écran. Décisions :
+   - **Variables** : les `--ui-*` des annexes passent à la palette Grillage (texte `--ink-*`, plaques `--plate`,
+     traits `--ink-line`, accents `--ball`, Archivo partout). `--ui-bevel` (12 `--ui-px`) pour les coins coupés.
+   - **Qualité d'une frappe** : parfait `--ui-perfect` (jaune balle), réussi `#3FE39A`, imprécis `#FF8A1F`, raté
+     `#FF3B6B`. Teintes éloignées et clarté qui descend (OKLab 0,95 → 0,82 → 0,75 → 0,66), vérifiées en
+     simulation deutéranopie et protanopie (les quatre restent séparées par la clarté) ; contraste sur l'encre 5,6
+     au moins. Le mot est toujours écrit à côté de la couleur. Le retour « dans le vide ! » du HUD (`.tone-off`)
+     suit.
+   - **Tutoriel** : la carte n'a plus de panneau, elle pose sur l'encre maillée des menus. Titre et intertitres
+     (« Quand », « Comment », losange violet et fil) comme les menus, étapes de « Comment » à losanges. Une leçon =
+     une entrée de menu **sur une ligne** (nom, boutons, étoiles) au lieu de deux, pour que les dix tiennent sans
+     défiler en 720p et en 1080p avec le texte agrandi ; la leçon choisie est la plaque jaune balle qui glisse.
+     Étoiles blanches dans la liste, en grand et en jaune balle sur la leçon réussie. Boutons de la carte : plaques,
+     l'action principale (« Voir la démo », « Leçon suivante ») liserée de jaune. Pendant l'essai : bandeau en haut
+     dans la zone de sécurité (Archivo italique 900), consigne et verdict sur des plaques d'encre (verdict aux
+     couleurs réussi / imprécis), gros indice sur la plaque violette maillée des grandes annonces, penchée.
+   - **Retour des entrées** : plaque d'encre aux coins coupés ; le liseré gauche (signalé par `detect`) devient le
+     coin haut gauche peint à la couleur de la place, qui dit qui est qui même en mode discret ; un losange de la
+     couleur remplace la pastille « ● » du titre (même texte). Texte agrandi (19 à 22 `--ui-px`, plancher en px),
+     trace du stick droit et « R » en jaune balle. **Guide du geste** : même plaque, fin du geste allumée en jaune.
+   - **Icônes** : les touches du clavier (`.key-icon`, jusque-là le style par défaut du navigateur) deviennent de
+     petites plaques claires, lettre en encre ; le losange des boutons de manette suit la taille du texte (il
+     restait à 14 px, illisible dans les grandes consignes). Ça vaut aussi pour l'aide du HUD (`#help`) et les
+     annonces, vérifié sur les captures.
+   - **Labo** : panneau en plaque d'encre biseautée, intertitres à losange, boutons en plaques, situation en cours
+     avec un losange jaune, curseurs et case en jaune (`accent-color`), texte en `--ui-px` avec un plancher (jamais
+     plus petit qu'avant en 720p). Son bas s'arrête au-dessus du retour des entrées, qui le recouvrait.
+     **Décompte** : le chiffre en jaune balle sur une plaque d'encre penchée, comme les annonces.
+   - **Test de la manette** : sans panneau, sur l'encre maillée ; titre de menu, consigne en grand, dessin à
+     l'échelle de l'interface (560 `--ui-px` au lieu de 280 px fixes), bouton demandé qui clignote en jaune balle,
+     boutons réussis en vert « réussi ».
+   - `impeccable detect` sur les trois CSS et sur le tutoriel servi : rien, hormis le rebond déjà accepté. Sur le
+     labo servi : « cramped-padding » sur le compteur d'échange libre du HUD (étape 8, pas touché ici).
+   Restent pour l'étape 10 :
+   - Le panneau du labo cache « qui joue avec quoi » (`#players`, en haut à gauche) et défile (onze situations et
+     sept curseurs) ; il faudra choisir sa place (à droite, ou les sensations repliées).
+   - Retour des entrées et guide du geste hors de la zone de sécurité (16 px du bord, positions écrites dans
+     `inputDisplay.ts`) ; leurs dessins SVG restent en px fixes (ne suivent pas `--ui-px`).
+   - Consigne et gros indice du tutoriel à 22 % et 34 % de la hauteur : ils peuvent passer sur le joueur du fond.
+   - Étoiles et pastilles en caractères Unicode (★ ☆) plutôt qu'en losanges dessinés.
+   - La carte d'une leçon n'a pas de barre d'aides manette (A Valider, B Retour) comme les menus : les touches sont
+     écrites dans les boutons (« Retour (Échap) »).
+   - Le jugement depuis le canapé, à la manette.
 10. **Finitions** : `audit`, `harden` (noms longs, 4 manettes, déconnexion, 4:3, 1366×768, 4K, ultra-large),
     `clarify`, `polish`, `detect`. Captures après dans `screenshots/design/apres/`.
 
