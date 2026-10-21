@@ -60,7 +60,7 @@ test('une manette seule joue à gauche en double', async ({ page }) => {
     timeout: 110_000,
   });
   // Toujours à gauche : la manette a joué Bleu 2, pas Bleu 1.
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('padel-smash.reglages')!).players);
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('padel-smash.match')!).players);
   expect(settings[0]).not.toBe('manette1');
   expect(settings[2]).toBe('manette1');
 });

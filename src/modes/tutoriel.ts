@@ -12,7 +12,7 @@ import { applyFeel } from '../sim/feel';
 import { AttemptWatcher, LESSONS, type Lesson } from '../sim/lessons';
 import { FixedStepLoop } from '../sim/loop';
 import { loadKeyboardLayout, sourceKey, type InputSource } from '../ui/buttonIcons';
-import { loadSettings, saveSettings } from '../ui/duelSettings';
+import { loadPreferences, loadSettings, saveSettings } from '../ui/settingsStore';
 import { loadFeel } from '../ui/feelStorage';
 import { createInputDisplay } from '../ui/inputDisplay';
 import { createPadTest } from '../ui/padTest';
@@ -67,8 +67,10 @@ export function startTutorial(canvas: HTMLCanvasElement): void {
   if (feel.inMatch) applyFeel(duel.profile, feel.feel);
   duel.profile.rally.pressure.scale = settings.pressure;
   // Les leçons apprennent les coups : la course assistée place le joueur, même s'il joue en placement manuel en match.
-  duel.players[0].assist = settings.assists[0] === 'off' ? 'magnet' : settings.assists[0];
+  const prefs = loadPreferences();
+  duel.players[0].assist = prefs.assist === 'off' ? 'magnet' : prefs.assist;
   duel.players[0].prepMove = settings.prepMove;
+  duel.players[0].hand = prefs.hand;
 
   const view = createDuelView(canvas, duel);
   const keyboard = createKeyboardPads(canvas);

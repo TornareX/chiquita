@@ -14,7 +14,7 @@ import type { Situation } from '../sim/situations';
 import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
 import { createInputDisplay } from '../ui/inputDisplay';
-import { isHuman, loadSettings } from '../ui/duelSettings';
+import { isHuman, loadPreferences, loadSettings } from '../ui/settingsStore';
 import { loadFeel, saveFeel } from '../ui/feelStorage';
 import { createLaboPanel } from '../ui/laboPanel';
 
@@ -46,8 +46,11 @@ export function startLabo(canvas: HTMLCanvasElement): void {
   applyFeel(duel.profile, stored.feel);
   const settings = loadSettings(new URLSearchParams());
   duel.profile.rally.pressure.scale = settings.pressure;
-  duel.players[0].assist = settings.assists[0];
+  // Bleu, c'est soi : ses préférences de joueur.
+  const prefs = loadPreferences();
+  duel.players[0].assist = prefs.assist;
   duel.players[0].prepMove = settings.prepMove;
+  duel.players[0].hand = prefs.hand;
 
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();

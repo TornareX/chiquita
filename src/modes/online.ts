@@ -1,7 +1,7 @@
 import { Connection, serverUrl } from '../net/connection';
 import { TICKS_PER_FRAME } from '../net/fakeNet';
 import { SIM_DT } from '../sim/constants';
-import { DEVICES, isHuman, loadSettings, type Device } from '../ui/duelSettings';
+import { DEVICES, loadPreferences, type Device } from '../ui/settingsStore';
 import { createOnlineLobby, savedName } from '../ui/onlineLobby';
 import { startDuel } from './duel';
 
@@ -13,7 +13,7 @@ const DEVICE_KEY = 'padel.enligne.peripherique';
 
 /**
  * Avec quoi ce navigateur joue sa place : `&manette=2` (1 à 4) ou `&clavier=1` (bleu) / `2` (rouge) dans l'adresse,
- * sinon le dernier choix fait dans cette fenêtre, sinon le premier périphérique humain des réglages.
+ * sinon le dernier choix fait dans cette fenêtre, sinon « je joue avec » des préférences.
  */
 function initialDevice(params: URLSearchParams, fallback: Device): Device {
   const pad = Number(params.get('manette'));
@@ -40,11 +40,11 @@ function initialDevice(params: URLSearchParams, fallback: Device): Device {
  */
 export function startOnline(canvas: HTMLCanvasElement): void {
   const params = new URLSearchParams(location.search);
-  const settings = loadSettings(params);
-  const prefs = { assist: settings.assists[0], prepMove: settings.prepMove, hand: settings.hands[0] };
+  const preferences = loadPreferences();
+  const prefs = { assist: preferences.assist, prepMove: preferences.prepMove, hand: preferences.hand };
   const delayFrames = Math.max(0, Math.min(10, Math.round(Number(params.get('delai') ?? DEFAULT_DELAY_FRAMES)) || 0));
   const windowMs = Math.max(50, Math.min(1000, Number(params.get('fenetre') ?? DEFAULT_WINDOW_MS) || DEFAULT_WINDOW_MS));
-  let device = initialDevice(params, settings.players.find(isHuman) ?? 'manette1');
+  let device = initialDevice(params, preferences.device);
   const url = serverUrl(params);
   const banner = createBanner();
 
