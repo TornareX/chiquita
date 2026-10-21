@@ -4,132 +4,334 @@
  * ralenti et décompte (`modes/replay.ts`, `modes/labo.ts`), encart réseau (`netHud.ts`).
  * Le code ne garde que ce qui bouge : afficher ou cacher, positions calculées, fondus. Couleurs et polices viennent
  * de `theme.css`.
+ *
+ * HUD de match en « Grillage » (étape 8, contrat dans `.impeccable/surfaces/src-ui-hud-css.md`) : le tableau au
+ * centre du haut, les annonces penchées juste dessous (au-dessus du mur du fond), les coins pour le reste. Tout en
+ * `--ui-px`, dans la zone de sécurité. Rien de coûteux pendant l'échange : formes en `clip-path`, maille en
+ * dégradés, pas de flou ni d'ombre ; seule l'annonce s'anime, à son arrivée (`duelHud.ts`).
  */
 
 /* --- Score, échange, annonces, aides (duelHud.ts) --- */
 
+:root {
+  --hud-u: var(--ui-px);
+  /* Tableau : hauteur, largeur d'une plaque d'équipe, des cases de jeux et de points, du bout de filet. */
+  --hud-board-height: calc(70 * var(--hud-u));
+  --hud-team-width: calc(212 * var(--hud-u));
+  --hud-games-width: calc(56 * var(--hud-u));
+  --hud-points-width: calc(96 * var(--hud-u));
+  --hud-net-width: calc(22 * var(--hud-u));
+  --hud-board-width: calc(
+    2 * (var(--hud-team-width) + var(--hud-games-width) + var(--hud-points-width)) + var(--hud-net-width)
+  );
+  --hud-bevel: calc(22 * var(--hud-u));
+  --hud-strip-height: calc(40 * var(--hud-u));
+  /* Annonces : sous le tableau, penchées. */
+  --hud-call-top: calc(var(--ui-safe-y) + 68 * var(--hud-u));
+  --hud-tilt: -4deg;
+  /* Encre presque opaque des petites plaques posées sur le public. */
+  --hud-plate: rgba(13, 11, 26, 0.9);
+  /* Maille blanche, serrée, du bout de filet. */
+  --hud-net-wire: rgba(255, 255, 255, 0.45);
+  --hud-net-mesh: repeating-linear-gradient(45deg, var(--hud-net-wire) 0 1.5px, transparent 1.5px 9px),
+    repeating-linear-gradient(-45deg, var(--hud-net-wire) 0 1.5px, transparent 1.5px 9px);
+  /* Maille claire sur le violet des grandes annonces. */
+  --hud-call-wire: rgba(255, 255, 255, 0.14);
+  --hud-call-mesh: repeating-linear-gradient(45deg, var(--hud-call-wire) 0 2px, transparent 2px 20px),
+    repeating-linear-gradient(-45deg, var(--hud-call-wire) 0 2px, transparent 2px 20px);
+}
+
 .hud-text {
   position: fixed;
-  color: var(--ui-fg);
-  font: 15px/1.4 var(--ui-font);
-  text-shadow: var(--ui-text-shadow);
+  color: var(--ink-fg);
+  font: 500 calc(22 * var(--hud-u)) / 1.3 var(--ui-font-text);
   pointer-events: none;
 }
 .hud-centered {
   left: 50%;
-  transform: translateX(-50%);
+  translate: -50% 0;
   text-align: center;
 }
-.hud-pill {
-  background: var(--ui-pill-bg);
-  padding: 4px 14px;
-  border-radius: 8px;
-  white-space: nowrap;
+/* Titres, chiffres et annonces : Archivo étroite italique 900, en capitales. */
+.hud-brand,
+#score,
+#rally,
+#point .call-main,
+#effect-banner,
+#replay-badge {
+  font-family: var(--ui-font-brand);
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+/* Losange : balle de service, repères. */
+.hud-diamond {
+  display: inline-block;
+  flex: none;
+  width: calc(15 * var(--hud-u));
+  height: calc(15 * var(--hud-u));
+  background: var(--ball);
+  box-shadow: 0 0 0 calc(3 * var(--hud-u)) var(--ink);
+  rotate: 45deg;
 }
 
-#rally {
-  top: 14px;
-  font-size: 22px;
-  font-weight: 600;
-}
-.hud-rally-count {
-  font-size: 15px;
-}
-.hud-record {
-  font-size: 13px;
-  font-weight: 400;
-}
-
+/* Tableau : Bleu | jeux | points | filet | points | jeux | Rouge, puis la bande des sets et de l'appel. */
 #score {
-  top: 12px;
-  left: 16px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: rgba(10, 16, 24, 0.55);
-  font-size: 17px;
-  font-weight: 600;
+  top: var(--ui-safe-y);
+  width: var(--hud-board-width);
   font-variant-numeric: tabular-nums;
 }
-.hud-score-table {
-  border-collapse: collapse;
+.score-board {
+  display: flex;
+  height: var(--hud-board-height);
 }
-.hud-score-table .serve {
-  width: 14px;
-  color: var(--ui-call);
+.score-team {
+  display: flex;
+  align-items: center;
+  gap: calc(16 * var(--hud-u));
+  box-sizing: border-box;
+  width: var(--hud-team-width);
+  padding: 0 calc(24 * var(--hud-u));
+  color: var(--ink);
+  font-size: calc(40 * var(--hud-u));
 }
-.hud-score-table .team {
-  padding-right: 10px;
+.score-team.blue {
+  justify-content: flex-end;
+  background: var(--blue);
+  clip-path: polygon(var(--hud-bevel) 0, 100% 0, 100% 100%, 0 100%, 0 var(--hud-bevel));
 }
-.hud-score-table .team.blue {
-  color: var(--team-blue);
+.score-team.red {
+  background: var(--red);
+  clip-path: polygon(0 0, calc(100% - var(--hud-bevel)) 0, 100% var(--hud-bevel), 100% 100%, 0 100%);
 }
-.hud-score-table .team.red {
-  color: var(--team-red);
+/* Le losange du service n'apparaît que sur l'équipe qui sert ; il garde sa place pour que le nom ne bouge pas. */
+.score-team .hud-diamond {
+  visibility: hidden;
 }
-.hud-score-table .set {
-  padding: 0 6px;
-  opacity: 0.75;
+.score-team.is-serving .hud-diamond {
+  visibility: visible;
 }
-.hud-score-table .games {
-  padding: 0 6px;
+.score-games,
+.score-points {
+  display: grid;
+  place-items: center;
 }
-.hud-score-table .points {
-  min-width: 30px;
-  padding-left: 8px;
-  text-align: right;
+.score-games {
+  width: var(--hud-games-width);
+  background: var(--ink);
+  color: var(--white);
+  font-size: calc(42 * var(--hud-u));
 }
-.hud-call {
-  margin-top: 3px;
-  font-size: 13px;
-  color: var(--ui-call);
+.score-points {
+  width: var(--hud-points-width);
+  background: var(--white);
+  color: var(--ink);
+  font-size: calc(52 * var(--hud-u));
+}
+.score-net {
+  width: var(--hud-net-width);
+  background: var(--hud-net-mesh), var(--ink);
+}
+/*
+ * En pause, le bandeau du menu couvre la gauche : tableau et annonce passent à droite, dans la partie du match qui
+ * reste visible.
+ */
+body:has(#pause-menu:not([hidden])) :is(#score, #rally[data-mode='free'], #point, #feedback) {
+  left: calc(100% - var(--ui-safe-x) - var(--hud-board-width) / 2);
+}
+body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
+  right: calc(var(--ui-safe-x) + 30 * var(--hud-u));
 }
 
-/* Annonce au centre : service, faute, point, por tres, fin du match (`data-tone`). */
+/* Match fini : il ne reste que les équipes, les sets sont dans la bande. */
+#score[data-over] :is(.score-games, .score-points) {
+  display: none;
+}
+#score[data-over] {
+  width: auto;
+}
+
+.score-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(22 * var(--hud-u));
+  height: var(--hud-strip-height);
+  margin: 0 calc(30 * var(--hud-u));
+  padding: 0 calc(34 * var(--hud-u));
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16 * var(--hud-u)) 100%, calc(16 * var(--hud-u)) 100%);
+  font-size: calc(26 * var(--hud-u));
+  font-stretch: 75%;
+  letter-spacing: 0.05em;
+}
+.score-strip:empty {
+  display: none;
+}
+.score-set {
+  color: var(--ink-muted);
+}
+.score-set b {
+  margin-left: calc(8 * var(--hud-u));
+  color: var(--white);
+}
+.score-call {
+  color: var(--ball);
+}
+
+/* Compteur d'échange : dans la bande, à droite, sous la plaque rouge. Sans match : au centre, en grand. */
+#rally {
+  top: calc(var(--ui-safe-y) + var(--hud-board-height));
+  height: var(--hud-strip-height);
+  display: flex;
+  align-items: center;
+  font-size: calc(26 * var(--hud-u));
+  font-stretch: 75%;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+#rally[data-mode='match'] {
+  left: auto;
+  right: calc(50% - var(--hud-board-width) / 2 + 30 * var(--hud-u));
+  translate: none;
+  padding: 0 calc(30 * var(--hud-u)) 0 calc(24 * var(--hud-u));
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16 * var(--hud-u)) 100%, calc(16 * var(--hud-u)) 100%);
+}
+#rally[data-mode='free'] {
+  top: var(--ui-safe-y);
+  height: auto;
+  flex-direction: column;
+  padding: calc(8 * var(--hud-u)) calc(40 * var(--hud-u));
+  background: var(--hud-plate);
+  clip-path: polygon(var(--hud-bevel) 0, 100% 0, calc(100% - var(--hud-bevel)) 100%, 0 100%);
+  color: var(--white);
+  font-size: calc(44 * var(--hud-u));
+  line-height: 1.1;
+}
+#rally:empty {
+  display: none;
+}
+.hud-record {
+  color: var(--ink-muted);
+  font-size: calc(24 * var(--hud-u));
+}
+
+/*
+ * Annonce : trois mots au plus sur une plaque penchée, la raison dessous, plus petite. Ton (`data-tone`) : service
+ * (vide) en encre, faute, let et por tres (`call`) en violet maillé, point et fin du match à la couleur de l'équipe.
+ */
 #point {
-  top: 16%;
-  font-size: 22px;
-  font-weight: 600;
+  top: var(--hud-call-top);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  rotate: var(--hud-tilt);
 }
-#point[data-tone='call'] {
-  color: var(--ui-call);
+.call-main {
+  --call-bevel: calc(28 * var(--hud-u));
+  display: flex;
+  align-items: center;
+  gap: calc(18 * var(--hud-u));
+  padding: calc(4 * var(--hud-u)) calc(46 * var(--hud-u)) calc(8 * var(--hud-u));
+  background: var(--ink);
+  clip-path: polygon(var(--call-bevel) 0, 100% 0, calc(100% - var(--call-bevel)) 100%, 0 100%);
+  color: var(--white);
+  font-size: calc(62 * var(--hud-u));
+  line-height: 1;
+  white-space: nowrap;
 }
-#point[data-tone='blue'] {
-  color: var(--team-blue);
+#point[data-tone='call'] .call-main {
+  background: var(--hud-call-mesh), var(--violet);
+  color: var(--ball);
 }
-#point[data-tone='red'] {
-  color: var(--team-red);
+#point[data-tone='blue'] .call-main {
+  background: var(--blue);
+  color: var(--ink);
 }
-.hud-sub {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--ui-soft);
+#point[data-tone='red'] .call-main {
+  background: var(--red);
+  color: var(--ink);
 }
-.hud-again {
-  font-size: 15px;
-  color: var(--ui-fg);
+.call-sub,
+.call-again {
+  margin-top: calc(-6 * var(--hud-u));
+  padding: calc(4 * var(--hud-u)) calc(26 * var(--hud-u)) calc(5 * var(--hud-u));
+  background: var(--ink);
+  clip-path: polygon(calc(12 * var(--hud-u)) 0, 100% 0, calc(100% - 12 * var(--hud-u)) 100%, 0 100%);
+  color: var(--ink-fg);
+  font-size: calc(24 * var(--hud-u));
+  font-style: italic;
+  font-weight: 700;
+  font-stretch: 85%;
+  white-space: nowrap;
+}
+.call-again {
+  margin-top: calc(4 * var(--hud-u));
+  color: var(--ball);
 }
 
+/* Retour sur les frappes marquantes : une ligne sous la bande, pendant l'échange. */
 #feedback {
-  top: 26%;
-  font-size: 18px;
-  font-weight: 700;
+  top: calc(var(--ui-safe-y) + var(--hud-board-height) + var(--hud-strip-height) + 10 * var(--hud-u));
+  padding: calc(3 * var(--hud-u)) calc(26 * var(--hud-u)) calc(5 * var(--hud-u));
+  background: var(--hud-plate);
+  clip-path: polygon(calc(12 * var(--hud-u)) 0, 100% 0, calc(100% - 12 * var(--hud-u)) 100%, 0 100%);
+  font-size: calc(28 * var(--hud-u));
+  font-style: italic;
+  font-weight: 800;
+  font-stretch: 85%;
+  white-space: nowrap;
   transition: opacity 0.25s;
 }
-
-#players {
-  left: 16px;
-  font-size: 12px;
-  color: var(--ui-soft);
-  transition: opacity 0.3s;
+#feedback:empty {
+  display: none;
 }
 
+/* Qui joue avec quoi : en haut à gauche, entre les points, sans déborder sur le tableau (la ligne passe à la ligne). */
+#players {
+  top: var(--ui-safe-y);
+  left: var(--ui-safe-x);
+  max-width: calc(50% - var(--hud-board-width) / 2 - var(--ui-safe-x) - 24 * var(--hud-u));
+  font-size: calc(20 * var(--hud-u));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(6 * var(--hud-u));
+  transition: opacity 0.3s;
+}
+.players-row {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--hud-u));
+  padding: calc(4 * var(--hud-u)) calc(22 * var(--hud-u)) calc(4 * var(--hud-u)) calc(14 * var(--hud-u));
+  background: var(--hud-plate);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10 * var(--hud-u)) 100%, 0 100%);
+}
+.players-row .hud-diamond {
+  width: calc(12 * var(--hud-u));
+  height: calc(12 * var(--hud-u));
+  background: var(--player);
+  box-shadow: none;
+}
+.players-row b {
+  color: var(--player);
+  font-weight: 800;
+}
+
+/* Aide aux coups (labo, mode détaillé) : en bas à droite. */
 #help {
-  bottom: 14px;
-  right: 18px;
-  max-width: min(680px, calc(100vw - 390px));
-  font-size: 12px;
+  bottom: var(--ui-safe-y);
+  right: var(--ui-safe-x);
+  max-width: min(calc(860 * var(--hud-u)), calc(100vw - 2 * var(--ui-safe-x) - 420px));
+  padding: calc(8 * var(--hud-u)) calc(16 * var(--hud-u));
+  background: var(--hud-plate);
+  color: var(--ink-soft);
+  font-size: calc(18 * var(--hud-u));
   text-align: right;
-  color: var(--ui-soft);
 }
 
 /* --- Icônes de boutons et de touches (buttonIcons.ts) --- */
@@ -372,35 +574,46 @@
   opacity: 0;
   pointer-events: none;
 }
+/*
+ * Por tres, por cuatro : la grande annonce, une plaque violette maillée au même endroit que les annonces, en plus
+ * grand (elle couvre celle du point pendant sa vie, puis la laisse voir). `effectsView.ts` règle son grossissement,
+ * sa bascule (`transform`) et son fondu.
+ */
 #effect-banner {
+  --banner-bevel: calc(40 * var(--hud-u));
   position: fixed;
-  left: 0;
-  right: 0;
-  top: 26%;
+  left: 50%;
+  top: calc(var(--hud-call-top) - 22 * var(--hud-u));
   z-index: 6;
-  text-align: center;
-  font: italic 900 clamp(48px, 9vw, 120px) var(--ui-font);
-  letter-spacing: 0.02em;
-  color: var(--ui-gold);
-  text-shadow: 0 0 18px rgba(255, 170, 30, 0.8), 0 5px 0 #b04a00, 0 8px 18px rgba(0, 0, 0, 0.6);
-  -webkit-text-stroke: 3px #3a1800;
+  translate: -50% 0;
+  padding: calc(4 * var(--hud-u)) calc(70 * var(--hud-u)) calc(12 * var(--hud-u));
+  background: var(--hud-call-mesh), var(--violet);
+  clip-path: polygon(var(--banner-bevel) 0, 100% 0, calc(100% - var(--banner-bevel)) 100%, 0 100%);
+  color: var(--ball);
+  font-size: calc(104 * var(--hud-u));
+  line-height: 1;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
+}
+#effect-banner:empty {
+  display: none;
 }
 
 /* --- Ralenti et décompte du labo --- */
 
+/* Ralenti : une plaque violette en haut à droite, sous le bouton de pause. */
 #replay-badge {
   position: fixed;
-  top: 18px;
-  right: 24px;
+  top: calc(var(--ui-safe-y) + 62 * var(--hud-u));
+  right: var(--ui-safe-x);
   z-index: 6;
-  padding: 4px 14px;
-  border-left: 4px solid var(--ui-gold);
-  background: rgba(10, 16, 24, 0.7);
-  color: #ffffff;
-  font: italic 800 20px var(--ui-font);
-  letter-spacing: 0.12em;
+  padding: calc(6 * var(--hud-u)) calc(28 * var(--hud-u)) calc(8 * var(--hud-u));
+  background: var(--hud-call-mesh), var(--violet);
+  clip-path: polygon(calc(14 * var(--hud-u)) 0, 100% 0, calc(100% - 14 * var(--hud-u)) 100%, 0 100%);
+  color: var(--white);
+  font-size: calc(36 * var(--hud-u));
+  letter-spacing: 0.08em;
   pointer-events: none;
 }
 #countdown {
@@ -419,14 +632,15 @@
 
 #net-hud {
   position: fixed;
-  right: 12px;
-  bottom: 12px;
+  right: var(--ui-safe-x);
+  bottom: var(--ui-safe-y);
   z-index: 50;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: #0008;
-  color: #cfe;
-  font: 12px/1.4 var(--ui-font-mono);
+  padding: calc(6 * var(--hud-u)) calc(18 * var(--hud-u));
+  background: var(--hud-plate);
+  clip-path: polygon(calc(10 * var(--hud-u)) 0, 100% 0, 100% 100%, 0 100%, 0 calc(10 * var(--hud-u)));
+  color: var(--ink-soft);
+  font: 600 calc(18 * var(--hud-u)) / 1.35 var(--ui-font-text);
+  font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: pre;
   pointer-events: none;

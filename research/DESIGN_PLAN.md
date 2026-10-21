@@ -271,6 +271,57 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    échoué une fois en série (tape de 80 ms manquée sous charge), vert seul trois fois.
 8. **HUD de match**, maquette d'abord : score et sets, service, punto de oro, annonces (point, faute, por tres,
    ralenti), étiquettes des joueurs, état réseau en ligne. Simple et double, les deux côtés de la caméra.
+   *Fait.* Contrat de direction du HUD : `.impeccable/surfaces/src-ui-hud-css.md`. Trois organisations proposées
+   sur de vraies captures du match (tableau au centre, score en coin, score sous le court) ; Xavier a choisi **le
+   tableau au centre**, et **le bleu ciel partout** pour les couleurs d'équipe. Décisions :
+   - **Couleurs d'équipe à une seule source** : `src/render/teamColors.ts` (maillots) et `theme.css` (`--blue`
+     `#3CC4FF`, `--blue-partner` `#A6E6FF`, `--red` `#FF4D3D`, `--red-partner` `#FF9E94`) ont les mêmes valeurs,
+     vérifiées par `tests/render/teamColors.test.ts`. Le bleu ciel ressort sur le court bleu roi (l'ancien bleu s'y
+     confondait) et reste nettement plus clair que le rouge (daltonisme) ; texte en encre sur les deux, y compris le
+     bandeau « Bleu » de Jouer et de la salle (avant : blanc). Les pastilles des joueurs (`--player-*`) et le
+     retour des entrées suivent.
+   - **Tableau** en haut au centre, dans la zone de sécurité : plaque Bleu | jeux (encre) | points (blanc) | bout de
+     filet maillé | points | jeux | plaque Rouge, coins coupés vers l'extérieur ; Bleu reste à gauche quel que soit
+     le côté de la caméra. Le losange jaune balle (liseré encre) marque l'équipe au service ; l'annonce du service
+     reprend le même losange et lui sert de légende. Dessous, une bande encre : sets terminés (« SET 1 6-4 », dans
+     l'ordre Bleu-Rouge) et l'appel du point en jaune (« Punto de oro », « Égalité », « Jeu décisif ») ; à sa
+     droite, le compteur d'échange (« 5 COUPS »). Match fini : il ne reste que les deux plaques et les sets.
+   - **Annonces** (`#point`) : trois mots au plus sur une plaque penchée de 4°, posée sur la bande et le bandeau LED,
+     au-dessus des têtes du fond ; la raison dessous, plus petite. Service « ◆ SERVICE BLEU » / « 2E SERVICE »
+     (plaque encre, la consigne dessous), faute et let (violet maillé, texte jaune : « FAUTE » / hors du carré),
+     point « POINT BLEU », « JEU ROUGES », « SET BLEUS » à la couleur de l'équipe (raison · nombre de coups), por tres
+     et por cuatro en plein échange (« POR TRES ! » / « À rattraper dehors »), fin du match « BLEU GAGNE » / « Match
+     6-4 » et la consigne pour rejouer en jaune. Entrée en 160 ms (grossit de 1,35 à 0,96 puis 1, fondu), par
+     l'animation du navigateur sur `scale` et `opacity`, seulement quand le texte change ; rien avec
+     `prefers-reduced-motion`. Pendant une annonce, le compteur d'échange se cache.
+   - **Grand bandeau des effets** (`#effect-banner`) : même endroit que les annonces, en plus grand (104 `--ui-px`),
+     plaque violette maillée et texte jaune balle ; il couvre l'annonce du HUD pendant sa vie puis la laisse voir.
+     Texte en français : « POR TRES ! » (avant « ¡POR TRES! »). Le grossissement et la bascule restent ceux de
+     `effectsView.ts`.
+   - **Retour des frappes** (`#feedback`) : une ligne en plaque encre sous la bande, nom à la couleur du joueur,
+     même entrée que les annonces. **Qui joue avec quoi** (`#players`) : en haut à gauche, une plaque par joueur avec
+     un losange de sa couleur, sans déborder sur le tableau (la ligne passe à la ligne). **Pause** : bouton dans la
+     zone de sécurité, un peu plus gros. **Ralenti** : plaque violette maillée « RALENTI » sous le bouton de pause
+     (avant, elle le chevauchait). **Encart réseau** : plaque encre en bas à droite, Archivo à chiffres tabulaires.
+     **Aide aux coups** (labo) : plaque encre en bas à droite.
+   - Le HUD ne touche au DOM que quand son contenu change (avant : tableau du score et lignes réécrits à chaque image,
+     et une mesure de mise en page par image pour placer `#players`). Aucun `backdrop-filter`, ombre ni `filter` ;
+     formes en `clip-path`, maille en dégradés. Mesure `?perf` (double IA contre IA, 1080p, Chromium sur GPU, trois
+     fois 10 s, avant et après, deux passes) : 60 i/s des deux côtés, pire image 16,8 ms ; mises en page 120 par
+     seconde avant, ~3 après (10 ms/s → 0,4 ms/s), recalculs de style 120/s → 9 à 18/s (5 ms/s → 0,4 à 0,9 ms/s).
+   - Le score se lit pendant la pause (question de l'étape 6) : tant que le menu de pause est ouvert, tableau,
+     annonce et retour des frappes passent à droite, calés sur la zone de sécurité, dans la partie du match qui reste
+     visible (règle `body:has(#pause-menu:not([hidden]))` de `hud.css`). Dans les réglages ouverts depuis la pause,
+     le bandeau plus large mord encore sur le coin de la plaque Bleu (le nom reste lisible).
+   - `impeccable detect` sur `hud.css`, `menu.css` et `theme.css` : rien de nouveau (le liseré latéral du retour
+     des entrées est pour l'étape 9 ; le rebond des menus était déjà accepté).
+   - Captures ajoutées : `29-annonce-point`, `29b-por-tres` (provoqué comme dans `effects.spec.ts`),
+     `29c-fin-du-match` (match en un jeu, Bleu mène 1-0, 40-0 d'office).
+   Restent : étiquettes au-dessus des joueurs et appel au partenaire de la maquette (pas dans cette étape) ; le
+   décor 3D écrit encore en espagnol (« ¡VAMOS! » sur le bandeau LED, « ¡POR TRES! » sur la bande de l'arène
+   pendant le ralenti) et le retour « salida de pista ! » (`clarify`, étape 10) ; raisons de point longues (« la
+   balle n'a pas passé le filet ») ; le jugement depuis le canapé, à la manette, surtout la taille du tableau et la
+   lisibilité des annonces sur un match qui bouge.
 9. **Écrans annexes** : tutoriel et guides de coups, labo, test manette, affichage des entrées. Tokens et
    composants seulement, sans maquette ni passe complète.
 10. **Finitions** : `audit`, `harden` (noms longs, 4 manettes, déconnexion, 4:3, 1366×768, 4K, ultra-large),

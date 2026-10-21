@@ -119,8 +119,8 @@ describe('effets de balle et de vitre', () => {
   });
 
   it('por tres et por cuatro : éclair et annonce, qui s’effacent', () => {
-    expect(bannerFor('por-tres')).toBe('¡POR TRES!');
-    expect(bannerFor('por-cuatro')).toBe('¡POR CUATRO!');
+    expect(bannerFor('por-tres')).toBe('POR TRES !');
+    expect(bannerFor('por-cuatro')).toBe('POR CUATRO !');
     expect(bannerFor('second-bounce')).toBeNull();
     const fx = new Effects(32, 256, seeded());
     // Sortie par-dessus le mur après le rebond : éclat au sommet du mur ; avant le rebond (faute), rien.
@@ -130,7 +130,7 @@ describe('effets de balle et de vitre', () => {
     expect(fx.spawned.exit).toBe(1);
 
     fx.fromStep(step({ result: { reason: 'por-tres' } }));
-    expect(fx.banner).toBe('¡POR TRES!');
+    expect(fx.banner).toBe('POR TRES !');
     expect(fx.flashAge).toBe(0);
     fx.update(BANNER_LIFE + 0.01);
     expect(fx.banner).toBeNull();

@@ -216,6 +216,47 @@ for (const size of SIZES) {
       await shot(page, '28-faux-reseau');
     });
 
+    test('annonces du match', async ({ page }) => {
+      test.setTimeout(150_000);
+      // Point gagné : l'annonce à la couleur de l'équipe, et pourquoi.
+      await page.goto(MATCH);
+      await page.waitForFunction(() => window.__duel?.duel.phase === 'dead' && window.__duel.duel.lastResult != null, null, { timeout: 60_000, polling: 20 });
+      await page.waitForTimeout(400);
+      await shot(page, '29-annonce-point');
+
+      // Por tres provoqué (comme `effects.spec.ts`) : la grande annonce des effets par-dessus celle du HUD.
+      await page.goto(MATCH);
+      await page.waitForFunction(() => window.__duel !== undefined);
+      await page.evaluate(() => {
+        const { duel } = window.__duel!;
+        const step = duel.step.bind(duel);
+        let pushed = false;
+        duel.step = (commands) => {
+          step(commands);
+          const ball = duel.ball;
+          // Après le rebond, loin des joueurs (sinon l'IA la reprend aussitôt).
+          const alone = ball !== null && duel.players.every((p) => Math.hypot(p.pos.x - ball.pos.x, p.pos.z - ball.pos.z) > 2.5);
+          if (!pushed && ball && alone && duel.phase === 'rally' && duel.bounces === 1 && duel.hits >= 1 && ball.vel.y > 0) {
+            pushed = true;
+            ball.vel = { x: ball.pos.x >= 0 ? 10 : -10, y: 14, z: 0 };
+          }
+        };
+      });
+      await page.waitForFunction(() => /POR/.test(document.getElementById('effect-banner')?.textContent ?? ''), null, { timeout: 60_000, polling: 20 });
+      await page.waitForTimeout(350);
+      await shot(page, '29b-por-tres');
+
+      // Fin du match : set en un jeu (gagné par deux jeux d'écart) ; Bleu mène 1-0, 40-0 d'office pour ne pas attendre.
+      await page.goto(`${MATCH}&games=1`);
+      await page.waitForFunction(() => window.__duel?.duel.match != null);
+      await page.evaluate(() => {
+        for (let i = 0; i < 7; i++) window.__duel!.duel.match!.awardPoint(0);
+      });
+      await page.waitForFunction(() => window.__duel?.duel.phase === 'over', null, { timeout: 120_000, polling: 50 });
+      await page.waitForTimeout(400);
+      await shot(page, '29c-fin-du-match');
+    });
+
     test('test de la manette, en cours', async ({ page }) => {
       // Manette virtuelle : A (bouton du bas) est le premier bouton demandé.
       await page.addInitScript(() => {

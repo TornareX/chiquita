@@ -209,8 +209,8 @@ export function meshStrength(speed: number): number {
 
 /** Annonce à l'écran pour une raison de point, sinon `null`. */
 export function bannerFor(reason: PointReason): string | null {
-  if (reason === 'por-tres') return '¡POR TRES!';
-  if (reason === 'por-cuatro') return '¡POR CUATRO!';
+  if (reason === 'por-tres') return 'POR TRES !';
+  if (reason === 'por-cuatro') return 'POR CUATRO !';
   return null;
 }
 
@@ -234,7 +234,7 @@ export class Effects {
   readonly particles: Pool<Particle>;
   /** Éclair blanc plein écran (por tres) : âge (s), éteint au-delà de `FLASH_LIFE`. */
   flashAge = Infinity;
-  /** Annonce à l'écran (« ¡POR TRES! ») et son âge (s). */
+  /** Annonce à l'écran (« POR TRES ! ») et son âge (s). */
   banner: string | null = null;
   bannerAge = Infinity;
   /** Effets lancés depuis le début, par sorte (tests, mode debug). */

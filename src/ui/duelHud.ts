@@ -135,13 +135,45 @@ function element(id: string, classes = ''): HTMLDivElement {
   return div;
 }
 
+/** Contenu écrit dans chaque élément, pour ne toucher au DOM que s'il change (pas de mise en page à chaque image). */
+const written = new WeakMap<HTMLElement, string>();
+function setHtml(target: HTMLElement, html: string): boolean {
+  if (written.get(target) === html) return false;
+  written.set(target, html);
+  target.innerHTML = html;
+  return true;
+}
+
+/** Losange du service et des repères (`hud.css`). */
+const DIAMOND = '<span class="hud-diamond"></span>';
+
+/** Annonce : trois mots au plus, puis la raison, plus petite, et une consigne éventuelle. */
+const callout = (main: string, sub = '', again = ''): string =>
+  `<div class="call-main">${main}</div>` +
+  (sub ? `<div class="call-sub">${sub}</div>` : '') +
+  (again ? `<div class="call-again">${again}</div>` : '');
+
+/** Arrivée d'une annonce : elle claque sur sa plaque en ~120 ms, avec un léger dépassement (sauf mouvement réduit). */
+const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+function slam(target: HTMLElement): void {
+  if (reducedMotion?.matches || !target.animate) return;
+  target.animate(
+    [
+      { scale: '1.35', opacity: 0 },
+      { scale: '0.96', opacity: 1, offset: 0.75 },
+      { scale: '1', opacity: 1 },
+    ],
+    { duration: 160, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' },
+  );
+}
+
 export function createDuelHud(): DuelHud {
+  const score = element('score', 'hud-centered');
   const rally = element('rally', 'hud-centered');
-  const score = element('score');
-  // Annonces au centre, sur un fond : lisibles sur le terrain comme sur les bandeaux.
-  const message = element('point', 'hud-centered hud-pill');
-  const feedback = element('feedback', 'hud-centered hud-pill');
-  // Sous le score : qui joue avec quoi, entre les points seulement (en mode détaillé, tout le temps).
+  // Annonces au centre du haut, au-dessus du mur du fond : jamais sur le court.
+  const message = element('point', 'hud-centered');
+  const feedback = element('feedback', 'hud-centered');
+  // En haut à gauche : qui joue avec quoi, entre les points seulement (en mode détaillé, tout le temps).
   const players = element('players');
   const help = element('help');
   let helpKey = '';
@@ -159,35 +191,41 @@ export function createDuelHud(): DuelHud {
       }
       help.style.display = detailed ? '' : 'none';
       const match = duel.match;
+      // Match terminé : seuls restent les sets.
+      const over = duel.phase === 'over';
       score.style.display = match ? '' : 'none';
+      rally.dataset.mode = match ? 'match' : 'free';
       if (match) {
-        // Une ligne par joueur : balle de service, nom, sets terminés, jeux, points.
+        // Bleu à gauche, Rouge à droite, quel que soit le côté de la caméra ; jeux puis points vers le filet.
         const labels = match.pointLabels();
-        // Match terminé : seuls restent les sets.
-        const over = duel.phase === 'over';
-        const rows = ([0, 1] as const).map((i) => {
-          const serving = duel.phase !== 'over' && match.server === i ? '●' : '&nbsp;';
-          const sets = match.sets.map((set) => `<td class="set">${set[i]}</td>`).join('');
-          return (
-            `<tr><td class="serve">${serving}</td>` +
-            `<td class="team ${TEAM_CLASSES[i]}">${teamName(i, doubles)}</td>${sets}` +
-            (over ? '' : `<td class="games">${match.games[i]}</td><td class="points">${labels[i]}</td>`) +
-            '</tr>'
-          );
-        });
-        const call = match.call();
-        score.innerHTML = `<table class="hud-score-table">${rows.join('')}</table>` + (call ? `<div class="hud-call">${call}</div>` : '');
-        rally.innerHTML = duel.hits > 1 && !over ? `<span class="hud-rally-count">Échange : ${duel.hits} coups</span>` : '';
+        const team = (i: 0 | 1): string => {
+          const serving = !over && match.server === i ? ' is-serving' : '';
+          const label = `<span class="score-name">${teamName(i, doubles)}</span>`;
+          return `<div class="score-team ${TEAM_CLASSES[i]}${serving}">${i === 0 ? DIAMOND + label : label + DIAMOND}</div>`;
+        };
+        const games = (i: 0 | 1): string => `<div class="score-games">${match.games[i]}</div>`;
+        const points = (i: 0 | 1): string => `<div class="score-points">${labels[i]}</div>`;
+        const board = `<div class="score-board">${team(0)}${games(0)}${points(0)}<div class="score-net"></div>${points(1)}${games(1)}${team(1)}</div>`;
+        // Bande : sets terminés (Bleu-Rouge, dans l'ordre du tableau) et appel du point (punto de oro…).
+        const sets = match.sets.map((set, k) => `<span class="score-set">Set ${k + 1}<b>${set[0]}-${set[1]}</b></span>`).join('');
+        const call = over ? null : match.call();
+        setHtml(score, `${board}<div class="score-strip">${sets}${call ? `<span class="score-call">${call}</span>` : ''}</div>`);
+        score.toggleAttribute('data-over', over);
+        setHtml(rally, duel.hits > 1 && !over ? `${duel.hits} coups` : '');
       } else {
-        rally.innerHTML =
-          `Échange : ${duel.hits} coup${duel.hits > 1 ? 's' : ''}<br>` + `<span class="hud-record">Record : ${duel.bestRally}</span>`;
+        setHtml(rally, `Échange : ${duel.hits} coup${duel.hits > 1 ? 's' : ''}<span class="hud-record">Record : ${duel.bestRally}</span>`);
       }
-      players.style.top = `${(match ? score.getBoundingClientRect().bottom : 4) + 8}px`;
       players.style.opacity = detailed || duel.phase !== 'rally' ? '1' : '0';
-      players.innerHTML = sources
-        .slice(0, duel.players.length)
-        .map((source, i) => `${playerColor(i, '●')} ${name(i)} : ${source} · ` + ASSIST_LABELS[duel.players[i]!.assist])
-        .join('<br>');
+      setHtml(
+        players,
+        sources
+          .slice(0, duel.players.length)
+          .map(
+            (source, i) =>
+              `<div class="players-row" data-player="${i}">${DIAMOND}<span><b>${name(i)}</b> : ${source} · ${ASSIST_LABELS[duel.players[i]!.assist]}</span></div>`,
+          )
+          .join(''),
+      );
 
       // Retour sur la dernière frappe ou le dernier coup raté, pendant un court instant. Épuré : une seule ligne,
       // la frappe marquante la plus récente, qui s'efface en fondu.
@@ -201,41 +239,42 @@ export function createDuelHud(): DuelHud {
       const shown = notes.filter((n) => n !== null).sort((a, b) => b.tick - a.tick);
       const lines = (detailed ? shown : shown.slice(0, 1)).map((n) => n.html).join('<br>');
       // Le texte reste pendant le fondu.
-      if (lines) feedback.innerHTML = lines;
+      if (lines && setHtml(feedback, lines)) slam(feedback);
       feedback.style.opacity = lines ? '1' : '0';
 
       const call = duel.lastServeCall;
+      let tone = '';
+      let html = '';
       if (duel.phase === 'serve') {
-        message.dataset.tone = '';
-        const second = duel.serveNumber === 2 ? ' (second service)' : '';
         const server = buttons[duel.server] ?? main;
         const how = buttonsEnabled() ? `maintiens ${buttonIcon('normal', server)}` : formatButtons('tire le stick droit vers toi', server);
-        message.innerHTML = `${name(duel.server)} au service${second}<br><span class="hud-sub">${how}</span>`;
+        // Le losange du tableau marque aussi l'équipe au service : l'annonce lui sert de légende.
+        html = callout(`${DIAMOND}${duel.serveNumber === 2 ? '2e service' : 'Service'} ${name(duel.server)}`, how);
       } else if (duel.phase === 'dead' && call) {
-        message.dataset.tone = 'call';
-        message.textContent = call.call === 'let' ? 'Let : service à rejouer' : `Faute : ${SERVE_FAULTS[call.reason!]}`;
+        tone = 'call';
+        html = call.call === 'let' ? callout('Let', 'Service à rejouer') : callout('Faute', SERVE_FAULTS[call.reason!]);
       } else if (duel.phase === 'dead' && duel.lastResult) {
         const { winner, reason, hits } = duel.lastResult;
         const outcome = duel.lastOutcome;
-        const won = outcome?.set ? ` · set ${teamName(winner, doubles)}` : outcome?.game ? ` · jeu ${teamName(winner, doubles)}` : '';
-        message.dataset.tone = TEAM_CLASSES[winner];
-        message.textContent = `Point ${teamName(winner, doubles)} : ${REASONS[reason]} (${hits} coups)${won}`;
+        const won = outcome?.set ? 'Set' : outcome?.game ? 'Jeu' : 'Point';
+        tone = TEAM_CLASSES[winner];
+        html = callout(`${won} ${teamName(winner, doubles)}`, `${REASONS[reason]} · ${hits} coup${hits > 1 ? 's' : ''}`);
       } else if (duel.phase === 'rally' && duel.exit) {
         // Balle sortie après son rebond : encore jouable dehors, jusqu'à ce qu'elle touche le sol.
         const side = duel.exit.wall === 'sidePosX' || duel.exit.wall === 'sideNegX';
-        message.dataset.tone = 'call';
-        message.textContent = side ? 'Por tres !' : 'Por cuatro !';
+        tone = 'call';
+        html = callout(side ? 'Por tres !' : 'Por cuatro !', 'À rattraper dehors');
       } else if (duel.phase === 'over' && duel.match?.winner != null) {
         const winner = duel.match.winner;
         const sets = duel.match.sets.map((set) => `${set[winner]}-${set[winner === 0 ? 1 : 0]}`).join(' ');
-        message.dataset.tone = TEAM_CLASSES[winner];
-        message.innerHTML =
-          `${teamName(winner, doubles)} ${doubles ? 'gagnent' : 'gagne'} le match ${sets}<br>` +
-          '<span class="hud-again">Appuie sur un bouton de coup pour rejouer</span>';
-      } else {
-        message.textContent = '';
+        tone = TEAM_CLASSES[winner];
+        html = callout(`${teamName(winner, doubles)} ${doubles ? 'gagnent' : 'gagne'}`, `Match ${sets}`, 'Appuie sur un bouton de coup pour rejouer');
       }
-      message.style.display = message.innerHTML ? '' : 'none';
+      message.dataset.tone = tone;
+      if (setHtml(message, html) && html) slam(message);
+      message.style.display = html ? '' : 'none';
+      // Pendant une annonce (por tres en plein échange), le compteur d'échange se cache dessous.
+      rally.style.visibility = html && match ? 'hidden' : '';
     },
   };
 }

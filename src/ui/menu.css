@@ -803,7 +803,7 @@
   margin: calc(10 * var(--u)) 0 0;
 }
 
-/* Nom d'une équipe en tête de sa moitié : un bandeau à sa couleur (texte encre sur le rouge). */
+/* Nom d'une équipe en tête de sa moitié : un bandeau à sa couleur, texte encre (bleu ciel comme rouge). */
 .menu-heading.blue,
 .menu-heading.red {
   align-self: flex-start;
@@ -815,7 +815,7 @@
 }
 .menu-heading.blue {
   background: var(--blue);
-  color: var(--white);
+  color: var(--ink);
 }
 .menu-heading.red {
   background: var(--red);
@@ -1417,18 +1417,18 @@
   display: none;
 }
 
-/* Bouton de pause, en haut à droite pendant un match (souris). */
+/* Bouton de pause, en haut à droite pendant un match (souris), dans la zone de sécurité ; le ralenti dessous. */
 #pause-button {
   --bevel: calc(10 * var(--u));
   position: fixed;
-  top: calc(24 * var(--u));
-  right: calc(32 * var(--u));
+  top: var(--ui-safe-y);
+  right: var(--ui-safe-x);
   padding: calc(10 * var(--u)) calc(22 * var(--u));
   border: 0;
   background: var(--plate);
   color: var(--ink-soft);
   font-family: var(--ui-font-brand);
-  font-size: calc(19 * var(--u));
+  font-size: calc(22 * var(--u));
   font-stretch: 80%;
   font-style: italic;
   font-weight: 800;

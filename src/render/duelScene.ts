@@ -21,6 +21,7 @@ import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, pla
 import { SlideDetector } from './effects';
 import { juiceFlags } from './juice';
 import { createSwingTrail, swingLook, type SwingTrail } from './swingTrail';
+import { PARTNER_COLORS, TEAM_COLORS } from './teamColors';
 import { WALLS } from '../sim/court';
 
 export interface DuelView {
@@ -92,10 +93,8 @@ const CONTACT_SHADOW_OPACITY = 0.18;
 /** Anneau de timing : couleur de la balle à venir (`pressure.ts`). */
 const BALL_COLORS: Record<BallColor, number> = { verte: 0x46d160, jaune: 0xffd23f, rouge: 0xff4436 };
 
-/** Couleurs d'équipe vives, lisibles de loin (GAME_DESIGN.md §9). */
-export const TEAM_COLORS = [0x2f8cff, 0xff4f5e] as const;
-/** En double, le partenaire (joueurs 2 et 3) porte une teinte plus claire de la couleur de son équipe. */
-export const PARTNER_COLORS = [0x8fc3ff, 0xff9ea8] as const;
+/** Couleurs d'équipe vives, lisibles de loin (GAME_DESIGN.md §9), communes avec l'interface (`teamColors.ts`). */
+export { PARTNER_COLORS, TEAM_COLORS };
 /** Durée d'affichage d'une annonce entre partenaires (s), et son texte. */
 const CALL_TIME = 1;
 const CALL_TEXT: Record<CallKind, string> = { mia: '¡Mía!', tuya: '¡Tuya!' };

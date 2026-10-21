@@ -1,8 +1,8 @@
 /*
- * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étapes 2 et 3.
+ * Variables communes de l'interface (menus, HUD, écrans annexes) : `research/DESIGN_PLAN.md`, étapes 2, 3 et 8.
  * `menu.css`, `hud.css` et `annexes.css` n'utilisent que ces variables pour les couleurs et les polices.
- * La palette « Grillage » (DA du 21/10/2026) est en tête ; les menus s'en servent déjà. Les variables du HUD et des
- * écrans annexes gardent les valeurs du style neutre jusqu'à leur étape (8 et 9).
+ * La palette « Grillage » (DA du 21/10/2026) est en tête ; menus et HUD s'en servent. Les variables `--ui-*` des
+ * écrans annexes gardent les valeurs du style neutre jusqu'à leur étape (9).
  */
 
 /* Archivo (licence OFL, `fonts/ARCHIVO-OFL.txt`), variable en largeur (62-125 %) et en graisse (100-900), latin. */
@@ -25,18 +25,21 @@
 
 :root {
   /*
-   * Palette « Grillage ». Le jaune balle est réservé au focus et à l'action principale. Bleu et rouge se
-   * distinguent aussi par la clarté (le bleu est nettement plus sombre) ; petit texte sur rouge : en encre.
-   * La 3D garde ses propres teintes (`TEAM_COLORS`, `src/render/duelScene.ts`) : ce bleu se confond avec le court,
-   * bleu lui aussi ; l'unification se décide avec le HUD (étape 8).
+   * Palette « Grillage ». Le jaune balle est réservé au focus, à l'action principale et, en match, à l'instant
+   * (service, punto de oro, por tres).
+   * Couleurs d'équipe : les mêmes que les maillots de la 3D (`src/render/teamColors.ts`, vérifié par
+   * `tests/render/teamColors.test.ts`). Bleu ciel, qui ressort sur le court bleu roi ; bleu et rouge se distinguent
+   * aussi par la clarté (le bleu est nettement plus clair) ; texte sur l'un ou l'autre : en encre.
    */
   --ink: #0d0b1a;
   --plate: #1b1631;
   --plate-raised: #261f45;
   --violet: #7a3cff;
   --ball: #e6ff2e;
-  --blue: #2f6bff;
+  --blue: #3cc4ff;
+  --blue-partner: #a6e6ff;
   --red: #ff4d3d;
+  --red-partner: #ff9e94;
   --white: #ffffff;
   /* Texte sur l'encre et sur les plaques, légèrement violacé ; traits et repères éteints. */
   --ink-fg: #f3f0ff;
@@ -58,7 +61,7 @@
 
   /*
    * Échelle unique : l'interface est pensée en 1920×1080 ; 1 `--ui-px` vaut 1 px à cette taille et suit la fenêtre
-   * (le plus petit des deux côtés, en 16:9). Les menus s'en servent ; le HUD y passera à l'étape 8.
+   * (le plus petit des deux côtés, en 16:9). Menus et HUD de match s'en servent.
    */
   --ui-px: calc(min(100vw, 100vh * 16 / 9) / 1920);
   /* Zone de sécurité d'une télé : 5 % sur les bords. */
@@ -89,13 +92,13 @@
   --ui-line: #3a4a58;
   --ui-line-soft: #5a6b7a;
 
-  /* Équipes : nom au score, et pastille de chaque joueur (le partenaire en plus clair). */
-  --team-blue: #8cc4ff;
-  --team-red: #ff9aa3;
-  --player-1: #6fb2ff;
-  --player-2: #ff8a94;
-  --player-3: #b5d8ff;
-  --player-4: #ffc2c8;
+  /* Équipes : nom au score, et pastille de chaque joueur (le partenaire en plus clair), comme les maillots. */
+  --team-blue: var(--blue);
+  --team-red: var(--red);
+  --player-1: var(--blue);
+  --player-2: var(--red);
+  --player-3: var(--blue-partner);
+  --player-4: var(--red-partner);
 }
 
 /* Couleur d'un joueur selon sa place (`data-player`, de 0 à 3), lue par `var(--player)`. */
