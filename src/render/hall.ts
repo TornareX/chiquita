@@ -89,7 +89,8 @@ function beamMaterial(): THREE.ShaderMaterial {
 }
 
 /**
- * Habille la salle : halos et faisceaux des projecteurs ajoutés à `scene`, ambiance appliquée à l'arène (`arena`,
+ * Habille la salle : halos et faisceaux des projecteurs ajoutés à l'arène (ils tournent avec elle quand la caméra passe
+ * de l'autre côté), ambiance appliquée à la scène et à l'arène (`arena`,
  * ses meshes `sol-salle` et `tribunes`) et au fond. `hdr` : post-traitement actif (bloom). Rien n'est modifié sans arène.
  */
 export function dressHall(scene: THREE.Scene, arena: THREE.Object3D, hdr = false): void {
@@ -121,13 +122,13 @@ export function dressHall(scene: THREE.Scene, arena: THREE.Object3D, hdr = false
     // Un peu en avant de la vitre du projecteur, vers le terrain.
     sprite.position.copy(pos).add(new THREE.Vector3(-Math.sign(pos.x) * 0.15, 0, 0));
     sprite.renderOrder = 5;
-    scene.add(sprite);
+    arena.add(sprite);
     if (core) {
       const glow = new THREE.Sprite(core);
       glow.scale.setScalar(CORE_SIZE);
       glow.position.copy(sprite.position);
       glow.renderOrder = 6;
-      scene.add(glow);
+      arena.add(glow);
     }
 
     const aim = new THREE.Vector3(...lamp.aim);
@@ -141,6 +142,6 @@ export function dressHall(scene: THREE.Scene, arena: THREE.Object3D, hdr = false
     cone.quaternion.setFromUnitVectors(up, aim.clone().sub(pos).normalize());
     cone.renderOrder = 4;
     cone.frustumCulled = false;
-    scene.add(cone);
+    arena.add(cone);
   }
 }

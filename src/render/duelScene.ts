@@ -46,6 +46,11 @@ export interface DuelView {
    * lissée. Hors ligne, rien ne change.
    */
   setOnline(online: boolean): void;
+  /**
+   * Côté du terrain dans le dos duquel se place la caméra (-1 : camp bleu, par défaut ; 1 : camp rouge, la caméra fait
+   * un demi-tour), et le joueur que suivent les caméras rapprochées (`?camera=proche|dos`) et les repères.
+   */
+  setViewpoint(side: -1 | 1, focus: number): void;
   /** Léger tremblement de caméra ; `strength` de 0 à 1. */
   shake(strength: number): void;
   /** Zone à viser, dessinée au sol (tutoriel), ou `null` pour l'effacer. */
@@ -98,7 +103,8 @@ const CALL_TEXT: Record<CallKind, string> = { mia: '¡Mía!', tuya: '¡Tuya!' };
 const SHOW_CALLS = new URLSearchParams(location.search).get('bulles') === '1';
 
 /**
- * Caméra de retransmission télé, derrière le joueur du camp Z négatif (GAME_DESIGN.md §8) : téléobjectif
+ * Caméra de retransmission télé, derrière le joueur du camp Z négatif (GAME_DESIGN.md §8), ou du camp opposé, tournée
+ * d'un demi-tour, quand les joueurs de cet écran sont tous rouges (`setViewpoint`) : téléobjectif
  * placé haut et loin, qui aplatit la perspective (le joueur du fond reste grand) et cadre tout le
  * terrain, vitres du fond comprises. Valeurs relevées sur des images du Premier Padel (Milan 2026) :
  * ligne de fond proche sur ~76 % de la largeur d'une image 16:9, ligne de fond lointaine sur ~40 %.
@@ -536,6 +542,9 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   let zoom = 1;
   const framePoint = new THREE.Vector3();
   let shake = 0;
+  /** Camp dans le dos duquel est la caméra, et joueur suivi par les caméras rapprochées (`setViewpoint`). */
+  let viewSide: -1 | 1 = -1;
+  let focus = 0;
   /** Décalage de la balle laissé par une correction du réseau, et temps restant de son fondu (s). */
   let ballOffset: Vec3 = { x: 0, y: 0, z: 0 };
   let ballOffsetLeft = 0;
@@ -825,6 +834,20 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       online = on;
     },
 
+    setViewpoint(side: -1 | 1, player: number): void {
+      // Changement de camp : la caméra repart du centre au lieu de glisser d'un bout à l'autre.
+      if (side !== viewSide) cameraX = 0;
+      viewSide = side;
+      focus = player;
+      // Le décor fait le même demi-tour que la caméra : tribunes, bâches, projecteurs et terrain (symétrique, rien ne
+      // bouge en jeu) se voient de la même façon des deux côtés. La vitre coupée est celle du côté de la caméra.
+      const turn = side > 0 ? Math.PI : 0;
+      if (arena) arena.object.rotation.y = turn;
+      court.object.rotation.y = turn;
+      sun.position.set(-6 * side, 12, 4 * side);
+      NEAR_CLIP_PLANES[0]!.normal.set(0, 0, -side);
+    },
+
     correctBall(offset: Vec3): void {
       // Le saut s'ajoute à ce qui reste du précédent : la balle repart toujours de là où on la voyait.
       const k = ballOffsetLeft / BALL_CORRECTION_FADE;
@@ -858,21 +881,23 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       syncPlayers();
       trailDt = frozen ? 0 : frameTime;
       arena?.update(frozen ? 0 : frameTime);
-      const near = duel.players[0];
-      // Caméra partagée : elle suit à peine l'équipe proche (en double, le milieu de la paire bleue).
-      const nearTeam = duel.players.filter((p) => p.side < 0);
+      const near = duel.players[focus] ?? duel.players[0];
+      // Caméra partagée : elle suit à peine l'équipe proche (en double, le milieu de la paire), celle de son camp.
+      const nearTeam = duel.players.filter((p) => p.side === viewSide);
       const nearX = nearTeam.reduce((sum, p) => sum + lerp(p.prevPos, p.pos, alpha).x, 0) / nearTeam.length;
       cameraX += (nearX * CAMERA_FOLLOW - cameraX) * (1 - Math.exp(-CAMERA_SMOOTHING * frameTime));
       shake *= Math.exp(-10 * frameTime);
       shakeTime += frameTime;
       const jitter = shake * 0.06 * Math.sin(shakeTime * 70);
-      camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, -CAMERA_BACK);
-      camera.lookAt(cameraX * 0.6, 0, CAMERA_LOOK_Z);
+      // Côté rouge : tout le placement tourne d'un demi-tour autour du centre du terrain (Z opposé).
+      camera.position.set(cameraX + jitter, CAMERA_HEIGHT + jitter * 0.5, viewSide * CAMERA_BACK);
+      camera.lookAt(cameraX * 0.6, 0, -viewSide * CAMERA_LOOK_Z);
       if (!closeCamera) frameAll(alpha, frameTime);
       if (closeCamera === 'proche' || closeCamera === 'dos') {
         const p = lerp(near.prevPos, near.pos, alpha);
-        if (closeCamera === 'dos') camera.position.set(p.x + 0.6, 1.7, p.z - 4.2);
-        else camera.position.set(p.x - 3.4, 1.5, p.z + 2.6);
+        const s = -viewSide;
+        if (closeCamera === 'dos') camera.position.set(p.x + 0.6 * s, 1.7, p.z - 4.2 * s);
+        else camera.position.set(p.x - 3.4 * s, 1.5, p.z + 2.6 * s);
         camera.lookAt(p.x, 1.0, p.z);
         if (camera.fov !== 40) {
           camera.fov = 40;

@@ -170,6 +170,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     (s, restart) => {
       if (online) return;
       apply(s, restart);
+      // Une place passée d'humain à IA (ou l'inverse) peut changer le camp de la caméra.
+      updateViewpoint();
       // Nouvelle partie : l'historique du ralenti ne la rejoue plus.
       if (restart) recorder?.clear();
       // Faux réseau : les deux machines repartent de la partie réglée (et des nouvelles places humaines et IA).
@@ -189,6 +191,21 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
   const states: (PadState | null)[] = [null, null, null, null];
   const buttons: (InputSource | null)[] = [null, null, null, null];
+
+  /**
+   * Caméra dans le dos des joueurs de cet écran : en ligne, de sa place ; hors ligne, de l'équipe des humains s'ils
+   * sont tous dans la même (un humain rouge seul contre l'IA joue de son côté) ; sinon (bleu et rouge sur le même
+   * écran, ou que des IA), derrière les bleus comme toujours. `focus` : le premier de ces joueurs.
+   */
+  const viewpoint: { side: -1 | 1; focus: number } = { side: -1, focus: 0 };
+  const updateViewpoint = (): void => {
+    const humans = online ? online.seats : duel.players.map((_, i) => i).filter((i) => isHuman(settings.players[i]!));
+    const sides = new Set(humans.map((i) => duel.players[i]?.side ?? -1));
+    viewpoint.side = sides.size === 1 && sides.has(1) ? 1 : -1;
+    viewpoint.focus = humans.find((i) => duel.players[i]?.side === viewpoint.side) ?? 0;
+    view.setViewpoint(viewpoint.side, viewpoint.focus);
+  };
+  updateViewpoint();
 
   /** Bouton d'assistance maintenu au pas précédent : un appui fait passer au niveau suivant. */
   const assistHeld = [false, false, false, false];
@@ -225,7 +242,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
       netRestart = true;
     }
     assistHeld[index] = state.assistButton;
-    return toCommands(state, duel.players[index]!.side < 0, settings.farOwnView);
+    // Joueur du camp où est la caméra (dans son dos) : haut de l'écran = vers le filet.
+    return toCommands(state, duel.players[index]!.side === viewpoint.side, settings.farOwnView);
   };
   /** Commandes de tous les joueurs pour ce pas, arrondies comme elles le seraient en ligne (`src/net/codec.ts`). */
   const sample = (): ArcadeCommands[] => {

@@ -260,6 +260,17 @@ test) ; `tests/e2e/enligne.spec.ts` (deux fenêtres : liaison de l'invité coup�
 et redevient identique au serveur ; puis il recharge sa page et revient directement dans le match ; trois passages sur
 trois sans écart).
 
+**Caméra dans le dos de son joueur (21/10, même branche).** En ligne, chacun voit le match depuis son côté : si sa
+place est rouge, la caméra fait un demi-tour et se place derrière le camp rouge, et le haut de l'écran le mène vers
+le filet, exactement comme pour un bleu (`DuelView.setViewpoint`, `src/modes/duel.ts`). Le décor (tribunes, bâches,
+projecteurs, terrain) tourne avec elle, la vitre du fond coupée est celle de son côté : la vue est la même des deux
+côtés. Règle unique, hors ligne aussi : la caméra se met derrière l'équipe des humains de l'écran s'ils sont tous dans
+la même (un humain rouge seul contre l'IA joue de son côté) ; sinon (un bleu et un rouge sur le même écran, ou que des
+IA), derrière les bleus comme avant. En double, elle reste centrée sur la paire. Rendu et lecture du stick seulement,
+rien dans la simulation ; si un jour les équipes changent de côté en cours de match, la caméra devra suivre le côté
+de son joueur. Vérifié : `tests/e2e/camera.spec.ts` (le stick vers le haut mène le joueur rouge vers le filet, vers le
+bas recule le bleu ; avec l'ancienne règle, le test échoue).
+
 Pas encore fait (suite de la phase 1) : le salon à la manette ; héberger le serveur sur Internet (Fly.io, région
 Paris) ; deux joueurs sur la même machine dans une même fenêtre.
 
