@@ -3,6 +3,7 @@ import { SIM_DT } from '../sim/constants';
 import type { DuelFormat } from '../sim/duel';
 import { MatchServer } from './matchServer';
 import { encodeFinals, decodeFrame, type ClientMessage, type MatchConfig, type PlayerPrefs, type RoomView, type ServerMessage } from './protocol';
+import { serializeState } from './snapshot';
 
 const TICK_MS = SIM_DT * 1000;
 /** Le match commence ce temps après « Lancer » : chacun a le temps de recevoir la configuration (ms). */
@@ -10,10 +11,16 @@ const START_LEAD = 800;
 /** Lettres des codes de salle : sans I, O, 0, 1, faciles à dicter. */
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const RULES = { setsToWin: 1, gamesPerSet: 6, goldenPoint: false };
+/** Place gardée à un joueur coupé pendant un match (ms) : l'IA la tient, il la reprend s'il revient à temps. */
+export const HOLD_MS = 60_000;
 
 /** Un navigateur connecté : ce qu'on sait de lui, et comment lui écrire. */
 interface Member {
   id: number;
+  /** Identifiant de sa fenêtre, gardé d'une connexion à l'autre (`hello`). */
+  token: string;
+  /** Version différente de celle du serveur : on ne l'écoute plus. */
+  refused: boolean;
   name: string;
   prefs: PlayerPrefs;
   room: Room | null;
@@ -29,6 +36,8 @@ interface Room {
   level: AiLevel;
   match: MatchServer | null;
   startAt: number;
+  /** Places de joueurs coupés pendant le match, par jeton : la place, et jusqu'à quand elle est gardée. */
+  held: Map<string, { seat: number; until: number }>;
 }
 
 const DEFAULT_PREFS: PlayerPrefs = { assist: 'magnet', prepMove: 'libre', hand: 'right' };
@@ -47,34 +56,54 @@ export class Lobby {
   constructor(
     private readonly now: () => number,
     private readonly random: () => number = Math.random,
+    /** Version du jeu attendue (`version.ts`) ; `null` : tout le monde est accepté (tests). */
+    private readonly version: string | null = null,
   ) {}
 
   /** Un navigateur se connecte ; rend son identifiant. */
   connect(send: Member['send']): number {
     const id = this.nextId++;
-    this.members.set(id, { id, name: `Joueur ${id}`, prefs: DEFAULT_PREFS, room: null, send });
+    this.members.set(id, { id, token: `anonyme-${id}`, refused: false, name: `Joueur ${id}`, prefs: DEFAULT_PREFS, room: null, send });
     return id;
   }
 
   disconnect(id: number): void {
     const member = this.members.get(id);
     if (!member) return;
-    this.leave(member);
+    // Coupé pendant un match : sa place lui est gardée un moment (l'IA la tient en attendant).
+    this.leave(member, true);
     this.members.delete(id);
   }
 
   /** Message texte (JSON) d'un navigateur. */
   message(id: number, message: ClientMessage): void {
     const member = this.members.get(id);
-    if (!member) return;
+    if (!member || member.refused) return;
     const room = member.room;
     switch (message.t) {
       case 'ping':
         member.send({ t: 'pong', at: message.at, server: this.now() });
         return;
-      case 'hello':
+      case 'hello': {
+        if (this.version !== null && message.version !== this.version) {
+          member.refused = true;
+          member.send({ t: 'error', message: 'Ta version du jeu n’est pas celle du serveur : recharge la page (Ctrl+F5).' });
+          return;
+        }
         member.name = String(message.name).slice(0, 20) || member.name;
         member.prefs = { ...DEFAULT_PREFS, ...message.prefs };
+        if (message.token) member.token = String(message.token).slice(0, 64);
+        // Revenu après une coupure pendant un match : il reprend sa place.
+        for (const held of this.rooms.values()) {
+          const seat = held.held.get(member.token);
+          if (seat && held.match && !member.room) this.resume(member, held, seat.seat);
+        }
+        return;
+      }
+      case 'resync':
+        if (!room?.match || this.now() < room.startAt) return;
+        this.flush(room);
+        member.send({ t: 'state', tick: room.match.tick, state: serializeState(room.match.duel) });
         return;
       case 'create':
         this.leave(member);
@@ -127,17 +156,47 @@ export class Lobby {
   tick(): void {
     const now = this.now();
     for (const room of this.rooms.values()) {
+      // Places gardées trop longtemps : elles restent à l'IA ; salle vide sans place gardée : fermée.
+      for (const [token, held] of room.held) if (held.until < now) room.held.delete(token);
+      if (room.members.length === 0 && room.held.size === 0) {
+        this.rooms.delete(room.code);
+        continue;
+      }
       const match = room.match;
       if (!match || now < room.startAt) continue;
       match.advanceTo(Math.floor((now - room.startAt) / TICK_MS) + 1);
-      const finals = match.takeFinals();
-      const hashes = match.takeHashes();
-      const bytes = finals ? encodeFinals(finals.start, match.players, finals.data) : null;
-      for (const member of room.members) {
-        if (bytes) member.send(bytes);
-        for (const h of hashes) member.send({ t: 'hash', ...h });
-      }
+      this.flush(room);
     }
+  }
+
+  /** Envoie à chacun les commandes retenues et les empreintes pas encore envoyées. */
+  private flush(room: Room): void {
+    const match = room.match;
+    if (!match) return;
+    const finals = match.takeFinals();
+    const hashes = match.takeHashes();
+    const bytes = finals ? encodeFinals(finals.start, match.players, finals.data) : null;
+    for (const member of room.members) {
+      if (bytes) member.send(bytes);
+      for (const h of hashes) member.send({ t: 'hash', ...h });
+    }
+  }
+
+  /** Rend sa place à un joueur revenu : il reçoit l'état du match, les commandes suivantes partent de ce pas. */
+  private resume(member: Member, room: Room, seat: number): void {
+    const match = room.match!;
+    room.held.delete(member.token);
+    // Les autres reçoivent d'abord tout ce qui précède : l'état envoyé est celui du pas où reprend l'envoi.
+    if (this.now() >= room.startAt) {
+      match.advanceTo(Math.floor((this.now() - room.startAt) / TICK_MS) + 1);
+      this.flush(room);
+    }
+    member.room = room;
+    room.members.push(member);
+    room.seats[seat] = member.id;
+    match.restoreHuman(seat);
+    member.send({ t: 'resume', config: match.config, startAt: room.startAt, seats: [seat], tick: match.tick, state: serializeState(match.duel) });
+    this.broadcastRoom(room);
   }
 
   /** Salles ouvertes (pour le journal du serveur). */
@@ -150,7 +209,7 @@ export class Lobby {
     do {
       code = Array.from({ length: 4 }, () => CODE_LETTERS[Math.floor(this.random() * CODE_LETTERS.length)]).join('');
     } while (this.rooms.has(code));
-    const room: Room = { code, host, members: [], seats: [null, null, null, null], format: 'double', level: 'normal', match: null, startAt: 0 };
+    const room: Room = { code, host, members: [], seats: [null, null, null, null], format: 'double', level: 'normal', match: null, startAt: 0, held: new Map() };
     this.rooms.set(code, room);
     return room;
   }
@@ -165,7 +224,8 @@ export class Lobby {
     this.broadcastRoom(room);
   }
 
-  private leave(member: Member): void {
+  /** `hold` : coupé (pas parti exprès) ; pendant un match, sa place lui est gardée `HOLD_MS`. */
+  private leave(member: Member, hold = false): void {
     const room = member.room;
     if (!room) return;
     member.room = null;
@@ -174,9 +234,11 @@ export class Lobby {
     if (seat >= 0) {
       room.seats[seat] = null;
       room.match?.replaceWithBot(seat, room.level);
+      if (hold && room.match) room.held.set(member.token, { seat, until: this.now() + HOLD_MS });
     }
     if (room.members.length === 0) {
-      this.rooms.delete(room.code);
+      // Plus personne, mais une place gardée : la salle attend (`tick` la ferme à l'échéance).
+      if (room.held.size === 0) this.rooms.delete(room.code);
       return;
     }
     if (room.host === member.id) room.host = room.members[0]!.id;

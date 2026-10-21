@@ -90,6 +90,17 @@ describe('empreinte de l’état', () => {
     expect(hashState([1, 2])).not.toBe(hashState([2, 1]));
   });
 
+  it('ne dépend que des valeurs, pas du partage des objets ; un cycle ne boucle pas', () => {
+    // Le serveur réutilise la commande précédente d'un joueur en retard ; un navigateur reçoit des objets neufs.
+    const stick = { forward: 0, right: 0 };
+    const shared = { players: [{ stick }, { stick }] };
+    const fresh = { players: [{ stick: { forward: 0, right: 0 } }, { stick: { forward: 0, right: 0 } }] };
+    expect(hashState(shared)).toBe(hashState(fresh));
+    const cyclic: { self?: unknown; n: number } = { n: 1 };
+    cyclic.self = cyclic;
+    expect(Number.isInteger(hashState(cyclic))).toBe(true);
+  });
+
   it('deux parties de même graine ont la même empreinte à chaque seconde', () => {
     const play = (): number[] => {
       const duel = new Duel(null, 'double');

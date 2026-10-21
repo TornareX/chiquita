@@ -236,10 +236,32 @@ Vérifié :
   joueurs frappent. (Une première version du test divergeait : sa manette virtuelle faisait jouer une IA qui
   remplissait un cache de la partie hors du pas, ce qu'une vraie manette ne fait pas. Corrigé dans le test.)
 
-Pas encore fait (suite de la phase 1) : se reconnecter après une coupure (aujourd'hui : bandeau « connexion perdue »,
-le match continue sans soi, joué par l'IA) ; renvoyer l'état à un joueur qui diverge (aujourd'hui : l'encart l'affiche
-en rouge) ; deux joueurs sur la même machine dans un même navigateur ; le salon à la manette ; héberger le serveur
-sur Internet (Fly.io, région Paris) ; numéro de version de la sim.
+**Robustesse (21/10, même branche).**
+
+| Pièce | Où | Ce qu'elle fait |
+|---|---|---|
+| État transmis | `src/net/snapshot.ts` | L’état complet d’une partie en texte (quelques dizaines de Ko), relu à l'identique : classes (`Duel`, `Match`) par une liste explicite (la minification renomme les classes), objets partagés, `-0`, `±Infinity`, `undefined`. |
+| Reprise après coupure | `src/net/lobby.ts`, `src/net/connection.ts` | Chaque fenêtre a un jeton (`sessionStorage`, gardé au rechargement). Coupé pendant un match, le joueur garde sa place une minute (`HOLD_MS`), jouée par l'IA. La liaison se rétablit d'elle-même (essai chaque seconde, bandeau « reconnexion… ») ; le serveur rend la place et envoie l'état du match, d'où le navigateur repart (`OnlineClient.resync`). Page rechargée : la fenêtre se reconnecte dès le chargement et revient directement dans le match, sans le salon. |
+| Remise d'aplomb | `src/net/onlineClient.ts` | Une empreinte différente de celle du serveur : le navigateur demande l'état (`resync`) et repart de là, sans rien faire de lui-même. L'encart compte « reparti de l'état du serveur ». |
+| Version | `src/net/version.ts` | Version = protocole + empreinte d'un match d'IA de 5 s rejoué au démarrage : elle change d'elle-même dès que la simulation change. Une fenêtre d'une autre version est refusée (« recharge la page »). |
+
+Corrigé en route :
+- **L'empreinte ne dépend plus que des valeurs, pas du partage des objets.** Le serveur réutilise la commande
+  précédente d'un joueur en retard (le même objet à plusieurs pas), un navigateur reçoit des objets neufs ou garde une
+  commande prédite juste : même match, mais l'ancienne empreinte, qui comptait les objets partagés, les voyait
+  différents. Le test à deux fenêtres divergeait ainsi à la première seconde d'un deuxième match sur le même serveur.
+- **Un serveur de test resté orphelin** (sous Windows, arrêter `npm` ne tuait pas `tsx` en dessous) faisait tourner
+  les tests suivants sur du vieux code. `npm run serveur` et les tests lancent maintenant `node --import tsx`, un seul
+  processus. Une erreur pendant un message s'affiche dans la console du serveur au lieu d'être avalée.
+
+Vérifié : `tests/net/reconnect.test.ts` (coupé 2 s puis revenu : identique au serveur ; divergence provoquée : vue,
+état demandé, de nouveau identique ; autre version refusée ; saboter la reprise ou la demande d'état fait échouer le
+test) ; `tests/e2e/enligne.spec.ts` (deux fenêtres : liaison de l'invité coupée en plein match, il se reconnecte seul
+et redevient identique au serveur ; puis il recharge sa page et revient directement dans le match ; trois passages sur
+trois sans écart).
+
+Pas encore fait (suite de la phase 1) : le salon à la manette ; héberger le serveur sur Internet (Fly.io, région
+Paris) ; deux joueurs sur la même machine dans une même fenêtre.
 
 ## Comment tester en ligne
 
@@ -269,3 +291,8 @@ les pas rejoués, les corrections, et surtout **« empreintes : N identiques au 
 « DÉSYNCHRONISÉ », les deux machines ne calculent plus le même match (à me signaler). « commandes remplacées par le
 serveur » compte celles des siennes arrivées trop tard. Deux onglets dans le même navigateur : un onglet en arrière-plan
 est ralenti par le navigateur, mieux vaut deux fenêtres côte à côte.
+
+Pour essayer la reprise : en plein match, recharger une des deux fenêtres (F5) : elle revient directement dans le
+match. Avec un ami sur le même réseau, couper le Wi-Fi d'un des deux PC quelques secondes : le bandeau « reconnexion… »
+s'affiche, puis disparaît, et l'encart compte « reparti de l'état du serveur ». Au-delà d'une minute de coupure, la
+place reste à l'IA. (Arrêter le serveur ne marche pas pour ce test : il perdrait les salles.)

@@ -53,6 +53,8 @@ export interface OnlineStart {
   connection: Connection;
   /** Manette ou clavier qui joue la place de ce navigateur. */
   device: Device;
+  /** Reprise après une coupure (page rechargée) : l'état du match envoyé par le serveur. */
+  state?: Duel;
   /** Délai d'entrée et rollback au plus (pas). */
   inputDelay: number;
   maxRollback: number;
@@ -97,7 +99,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   const settings = loadSettings(params);
   const rulesOf = (s: DuelSettings): MatchRules | null =>
     s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint };
-  const duel = online ? createMatchDuel(online.config) : new Duel(rulesOf(settings), settings.match.doubles ? 'double' : 'simple');
+  const duel = online ? (online.state ?? createMatchDuel(online.config)) : new Duel(rulesOf(settings), settings.match.doubles ? 'double' : 'simple');
   const juice = juiceFlags();
   if (!online) {
     duel.highFloor = highFloorFromUrl();
@@ -361,7 +363,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
           () => {
             const s = onlineClient.stats;
             const sync = s.desyncs ? `DÉSYNCHRONISÉ (${s.desyncs}, dès le pas ${s.firstDesync})` : 'identiques au serveur';
-            return `empreintes : ${s.checked} ${sync} · commandes remplacées par le serveur : ${s.overridden}`;
+            const resyncs = s.resyncs ? ` · reparti de l'état du serveur : ${s.resyncs}` : '';
+            return `empreintes : ${s.checked} ${sync} · commandes remplacées par le serveur : ${s.overridden}${resyncs}`;
           },
         )
       : null;
@@ -378,12 +381,14 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     if (frozen()) return;
     if (online && onlineClient) {
       const pads = connectedGamepads();
-      const { replayed, rollbacks, stalls } = onlineClient.session.stats;
+      const session = onlineClient.session;
+      const { replayed, rollbacks, stalls } = session.stats;
       // Menu ouvert : le match continue chez les autres ; sa place ne bouge plus.
       const paused = menu.isOpen || padTest.isOpen;
       onlineClient.step((_, index) => (paused ? NEUTRAL_ARCADE : read(index, pads)), performance.now());
       online.connection.flush();
-      const stats = onlineClient.session.stats;
+      // Reparti de l'état du serveur pendant ce pas : nouveau moteur, nouveaux compteurs.
+      const stats = onlineClient.session === session ? onlineClient.session.stats : { replayed, rollbacks, stalls, lastReplayed: 0 };
       netFrame.replayed += stats.replayed - replayed;
       netFrame.stalls += stats.stalls - stalls;
       if (stats.rollbacks > rollbacks) netFrame.longest = Math.max(netFrame.longest, stats.lastReplayed);

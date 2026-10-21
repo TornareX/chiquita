@@ -2,8 +2,10 @@
  * Empreinte 32 bits d'un état de simulation (une partie `Duel`, ou tout objet de données) : deux machines qui
  * ont calculé le même match au bit près ont la même empreinte. Les nombres comptent par leurs 64 bits exacts
  * (0 et -0 diffèrent, comme deux flottants qui ne diffèrent qu'au dernier bit) ; les clés sont parcourues
- * triées, l'ordre de création des champs ne compte pas ; les fonctions sont ignorées. Un objet partagé n'est
- * parcouru qu'une fois (un renvoi le remplace), les cycles ne bouclent pas.
+ * triées, l'ordre de création des champs ne compte pas ; les fonctions sont ignorées. Seules les valeurs comptent,
+ * pas le partage : un objet référencé deux fois est compté deux fois, par son contenu (le serveur réutilise la commande
+ * précédente d'un joueur en retard, un navigateur garde une commande prédite juste ; le match est le même). Les
+ * cycles sont marqués et ne bouclent pas.
  */
 
 const view = new DataView(new ArrayBuffer(8));
@@ -75,13 +77,20 @@ function walk(value: unknown, out: Hasher, seen: Map<object, number>): void {
     return;
   }
   const obj = value as object;
-  const index = seen.get(obj);
-  if (index !== undefined) {
+  // `seen` : les objets en cours de parcours (les ancêtres). Un cycle est marqué ; un objet simplement partagé est
+  // parcouru à chaque fois, par son contenu.
+  const depth = seen.get(obj);
+  if (depth !== undefined) {
     out.word(Tag.Seen);
-    out.word(index);
+    out.word(depth);
     return;
   }
   seen.set(obj, seen.size);
+  walkInside(obj, out, seen);
+  seen.delete(obj);
+}
+
+function walkInside(obj: object, out: Hasher, seen: Map<object, number>): void {
   if (Array.isArray(obj)) {
     out.word(Tag.Array);
     out.word(obj.length);

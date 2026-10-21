@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server",
-    "serveur": "tsx server/main.ts",
+    "serveur": "node --import tsx server/main.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

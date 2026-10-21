@@ -65,13 +65,19 @@ export function createBots(config: MatchConfig, duel: Duel): (Bot | null)[] {
 
 /** Messages du navigateur vers le serveur. */
 export type ClientMessage =
-  | { t: 'hello'; name: string; prefs: PlayerPrefs }
+  /**
+   * `token` : identifiant de cette fenêtre, gardé au rechargement (reprendre sa place après une coupure) ; `version` :
+   * celle du jeu (`version.ts`), refusée si elle diffère de celle du serveur.
+   */
+  | { t: 'hello'; name: string; prefs: PlayerPrefs; token: string; version: string }
   | { t: 'create' }
   | { t: 'join'; code: string }
   | { t: 'seat'; seat: number | null }
   | { t: 'setup'; format: DuelFormat; level: AiLevel }
   | { t: 'start' }
-  | { t: 'ping'; at: number };
+  | { t: 'ping'; at: number }
+  /** Ce navigateur a divergé du serveur : il demande l'état du match. */
+  | { t: 'resync' };
 
 /** Une salle vue par un joueur. */
 export interface RoomView {
@@ -96,7 +102,14 @@ export type ServerMessage =
   | { t: 'start'; config: MatchConfig; startAt: number; seats: number[] }
   /** Empreinte de l'état du serveur après le pas `tick - 1` (c'est-à-dire quand `duel.tick === tick`). */
   | { t: 'hash'; tick: number; hash: number }
-  | { t: 'end'; reason: string };
+  | { t: 'end'; reason: string }
+  /**
+   * Reprise après une coupure : comme `start`, plus l'état du match (`snapshot.ts`) au pas `tick` ; les commandes
+   * retenues suivantes commencent à ce pas.
+   */
+  | { t: 'resume'; config: MatchConfig; startAt: number; seats: number[]; tick: number; state: string }
+  /** Réponse à `resync` : l'état du match au pas `tick`. */
+  | { t: 'state'; tick: number; state: string };
 
 /** Frames binaires : commandes d'un joueur (navigateur → serveur), commandes retenues de tous (serveur → navigateurs). */
 const INPUTS = 1;

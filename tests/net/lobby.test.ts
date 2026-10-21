@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Lobby } from '../../src/net/lobby';
+import { HOLD_MS, Lobby } from '../../src/net/lobby';
 import { decodeFrame, type RoomView, type ServerMessage } from '../../src/net/protocol';
 
 /** Un navigateur branché sur le salon : ce qu'il a reçu. */
@@ -17,8 +17,8 @@ describe('salles privées', () => {
     const lobby = new Lobby(() => now, () => 0.5);
     const host = member(lobby);
     const guest = member(lobby);
-    lobby.message(host.id, { t: 'hello', name: 'Xavier', prefs: { assist: 'full', prepMove: 'libre', hand: 'left' } });
-    lobby.message(guest.id, { t: 'hello', name: 'Ami', prefs: { assist: 'magnet', prepMove: 'libre', hand: 'right' } });
+    lobby.message(host.id, { t: 'hello', name: 'Xavier', prefs: { assist: 'full', prepMove: 'libre', hand: 'left' }, token: 'h', version: 'x' });
+    lobby.message(guest.id, { t: 'hello', name: 'Ami', prefs: { assist: 'magnet', prepMove: 'libre', hand: 'right' }, token: 'g', version: 'x' });
     lobby.message(host.id, { t: 'create' });
     const code = host.room().code;
     expect(code).toMatch(/^[A-Z]{4}$/);
@@ -62,7 +62,11 @@ describe('salles privées', () => {
     expect(host.room().seats).toEqual([host.id, null, null, null]);
     now += 1000;
     lobby.tick();
+    // Les deux coupés : leurs places sont gardées un moment, la salle attend, puis ferme.
     lobby.disconnect(host.id);
+    expect(lobby.roomCount).toBe(1);
+    now += HOLD_MS + 1;
+    lobby.tick();
     expect(lobby.roomCount).toBe(0);
   });
 });

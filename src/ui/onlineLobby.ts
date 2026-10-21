@@ -34,6 +34,15 @@ const STYLE = `
 #online-lobby .error { min-height: 1.4em; color: #ff8a80; margin-top: 8px; }
 `;
 
+/** Nom retenu dans ce navigateur (ou une chaîne vide). */
+export function savedName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export interface LobbyActions {
   /** Périphérique choisi pour jouer sa place (retenu par fenêtre). */
   device(device: Device): void;
@@ -68,12 +77,7 @@ export function createOnlineLobby(
   root.append(panel);
   document.body.append(root);
 
-  let name = '';
-  try {
-    name = localStorage.getItem(NAME_KEY) ?? '';
-  } catch {
-    // Stockage indisponible : on redemandera le nom.
-  }
+  let name = savedName();
   const saveName = (value: string): string => {
     name = value.trim().slice(0, 20) || 'Joueur';
     try {

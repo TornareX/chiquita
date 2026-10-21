@@ -69,6 +69,12 @@ export class MatchServer {
     this.pending[seat]!.clear();
   }
 
+  /** Le joueur est revenu : sa place lui est rendue (l'IA la quitte) à partir du pas courant. */
+  restoreHuman(seat: number): void {
+    if (seat >= this.players) return;
+    this.bots[seat] = null;
+  }
+
   /** Retient et calcule tous les pas jusqu'à `target` (exclu). */
   advanceTo(target: number): void {
     while (this.tick < target) this.finalize();

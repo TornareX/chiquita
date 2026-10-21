@@ -19,7 +19,8 @@ export default defineConfig({
       reuseExistingServer: true,
     },
     {
-      command: 'npm run serveur',
+      // Un seul processus (pas d'npm ni de tsx autour) : arrêté proprement à la fin des tests, jamais laissé en route.
+      command: 'node --import tsx server/main.ts',
       url: `http://localhost:${GAME_SERVER_PORT}`,
       env: { PORT: String(GAME_SERVER_PORT) },
       reuseExistingServer: true,

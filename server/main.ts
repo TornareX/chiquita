@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { WebSocketServer, type RawData } from 'ws';
 import { Lobby } from '../src/net/lobby';
 import type { ClientMessage } from '../src/net/protocol';
+import { gameVersion } from '../src/net/version';
 
 /**
  * Serveur de jeu en ligne (`research/en-ligne/PLAN_EN_LIGNE.md`, phase 1) : salles privées à code, commandes relayées,
@@ -13,7 +14,8 @@ const PORT = Number(process.env.PORT ?? 2567);
 /** Fréquence de la boucle du serveur (ms) : il retient les pas dus et les envoie. */
 const LOOP_MS = 4;
 
-const lobby = new Lobby(() => performance.now());
+const version = gameVersion();
+const lobby = new Lobby(() => performance.now(), Math.random, version);
 
 const http = createServer((_, response) => {
   response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
@@ -34,10 +36,18 @@ sockets.on('connection', (socket) => {
       lobby.binary(id, new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
       return;
     }
+    let message: ClientMessage;
     try {
-      lobby.message(id, JSON.parse(data.toString()) as ClientMessage);
+      message = JSON.parse(data.toString()) as ClientMessage;
     } catch {
       // Message illisible : ignoré.
+      return;
+    }
+    try {
+      lobby.message(id, message);
+    } catch (error) {
+      // Une erreur du serveur ne doit pas passer inaperçue (ni le faire tomber).
+      console.error(`Erreur sur le message « ${message.t} » :`, error);
     }
   });
   socket.on('close', () => lobby.disconnect(id));
@@ -46,5 +56,5 @@ sockets.on('connection', (socket) => {
 setInterval(() => lobby.tick(), LOOP_MS);
 
 http.listen(PORT, () => {
-  console.log(`Serveur Padel Smash en ligne : ws://localhost:${PORT}`);
+  console.log(`Serveur Padel Smash en ligne : ws://localhost:${PORT} (version ${version})`);
 });

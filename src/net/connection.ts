@@ -1,8 +1,15 @@
+import type { Duel } from '../sim/duel';
 import { decodeFrame, encodeInputs, type ClientMessage, type MatchConfig, type PlayerPrefs, type RoomView, type ServerMessage } from './protocol';
 import type { OnlineClient } from './onlineClient';
+import { deserializeState } from './snapshot';
+import { gameVersion } from './version';
 
 /** Un ping toutes les ce nombre de ms : l'horloge du serveur reste calée et le ping affiché suit le réseau. */
 const PING_EVERY = 500;
+/** Liaison coupée pendant un match : nouvel essai toutes les ce nombre de ms. */
+const RETRY_EVERY = 1000;
+/** Identifiant de cette fenêtre (\`sessionStorage\` : gardé au rechargement, propre à chaque fenêtre). */
+const TOKEN_KEY = 'padel.enligne.jeton';
 
 /** Adresse du serveur : `?serveur=hote:port` (ou une adresse `ws://…` complète), sinon cette machine, port 2567. */
 export function serverUrl(params: URLSearchParams): string {
@@ -12,44 +19,93 @@ export function serverUrl(params: URLSearchParams): string {
   return `${secure ? 'wss' : 'ws'}://${given ?? `${location.hostname || 'localhost'}:2567`}`;
 }
 
+/** Identifiant de cette fenêtre, créé à sa première visite. */
+function windowToken(): string {
+  try {
+    const known = sessionStorage.getItem(TOKEN_KEY);
+    if (known) return known;
+    const token = crypto.randomUUID();
+    sessionStorage.setItem(TOKEN_KEY, token);
+    return token;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
+/** Début (ou reprise) d'un match : `state` est l'état du match quand on reprend après une coupure. */
+export interface MatchStart {
+  config: MatchConfig;
+  startAt: number;
+  seats: number[];
+  state?: Duel;
+}
+
 export interface ConnectionEvents {
   room(room: RoomView): void;
-  start(start: { config: MatchConfig; startAt: number; seats: number[] }): void;
+  start(start: MatchStart): void;
   error(message: string): void;
+  /** Liaison perdue hors match : c'est fini. */
   closed(): void;
+  /** Pendant un match : liaison perdue (on réessaie), puis rétablie (sa place reprise). */
+  reconnecting(): void;
+  reconnected(): void;
 }
 
 /**
  * Lien du navigateur avec le serveur de jeu (`server/main.ts`) : messages de salle, pings pour caler l'horloge, puis,
- * une fois le match lancé, commandes envoyées et commandes retenues reçues, données au client en ligne (`OnlineClient`).
+ * une fois le match lancé, commandes envoyées et commandes retenues reçues, données au client en ligne
+ * (`OnlineClient`). Coupée pendant un match, la liaison se rétablit d'elle-même : le serveur a gardé la place et
+ * renvoie l'état du match, d'où ce navigateur repart. Un navigateur qui a divergé demande lui aussi l'état.
  */
 export class Connection {
-  private readonly socket: WebSocket;
+  private socket!: WebSocket;
   private client: OnlineClient | null = null;
   private pings: number | null = null;
   /** Messages de match arrivés avant que le client ne soit prêt (rares : juste après le départ). */
   private early: (ServerMessage | Uint8Array)[] = [];
-  /** Le match en cours a démarré : ses messages vont au client. */
+  /** Un match est en cours : ses messages vont au client, une coupure se rattrape. */
   private inMatch = false;
+  private readonly token = windowToken();
+  /** Pongs reçus avant le match, rejoués dans le client à sa création. */
+  private readonly prematchPongs: { at: number; server: number; now: number }[] = [];
 
   constructor(
-    url: string,
-    name: string,
-    prefs: PlayerPrefs,
+    private readonly url: string,
+    private name: string,
+    private readonly prefs: PlayerPrefs,
     private readonly events: ConnectionEvents,
   ) {
-    this.socket = new WebSocket(url);
-    this.socket.binaryType = 'arraybuffer';
-    this.socket.addEventListener('open', () => {
-      this.send({ t: 'hello', name, prefs });
+    this.connect();
+  }
+
+  private connect(): void {
+    const socket = new WebSocket(this.url);
+    this.socket = socket;
+    socket.binaryType = 'arraybuffer';
+    socket.addEventListener('open', () => {
+      this.hello();
       this.pings = window.setInterval(() => this.send({ t: 'ping', at: performance.now() }), PING_EVERY);
       this.send({ t: 'ping', at: performance.now() });
     });
-    this.socket.addEventListener('message', (event) => this.receive(event.data as ArrayBuffer | string));
-    this.socket.addEventListener('close', () => {
+    socket.addEventListener('message', (event) => this.receive(event.data as ArrayBuffer | string));
+    socket.addEventListener('close', () => {
       if (this.pings !== null) window.clearInterval(this.pings);
-      events.closed();
+      this.pings = null;
+      if (socket !== this.socket) return;
+      if (!this.inMatch) {
+        this.events.closed();
+        return;
+      }
+      // Pendant un match : on réessaie jusqu'à ce que le serveur réponde ; il nous rendra notre place.
+      this.events.reconnecting();
+      window.setTimeout(() => this.connect(), RETRY_EVERY);
     });
+  }
+
+  /** Se présente (nom, réglages, jeton de la fenêtre, version du jeu). */
+  hello(name = this.name): void {
+    this.name = name;
+    this.send({ t: 'hello', name, prefs: this.prefs, token: this.token, version: gameVersion() });
   }
 
   get open(): boolean {
@@ -60,9 +116,10 @@ export class Connection {
     if (this.open) this.socket.send(JSON.stringify(message));
   }
 
-  /** Le match a commencé : ses messages vont désormais à `client`. */
+  /** Le match a commencé : ses messages vont désormais à `client`, qui peut demander l'état s'il diverge. */
   attach(client: OnlineClient): void {
     this.client = client;
+    client.onDesync = () => this.send({ t: 'resync' });
     for (const pong of this.prematchPongs.slice(-12)) client.pong(pong.at, pong.server, pong.now);
     const early = this.early;
     this.early = [];
@@ -73,10 +130,6 @@ export class Connection {
   flush(): void {
     if (!this.client || !this.open) return;
     for (const input of this.client.takeInputs()) this.socket.send(encodeInputs(input.seat, input.start, input.data));
-  }
-
-  close(): void {
-    this.socket.close();
   }
 
   private receive(data: ArrayBuffer | string): void {
@@ -90,6 +143,21 @@ export class Connection {
       case 'start':
         this.inMatch = true;
         return this.events.start(message);
+      case 'resume': {
+        const state = deserializeState<Duel>(message.state);
+        // Liaison rétablie en cours de match : on repart de l'état du serveur. Page rechargée : le match recommence ici.
+        if (this.client) {
+          this.client.resync(state);
+          this.events.reconnected();
+        } else {
+          this.inMatch = true;
+          this.events.start({ config: message.config, startAt: message.startAt, seats: message.seats, state });
+        }
+        return;
+      }
+      case 'state':
+        this.client?.resync(deserializeState<Duel>(message.state));
+        return;
       default:
         return this.route(message);
     }
@@ -118,7 +186,4 @@ export class Connection {
       else if (this.inMatch) this.early.push(message);
     }
   }
-
-  /** Pongs reçus avant le match, rejoués dans le client à sa création. */
-  readonly prematchPongs: { at: number; server: number; now: number }[] = [];
 }

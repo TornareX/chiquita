@@ -37,6 +37,8 @@ export interface OnlineStats {
   checked: number;
   desyncs: number;
   firstDesync: number | null;
+  /** Fois où ce navigateur est reparti de l'état du serveur (après une divergence ou une coupure). */
+  resyncs: number;
 }
 
 /**
@@ -47,8 +49,12 @@ export interface OnlineStats {
  * serveur. Sans réseau ni horloge : on lui donne l'heure (`now`, ms) et les messages, il rend ses commandes à envoyer.
  */
 export class OnlineClient {
-  readonly session: RollbackSession<Duel, ArcadeCommands>;
-  readonly stats: OnlineStats = { ping: 0, ahead: 0, overridden: 0, checked: 0, desyncs: 0, firstDesync: null };
+  /** Le moteur de rollback ; remplacé quand ce navigateur repart de l'état du serveur (`resync`). */
+  session: RollbackSession<Duel, ArcadeCommands>;
+  readonly stats: OnlineStats = { ping: 0, ahead: 0, overridden: 0, checked: 0, desyncs: 0, firstDesync: null, resyncs: 0 };
+  /** Divergence constatée : on demande l'état au serveur (une fois, jusqu'à ce qu'il arrive). */
+  onDesync: (() => void) | null = null;
+  private resyncPending = false;
   /** Écart entre l'horloge locale et celle du serveur (ms), et les mesures qui l'ont donné. */
   private offset: number | null = null;
   private samples: { rtt: number; offset: number }[] = [];
@@ -64,18 +70,24 @@ export class OnlineClient {
     readonly duel: Duel,
     readonly options: OnlineClientOptions,
   ) {
-    const hooks = options.hooks ?? {};
-    this.session = new RollbackSession(
-      duel,
+    this.session = this.createSession();
+    this.confirmedAll = duel.tick - 1;
+  }
+
+  /** Un moteur de rollback qui part de l'état courant de la partie. */
+  private createSession(): RollbackSession<Duel, ArcadeCommands> {
+    const hooks = this.options.hooks ?? {};
+    return new RollbackSession(
+      this.duel,
       DUEL_GAME,
       {
-        players: duel.players.length,
-        local: options.seats,
-        inputDelay: options.inputDelay,
-        maxRollback: options.maxRollback,
+        players: this.duel.players.length,
+        local: this.options.seats,
+        inputDelay: this.options.inputDelay,
+        maxRollback: this.options.maxRollback,
         neutral: NEUTRAL_ARCADE,
         same: sameCommands,
-        startTick: duel.tick,
+        startTick: this.duel.tick,
         serverConfirms: true,
       },
       {
@@ -87,6 +99,21 @@ export class OnlineClient {
         afterRollback: hooks.afterRollback,
       },
     );
+  }
+
+  /**
+   * Repart de l'état du serveur (`state`, au pas où reprennent les commandes retenues) : après une divergence, ou en
+   * revenant d'une coupure. La partie est remplacée sur place (le rendu garde le même objet), l'historique oublié.
+   */
+  resync(state: Duel): void {
+    DUEL_GAME.load(this.duel, state);
+    this.session = this.createSession();
+    this.localHashes.clear();
+    this.serverHashes.clear();
+    this.outbox.clear();
+    this.confirmedAll = this.duel.tick - 1;
+    this.resyncPending = false;
+    this.stats.resyncs++;
   }
 
   /** Réponse à un `ping` envoyé à `at` (ms, horloge locale) ; `server` : l'heure du serveur à la réponse. */
@@ -205,6 +232,10 @@ export class OnlineClient {
     if (mine !== theirs) {
       this.stats.desyncs++;
       this.stats.firstDesync ??= tick;
+      if (!this.resyncPending && this.onDesync) {
+        this.resyncPending = true;
+        this.onDesync();
+      }
     }
   }
 }
