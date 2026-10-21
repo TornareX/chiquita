@@ -145,12 +145,25 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   right: calc(var(--ui-safe-x) + 30 * var(--hud-u));
 }
 
-/* Match fini : il ne reste que les équipes, les sets sont dans la bande. */
+/*
+ * Match fini : il ne reste que les équipes et, dans la bande agrandie, le score de chaque set ; l'annonce de la fin
+ * descend sous la bande pour la laisser lire.
+ */
 #score[data-over] :is(.score-games, .score-points) {
   display: none;
 }
 #score[data-over] {
   width: auto;
+}
+#score[data-over] .score-strip {
+  height: calc(56 * var(--hud-u));
+  font-size: calc(38 * var(--hud-u));
+}
+#score[data-over] .score-set {
+  color: var(--ink-soft);
+}
+body:has(#score[data-over]) #point {
+  top: calc(var(--hud-call-top) + 64 * var(--hud-u));
 }
 
 .score-strip {
@@ -300,7 +313,8 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: calc(6 * var(--hud-u));
+  /* Les plaques se touchent : une seule colonne d'encre, le bandeau LED ne se lit pas entre deux lignes. */
+  gap: 0;
   transition: opacity 0.3s;
 }
 .players-row {
@@ -332,7 +346,7 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   padding: calc(8 * var(--hud-u)) calc(16 * var(--hud-u));
   background: var(--hud-plate);
   color: var(--ink-soft);
-  font-size: calc(18 * var(--hud-u));
+  font-size: max(13px, calc(20 * var(--hud-u)));
   text-align: right;
 }
 
@@ -719,4 +733,7 @@ body:has(#pause-menu:not([hidden])) #rally[data-mode='match'] {
   text-align: right;
   white-space: pre;
   pointer-events: none;
+}
+#net-hud .net-detail {
+  display: none;
 }

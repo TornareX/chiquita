@@ -389,6 +389,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
             const resyncs = s.resyncs ? ` · reparti de l'état du serveur : ${s.resyncs}` : '';
             return `empreintes : ${s.checked} ${sync} · commandes remplacées par le serveur : ${s.overridden}${resyncs}`;
           },
+          // Pour les joueurs, le ping seulement ; tout le détail avec `?debug`.
+          params.has('debug') ? undefined : () => `En ligne · ping ${onlineClient.stats.ping} ms`,
         )
       : null;
   const maxRollback = fakeNet?.maxRollback ?? online?.maxRollback ?? 0;

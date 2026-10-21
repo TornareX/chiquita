@@ -54,7 +54,7 @@ losanges à droite. Les écrans de réglage gardent la liste verticale, plus den
 
 FORM : Monde « Grillage », piste B de la planche du 21/10/2026, imposée par l'utilisateur, sans tirage. Mouvement
 signature : le focus, une plaque qui passe au jaune balle et glisse de quelques pixels avec un rebond court, comme
-une balle dans la maille. seed: none (unavailable)
+une balle dans la maille. seed: none (roll skipped: world imposed by the user, Xavier, from the 21/10/2026 board)
 
 FINISH : unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
@@ -75,4 +75,10 @@ rebond, comme une balle qui court le long du grillage.
 - ~~Situations de match trop longues~~ : tranché le 21/10/2026, **liste et fiche** (`layout: 'detail'` : noms à
   gauche, explication de l'entrée sélectionnée dans une plaque à droite). Pause en bandeau à gauche, match visible.
 - Couleur d'équipe des repères des manettes branchées.
+- Ombre violette décalée, sans flou, de « SMASH » dans le titre de l'accueil : reprise de la maquette de la piste B
+  choisie par Xavier (planche du 21/10/2026), le seul aplat décalé du monde ; aucune autre ombre portée.
+- Salle pleine : « Je joue avec » reste réglable pour qui regarde sans place, puisqu'il peut prendre une place qui
+  se libère (finish review de l'étape 10).
+- 4:3 : l'échelle reste celle d'un écran 16:9 (texte plus petit, bas de l'écran vide) ; à reprendre plus tard, avec
+  une disposition plus étroite (choix de Xavier, étape 10).
 - Taille minimale du texte courant, à valider depuis le canapé (cible de départ ~24 px à 1080p).

@@ -66,7 +66,7 @@ entre les points ; haut droit : pause, puis ralenti ; bas droit : encart réseau
 
 FORM : Monde « Grillage », piste B de la planche du 21/10/2026, imposé par l'utilisateur, sans tirage. Mouvement
 signature : l'annonce qui claque sur sa plaque penchée en ~120 ms avec un léger dépassement, comme une balle dans la
-maille, puis disparaît sans traîner. seed: none (unavailable)
+maille, puis disparaît sans traîner. seed: none (roll skipped: world imposed by the user, Xavier, from the 21/10/2026 board)
 
 FINISH : unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 

@@ -1375,12 +1375,15 @@
   grid-column: 2;
 }
 
-/* Liaison perdue pendant un match en ligne : un bandeau au milieu, liseré de rouge, qui bat tant qu'on attend. */
+/*
+ * Liaison perdue pendant un match en ligne : un bandeau liseré de rouge, qui bat tant qu'on attend, à la place des
+ * annonces (sous le tableau, au-dessus du mur du fond), jamais sur le court.
+ */
 #online-banner {
   --bevel: calc(18 * var(--u));
   position: fixed;
   z-index: 30;
-  top: 50%;
+  top: var(--hud-call-top);
   left: 50%;
   display: flex;
   align-items: center;
@@ -1404,7 +1407,7 @@
   font-weight: 900;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
 }
 #online-banner::before {
   content: '';

@@ -27,10 +27,12 @@ export function saveProgress(progress: TutorialProgress): void {
   }
 }
 
-/** Les deux étoiles d'une leçon, dessinées en CSS (`annexes.css`) ; le nombre est dit en toutes lettres. */
+/** Une étoile à cinq branches, dessinée (couleur dans `annexes.css`). */
+const STAR = '<path d="M12 1.5l3.1 7.2 7.8.7-5.9 5.2 1.8 7.6L12 18.2l-6.8 4 1.8-7.6L1.1 9.4l7.8-.7z"/>';
+/** Les deux étoiles d'une leçon : pleines si gagnées, éteintes sinon ; le nombre est dit en toutes lettres. */
 const starsHtml = (stars: number, className: string): string =>
   `<span class="${className}" role="img" aria-label="${stars} étoile${stars > 1 ? 's' : ''} sur 2">` +
-  [0, 1].map((n) => `<span class="star${n < stars ? ' is-won' : ''}"></span>`).join('') +
+  [0, 1].map((n) => `<svg class="star${n < stars ? ' is-won' : ''}" viewBox="0 0 24 24" aria-hidden="true">${STAR}</svg>`).join('') +
   '</span>';
 
 export interface TutorialPanelActions {

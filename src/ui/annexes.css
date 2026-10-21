@@ -20,7 +20,8 @@
   --annex-edge: calc(3 * var(--annex-u));
   --annex-bounce: cubic-bezier(0.3, 1.9, 0.55, 1);
   /* Fond d'un écran ouvert par-dessus le jeu : l'encre maillée des menus. */
-  --annex-backdrop: var(--mesh), rgba(13, 11, 26, 0.86);
+  /* Presque opaque : les lignes du court ne traversent pas le texte. */
+  --annex-backdrop: var(--mesh), rgba(13, 11, 26, 0.95);
 }
 
 /* Coin coupé en haut à gauche et en bas à droite, comme les entrées des menus. */
@@ -263,14 +264,13 @@
 #tutorial-overlay .star {
   width: 1em;
   height: 1em;
-  background: var(--ink-line);
-  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  fill: var(--ink-line);
 }
 #tutorial-overlay .star.is-won {
-  background: currentColor;
+  fill: currentColor;
 }
 #tutorial-overlay .lesson.selected .star:not(.is-won) {
-  background: color-mix(in oklab, var(--ink) 50%, var(--ball));
+  fill: color-mix(in oklab, var(--ink) 50%, var(--ball));
 }
 /* Leçon réussie : les étoiles gagnées, en grand, en jaune balle. */
 #tutorial-overlay .stars-big {
