@@ -547,6 +547,125 @@
   color: var(--ink);
 }
 
+/* Repères des manettes branchées, à droite de la barre d'aides (accueil) : un losange plein par manette. */
+.menu-pads {
+  display: none;
+  gap: calc(14 * var(--u));
+  margin-left: auto;
+  padding-right: calc(6 * var(--u));
+}
+.menu[data-screen='accueil'] .menu-pads {
+  display: flex;
+}
+.menu-pad {
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+  box-sizing: border-box;
+  border: calc(3 * var(--u)) solid var(--ink-line);
+  transform: rotate(45deg);
+}
+.menu-pad.is-on {
+  border-color: var(--ink-soft);
+  background: var(--ink-soft);
+}
+
+/*
+ * Tuiles (`data-layout='tiles'`, l'accueil) : le grand titre penché en haut à gauche, les entrées en quatre grandes
+ * plaques côte à côte au-dessus de la barre d'aides ; le focus monte au lieu de glisser.
+ */
+.menu[data-layout='tiles'] {
+  --menu-bevel: calc(36 * var(--u));
+  --menu-edge-width: calc(4 * var(--u));
+  --menu-focus-shift: calc(16 * var(--u));
+}
+.menu[data-layout='tiles'] .menu-panel {
+  position: absolute;
+  inset: var(--ui-safe-y) var(--ui-safe-x) calc(var(--ui-safe-y) + 84 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: auto;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  mask-image: none;
+  animation: none;
+}
+.menu[data-layout='tiles'] .menu-title {
+  width: min-content;
+  margin: calc(12 * var(--u)) 0 0 calc(12 * var(--u));
+  font-size: calc(184 * var(--u));
+  line-height: 0.84;
+  transform: rotate(-3deg);
+  transform-origin: left bottom;
+  text-shadow: calc(7 * var(--u)) calc(7 * var(--u)) 0 var(--violet);
+}
+.menu[data-layout='tiles'] .menu-title::first-line {
+  text-shadow: none;
+}
+/* « Copa Canapé » : le tournoi du décor, un bandeau rouge en parallélogramme sous le titre. */
+.menu[data-layout='tiles'] .menu-screen-hint {
+  margin: calc(26 * var(--u)) 0 0 calc(24 * var(--u));
+  padding: calc(6 * var(--u)) calc(24 * var(--u));
+  background: var(--red);
+  color: var(--ink);
+  clip-path: polygon(calc(12 * var(--u)) 0, 100% 0, calc(100% - 12 * var(--u)) 100%, 0 100%);
+  font-family: var(--ui-font-brand);
+  font-size: calc(26 * var(--u));
+  font-stretch: 80%;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  transform-origin: left bottom;
+}
+.menu[data-layout='tiles'] .menu-items {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(26 * var(--u));
+  align-self: stretch;
+  margin-top: auto;
+  padding: 0;
+}
+.menu[data-layout='tiles'] .menu-item {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 0;
+  min-height: calc(360 * var(--u));
+}
+.menu[data-layout='tiles'] .menu-item::after {
+  background: var(--mesh), var(--plate-bg);
+}
+.menu[data-layout='tiles'] .menu-item.is-focused {
+  transform: translateY(calc(-1 * var(--menu-focus-shift)));
+}
+.menu[data-layout='tiles'] .menu-button {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 calc(32 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: calc(56 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.menu[data-layout='tiles'] .menu-action.is-primary .menu-button {
+  font-size: calc(88 * var(--u));
+}
+.menu[data-layout='tiles'] .menu-action .menu-hint {
+  flex-basis: auto;
+  min-height: 2.6em;
+  margin: calc(12 * var(--u)) calc(32 * var(--u)) calc(30 * var(--u));
+  font-size: calc(22 * var(--u));
+  line-height: 1.3;
+}
+
 /* Bouton de pause, en haut à droite pendant un match (souris). */
 #pause-button {
   --bevel: calc(10 * var(--u));

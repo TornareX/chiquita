@@ -151,6 +151,29 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    pour l'instant) ; bleu et rouge ne se distinguent en clarté que modérément (le nom de l'équipe est toujours écrit) ;
    le jugement depuis le canapé, à la manette.
 4. **Accueil** : titre en typo seule, fond fixe avec le motif de maille, disposition en tuiles.
+   *Fait.* Xavier a choisi les **tuiles** de la maquette (plutôt que la liste verticale mise en scène). Décisions :
+   - Le menu commun gagne une disposition par écran, `layout: 'tiles'` (`data-layout` sur la racine, `list` par
+     défaut) : sur un écran en tuiles, gauche et droite passent d'une entrée à l'autre, en boucle ; haut et bas
+     continuent de marcher (même ordre). Les autres écrans restent en liste, sans changement de navigation :
+     captures identiques, aux variations de la scène 3D et du code de salle près (et du survol laissé par la souris
+     des captures, qui tombe sur une autre entrée après le clic sur une tuile).
+   - Disposition : grand titre « PADEL SMASH » sur deux lignes (184 `--ui-px`), penché de 3°, en haut à gauche dans
+     la zone de sécurité ; « SMASH » porte une ombre violette décalée (`::first-line` l'enlève de « PADEL »), le titre
+     reste blanc : le jaune balle reste réservé au focus et à l'action principale (sur la maquette, « SMASH » était
+     jaune). Sous le titre, « Copa Canapé » en bandeau rouge, texte encre (le `hint` de l'écran). Quatre tuiles égales
+     en bas, au-dessus de la barre d'aides, nom en Archivo étroite italique 900 et aide de l'entrée en dessous (textes
+     inchangés). Focus : la tuile passe au jaune et **monte** de 16 px avec le même rebond ; « Jouer » garde liseré et
+     nom jaunes au repos (action principale). Maille aussi dans les plaques des tuiles.
+   - Repères des manettes branchées : quatre losanges à droite de la barre d'aides, pleins pour chaque manette
+     branchée (`.menu-pads`, `data-count`), mis à jour par la boucle de lecture des manettes ; affichés sur l'accueil
+     seulement pour l'instant.
+   - Pas d'image dans la tuile « Jouer » ni de bande de couleur en haut des autres (maquette) : pas de visuel embarqué
+     prêt, et la bande colorée ressemble trop à la bordure latérale écartée à l'étape 3.
+   - Test du navigateur ajouté (`menu.spec.ts`) : gauche/droite et bas sur l'accueil, au clavier et à la manette,
+     repères des manettes, et droite qui ne déplace plus le focus sur un écran en liste.
+   Restent : une image ou une illustration pour la tuile « Jouer » (à décider avec Xavier) ; les repères des manettes
+   sur les autres écrans (Jouer surtout) et leur couleur d'équipe ; l'accent circonflexe d'« ENTRAÎNEMENT » touche le
+   haut de la ligne dans les titres d'écran en liste (interligne 0,9, étape 6) ; le jugement depuis le canapé.
 5. **Jouer** : l'écran le plus dense (places des 4 joueurs, IA, règles). Maquette d'abord (`shape`).
 6. **Pause, Réglages, Entraînement.**
 7. **En ligne** : salon, code de salle, places, erreurs (serveur introuvable, salle pleine, coupure).

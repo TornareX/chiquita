@@ -130,3 +130,34 @@ test('au clavier et à la souris', async ({ page }) => {
   await page.locator('[data-item="compter"] .menu-hint').click();
   await expect(page.locator('[data-item="compter"]')).toContainText('Compter (3)');
 });
+
+test('accueil en tuiles : gauche et droite passent d’une tuile à l’autre, haut et bas aussi ; les manettes se voient', async ({ page }) => {
+  await page.goto('/');
+  const home = page.locator('#accueil');
+  await expect(home).toHaveAttribute('data-layout', 'tiles');
+  await expect(focused(page)).toHaveAttribute('data-item', 'jouer');
+  await expect(home.locator('.menu-pads')).toHaveAttribute('data-count', '0');
+
+  // Clavier : droite et gauche, en boucle ; bas suit le même ordre.
+  await page.keyboard.press('ArrowRight');
+  await expect(focused(page)).toHaveAttribute('data-item', 'en-ligne');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(focused(page)).toHaveAttribute('data-item', 'reglages');
+  await page.keyboard.press('ArrowDown');
+  await expect(focused(page)).toHaveAttribute('data-item', 'jouer');
+
+  // Manette : la croix à droite, puis A ouvre l'écran, en liste, où droite ne déplace plus le focus.
+  await plugPad(page);
+  await expect(home.locator('.menu-pads')).toHaveAttribute('data-count', '1');
+  await expect(home.locator('.menu-pad.is-on')).toHaveCount(1);
+  await tap(page, 15);
+  await tap(page, 15);
+  await expect(focused(page)).toHaveAttribute('data-item', 'entrainement');
+  await tap(page, 0);
+  await expect(home).toHaveAttribute('data-screen', 'entrainement');
+  await expect(home).toHaveAttribute('data-layout', 'list');
+  const first = await focused(page).getAttribute('data-item');
+  await tap(page, 15);
+  await expect(focused(page)).toHaveAttribute('data-item', first!);
+});

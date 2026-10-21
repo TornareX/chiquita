@@ -55,6 +55,8 @@ export function startHome(canvas: HTMLCanvasElement): void {
   const home: MenuScreen = {
     id: 'accueil',
     title: 'Padel Smash',
+    hint: 'Copa Canapé',
+    layout: 'tiles',
     items: () => [
       { kind: 'action', id: 'jouer', label: 'Jouer', hint: 'Un match sur cet écran, contre l’IA ou entre amis.', primary: true, run: () => menu.push(play) },
       {

@@ -65,6 +65,9 @@ rebond, comme une balle qui court le long du grillage.
 
 ## Unresolved
 
-- Accueil : liste verticale (navigation actuelle) ou tuiles horizontales comme la maquette (navigation gauche/droite
-  à ajouter) ; à trancher à l'étape 4.
+- ~~Accueil : liste ou tuiles~~ : tranché le 21/10/2026, **tuiles** (`layout: 'tiles'`, gauche/droite et haut/bas
+  déplacent le focus ; titre au-dessus des tuiles, à gauche, et non au-dessus d'une liste). Le titre reste blanc :
+  jaune balle réservé au focus et à l'action principale.
+- Visuel de la tuile « Jouer » (image ou illustration, comme la maquette) : pas encore décidé.
+- Repères des manettes branchées hors de l'accueil (écran Jouer) et leur couleur d'équipe.
 - Taille minimale du texte courant, à valider depuis le canapé (cible de départ ~24 px à 1080p).

@@ -87,6 +87,11 @@ export interface MenuScreen {
   id: string;
   title: string;
   hint?: string;
+  /**
+   * Disposition des entrées (`data-layout`) : en liste (par défaut), ou en tuiles côte à côte (accueil), où gauche et
+   * droite passent aussi d'une entrée à l'autre.
+   */
+  layout?: 'list' | 'tiles';
   /** Les entrées, relues à chaque rafraîchissement (`Menu.refresh`). */
   items(): MenuItem[];
   /** B, Échap : revenir. Sans `back`, l'écran précédent de la pile ; à la racine, rien. */
@@ -176,6 +181,23 @@ export function createMenu(options: MenuOptions = {}): Menu {
     hint.append(glyph, text);
     hints.append(hint);
   }
+  // Repères des manettes branchées : un losange par manette, plein quand elle est là.
+  const padRow = document.createElement('span');
+  padRow.className = 'menu-pads';
+  const padMarks = Array.from({ length: 4 }, () => {
+    const mark = document.createElement('span');
+    mark.className = 'menu-pad';
+    padRow.append(mark);
+    return mark;
+  });
+  hints.append(padRow);
+  let padCount = -1;
+  const showPads = (count: number): void => {
+    if (count === padCount) return;
+    padCount = count;
+    padMarks.forEach((mark, i) => mark.classList.toggle('is-on', i < count));
+    padRow.dataset.count = String(count);
+  };
   root.append(panel, hints);
   document.body.append(root);
 
@@ -349,6 +371,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
     panel.replaceChildren(...children);
     panel.dataset.screen = screen.id;
     root.dataset.screen = screen.id;
+    root.dataset.layout = screen.layout ?? 'list';
     root.dataset.back = editing || screen.back || stack.length > 1 || options.onRootBack ? 'oui' : 'non';
     if (focusedId === null || !elements.has(focusedId)) focusedId = items.find(focusable)?.id ?? null;
     if (editing && !elements.has(editing.id)) editing = null;
@@ -393,6 +416,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
     if (item?.kind === 'text' && editing?.id === item.id) return editText(item, dir);
     if (dir === 'up') move(-1);
     else if (dir === 'down') move(1);
+    else if (current()?.layout === 'tiles') move(dir === 'left' ? -1 : 1);
     else if (item?.kind === 'choice') cycle(item, dir === 'left' ? -1 : 1);
     else if (item?.kind === 'toggle') {
       item.set(dir === 'right');
@@ -465,6 +489,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
   const poll = (now: number, loop: number): void => {
     if (root.hidden || loop !== pollLoop) return;
     const pads = connectedGamepads();
+    showPads(pads.length);
     let dir: Direction | null = null;
     for (const pad of pads) {
       const state = readPad(pad);
@@ -497,6 +522,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
     const wasHidden = root.hidden;
     root.hidden = false;
     render();
+    showPads(connectedGamepads().length);
     if (wasHidden) {
       snapshotPads();
       const loop = ++pollLoop;
