@@ -220,6 +220,10 @@ export function createMenu(options: MenuOptions = {}): Menu {
         activate(item);
       });
       row.append(button);
+      // Toute la carte se clique, ligne d'aide comprise, pas seulement le bouton.
+      row.addEventListener('click', (event) => {
+        if (!(event.target as Element).closest('.menu-button')) button.click();
+      });
     } else {
       const label = el('span', 'menu-label', item.label);
       row.append(label);
@@ -264,6 +268,9 @@ export function createMenu(options: MenuOptions = {}): Menu {
         input.addEventListener('input', () => item.set(input.value));
         input.addEventListener('focus', () => setFocus(item.id, false));
         row.append(input);
+        row.addEventListener('click', (event) => {
+          if (event.target !== input) input.focus();
+        });
         if (editing?.id === item.id) {
           row.classList.add('is-editing');
           // Lettre en cours d'édition à la manette.

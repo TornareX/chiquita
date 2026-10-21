@@ -126,4 +126,7 @@ test('au clavier et à la souris', async ({ page }) => {
   await page.locator('[data-item="compter"] button').click();
   await expect(page.locator('[data-item="compter"]')).toContainText('Compter (2)');
   await expect(focused(page)).toHaveAttribute('data-item', 'compter');
+  // La ligne d'aide d'une action se clique aussi.
+  await page.locator('[data-item="compter"] .menu-hint').click();
+  await expect(page.locator('[data-item="compter"]')).toContainText('Compter (3)');
 });

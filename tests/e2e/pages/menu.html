@@ -20,7 +20,7 @@
         id: 'essai',
         title: 'Essai',
         items: () => [
-          { kind: 'action', id: 'compter', label: `Compter (${state.count})`, primary: true, run: () => { state.count++; log.push('compter'); menu.refresh(); } },
+          { kind: 'action', id: 'compter', label: `Compter (${state.count})`, primary: true, hint: 'Compte un clic.', run: () => { state.count++; log.push('compter'); menu.refresh(); } },
           { kind: 'heading', id: 'groupe', text: 'Groupe' },
           { kind: 'choice', id: 'niveau', label: 'Niveau', value: state.level, options: [
             { value: 'facile', label: 'Facile' }, { value: 'normal', label: 'Normal' }, { value: 'fort', label: 'Fort' },
