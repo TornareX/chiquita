@@ -228,3 +228,60 @@ test('Jouer en colonnes : Bleu à gauche, Rouge à droite, tout tient sans défi
   await expect(page.locator('#accueil')).toHaveAttribute('data-layout', 'list');
   await expect(page.locator('#accueil .menu-pad-hint.is-jump')).toBeHidden();
 });
+
+test('Jouer en colonnes : la croix suit l’écran, sans sauter d’une colonne à l’autre', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/');
+  await page.locator('[data-item="jouer"] button').click();
+  await page.locator('[data-item="format"] .menu-next').click();
+  const path = async (keys: string[], ids: string[]): Promise<void> => {
+    for (const [n, key] of keys.entries()) {
+      await page.keyboard.press(key);
+      await expect(focused(page)).toHaveAttribute('data-item', ids[n]!);
+    }
+  };
+  const down = (n: number) => Array<string>(n).fill('ArrowDown');
+
+  // Colonne Bleu jusqu'en bas, puis les règles de gauche, puis « Retour » ; droite : « Lancer » ; haut : la colonne d'où l'on vient.
+  await page.locator('[data-item="place-0"]').hover();
+  await path(down(9), ['place-0-course', 'place-0-main', 'place-2', 'place-2-main', 'libre', 'sets', 'jeux', 'retour', 'retour']);
+  await path(['ArrowRight', 'ArrowUp'], ['lancer', 'jeux']);
+
+  // Colonne Rouge, puis les règles de droite, puis « Lancer » ; gauche : « Retour » ; haut : la colonne d'où l'on vient.
+  await page.locator('[data-item="place-1"]').hover();
+  await path(down(6), ['place-1-main', 'place-3', 'place-3-main', 'punto', 'pression', 'lancer']);
+  await path(['ArrowLeft', 'ArrowUp'], ['retour', 'pression']);
+
+  // Haut depuis la première place : le format ; bas y ramène. Tab change de colonne, même dans les règles.
+  await page.locator('[data-item="place-0"]').hover();
+  await path(['ArrowUp', 'ArrowDown'], ['format', 'place-0']);
+  await page.locator('[data-item="libre"]').hover();
+  await path(['Tab', 'Shift+Tab'], ['punto', 'libre']);
+
+  // Manette : LB/RB depuis un choix, un stick en diagonale ne change pas de colonne, et tenu vers le bas il descend
+  // toute la colonne Bleu sans passer à droite.
+  await plugPad(page);
+  await page.locator('[data-item="place-0-main"]').hover();
+  await tap(page, 5);
+  await expect(focused(page)).toHaveAttribute('data-item', /^place-[13]/);
+  await tap(page, 4);
+  await expect(focused(page)).toHaveAttribute('data-item', /^place-[02]/);
+  await page.locator('[data-item="place-0"]').hover();
+  const stick = (x: number, y: number) =>
+    page.evaluate(([ax, ay]) => {
+      (window as unknown as { __pad: { axes: number[] } }).__pad.axes = [ax!, ay!, 0, 0];
+    }, [x, y]);
+  await stick(0.75, 0.75);
+  await page.waitForTimeout(150);
+  await stick(0, 0);
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-0-course');
+  const seen = new Set<string>();
+  await stick(0, 1);
+  for (let t = 0; t < 20; t++) {
+    seen.add((await focused(page).getAttribute('data-item'))!);
+    await page.waitForTimeout(100);
+  }
+  await stick(0, 0);
+  await expect(focused(page)).toHaveAttribute('data-item', 'retour');
+  expect([...seen].filter((id) => /^place-[13]|punto|pression|lancer/.test(id))).toEqual([]);
+});

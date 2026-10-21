@@ -94,8 +94,9 @@ export interface MenuScreen {
   hint?: string;
   /**
    * Disposition des entrées (`data-layout`) : en liste (par défaut) ; en tuiles côte à côte (accueil), où gauche et
-   * droite passent aussi d'une entrée à l'autre ; ou en colonnes (Jouer), où haut et bas suivent l'ordre de lecture,
-   * gauche et droite changent la valeur, et LB/RB (Tab au clavier) sautent à la colonne voisine, à la même hauteur.
+   * droite passent aussi d'une entrée à l'autre ; ou en colonnes (Jouer), où la croix suit l'écran : haut et bas
+   * restent dans la colonne, gauche et droite changent la valeur d'un choix et, ailleurs, passent à la colonne
+   * voisine, comme LB/RB (Tab au clavier) depuis n'importe quelle entrée.
    */
   layout?: 'list' | 'tiles' | 'columns';
   /** Les entrées, relues à chaque rafraîchissement (`Menu.refresh`). */
@@ -351,6 +352,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
 
   /** Le focus visible (`is-focused`), et le focus du navigateur sur l'élément (texte : son champ). */
   const setFocus = (id: string | null, moveDom = true): void => {
+    if (id !== focusedId) returnTo = null;
     focusedId = id;
     for (const [itemId, element] of elements) element.classList.toggle('is-focused', itemId === id);
     if (!moveDom || id === null) return;
@@ -416,21 +418,54 @@ export function createMenu(options: MenuOptions = {}): Menu {
 
   const focusedItem = (): MenuItem | undefined => items.find((i) => i.id === focusedId);
 
-  /**
-   * En colonnes : l'entrée de la colonne voisine (`step` = -1 à gauche, 1 à droite) la plus proche en hauteur ; sans
-   * colonne de ce côté, celle de l'autre côté (avec deux colonnes, LB et RB passent toutes deux à l'autre).
+  /*
+   * En colonnes, la navigation suit l'écran. Haut et bas restent dans la colonne (l'entrée suivante qui la chevauche) ;
+   * au bout, ils vont à l'entrée la plus proche dans ce sens (bas : la rangée de « Lancer »). Gauche et droite, hors
+   * des choix et interrupteurs (qui gardent leur valeur), comme LB/RB et Tab, passent à la colonne voisine, sur
+   * l'entrée la plus proche en hauteur. Revenir en arrière après avoir quitté un groupe ramène à l'entrée quittée,
+   * même après s'être déplacé dans le nouveau groupe (de « Retour » à « Lancer », haut ramène à la colonne d'origine).
    */
+  let returnTo: { id: string; dir: Direction; group: string | undefined } | null = null;
+  const groupOf = (id: string | null): string | undefined => items.find((i) => i.id === id)?.group;
+  const rects = (): { id: string; r: DOMRect }[] => [...elements].map(([id, element]) => ({ id, r: element.getBoundingClientRect() }));
+  const centerX = (r: DOMRect): number => r.left + r.width / 2;
+  const centerY = (r: DOMRect): number => r.top + r.height / 2;
+
+  /** Focus déplacé par la navigation en colonnes ; le retour éventuel n'est gardé que s'il vaut pour le groupe atteint. */
+  const goTo = (id: string, keep: typeof returnTo): void => {
+    setFocus(id);
+    returnTo = keep && keep.group === groupOf(id) ? keep : null;
+  };
+
+  /** Colonne voisine (`step` = -1 à gauche, 1 à droite) ; sans colonne de ce côté, celle de l'autre côté. */
   const jump = (step: number): void => {
     if (current()?.layout !== 'columns' || focusedId === null) return;
     const from = elements.get(focusedId)?.getBoundingClientRect();
     if (!from) return;
-    const middle = (r: DOMRect): { x: number; y: number } => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-    const here = middle(from);
-    const others = [...elements].map(([id, element]) => ({ id, at: middle(element.getBoundingClientRect()) }));
-    const side = (s: number) => others.filter((o) => (o.at.x - here.x) * s > from.width / 2);
+    const others = rects().filter((o) => o.id !== focusedId);
+    const side = (s: number) => others.filter((o) => (centerX(o.r) - centerX(from)) * s > from.width / 2);
     const candidates = side(step).length ? side(step) : side(-step);
-    const best = candidates.sort((a, b) => Math.abs(a.at.y - here.y) - Math.abs(b.at.y - here.y) || Math.abs(a.at.x - here.x) - Math.abs(b.at.x - here.x))[0];
-    if (best) setFocus(best.id);
+    const best = candidates.sort(
+      (a, b) => Math.abs(centerY(a.r) - centerY(from)) - Math.abs(centerY(b.r) - centerY(from)) || Math.abs(centerX(a.r) - centerX(from)) - Math.abs(centerX(b.r) - centerX(from)),
+    )[0];
+    if (best) goTo(best.id, returnTo);
+  };
+
+  /** Haut ou bas, en colonnes. */
+  const vertical = (dir: 'up' | 'down'): void => {
+    if (focusedId === null) return;
+    if (returnTo && returnTo.dir === dir && returnTo.group === groupOf(focusedId) && elements.has(returnTo.id)) return goTo(returnTo.id, null);
+    const from = elements.get(focusedId)?.getBoundingClientRect();
+    if (!from) return;
+    const s = dir === 'down' ? 1 : -1;
+    const ahead = rects().filter((o) => (centerY(o.r) - centerY(from)) * s > from.height / 2);
+    const inColumn = ahead.filter((o) => Math.min(o.r.right, from.right) > Math.max(o.r.left, from.left));
+    const gap = (r: DOMRect): number => (s > 0 ? r.top - from.bottom : from.top - r.bottom);
+    const best = (inColumn.length ? inColumn : ahead).sort((a, b) => gap(a.r) - gap(b.r) || Math.abs(centerX(a.r) - centerX(from)) - Math.abs(centerX(b.r) - centerX(from)))[0];
+    if (!best) return;
+    const left = focusedId;
+    const leaving = groupOf(best.id) !== groupOf(left);
+    goTo(best.id, leaving ? { id: left, dir: dir === 'down' ? 'up' : 'down', group: groupOf(best.id) } : null);
   };
 
   /** Édition d'un texte à la manette. */
@@ -452,6 +487,10 @@ export function createMenu(options: MenuOptions = {}): Menu {
   const direction = (dir: Direction): void => {
     const item = focusedItem();
     if (item?.kind === 'text' && editing?.id === item.id) return editText(item, dir);
+    if (current()?.layout === 'columns') {
+      if (dir === 'up' || dir === 'down') return vertical(dir);
+      if (item?.kind !== 'choice' && item?.kind !== 'toggle') return jump(dir === 'left' ? -1 : 1);
+    }
     if (dir === 'up') move(-1);
     else if (dir === 'down') move(1);
     else if (current()?.layout === 'tiles') move(dir === 'left' ? -1 : 1);

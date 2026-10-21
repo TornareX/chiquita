@@ -190,12 +190,24 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    - Tout tient dans la zone de sécurité sans défiler, en 1280×720 et 1920×1080, en simple comme en double, y compris
      le pire cas (quatre places humaines, quatre lignes « Course ») ; « Lancer » reste au-dessus de la barre d'aides.
    - Nom de l'équipe en tête de sa moitié : bandeau en parallélogramme à sa couleur (blanc sur bleu, encre sur rouge).
-   - Navigation : haut et bas suivent l'ordre de lecture, inchangé (Format → Bleu → Rouge → règles → Lancer →
-     Retour), gauche et droite changent la valeur comme partout. **LB/RB** (Tab et Maj+Tab au clavier) sautent à
+   - Navigation, première version (remplacée par la retouche ci-dessous) : haut et bas suivaient l'ordre de lecture
+     (Format → Bleu → Rouge → règles → Lancer → Retour), gauche et droite changeaient la valeur. **LB/RB** (Tab et Maj+Tab au clavier) sautent à
      l'entrée de la colonne voisine la plus proche en hauteur (Bleu ↔ Rouge, règles de gauche ↔ de droite, Retour ↔
      Lancer), en boucle avec deux colonnes. Seulement sur un écran en colonnes ; l'aide « LB RB Colonne » s'ajoute
      alors à la barre d'aides. Test du navigateur ajouté (`menu.spec.ts`) : 720p et 1080p, pire cas sans défilement,
      équipes de part et d'autre, Tab, LB/RB, place allumée, et Tab sans effet sur un écran en liste.
+   - **Retouche après essai à la manette** (Xavier) : l'ordre de lecture ne suivait pas l'écran (en bas de la
+     colonne Bleu, bas menait en haut de la colonne Rouge ; « Retour », à gauche de « Lancer », s'atteignait par le
+     bas). La croix est désormais **spatiale** sur un écran en colonnes : haut et bas restent dans la colonne (l'entrée
+     suivante qui la chevauche) et, au bout, vont à l'entrée la plus proche dans ce sens (le bas de la colonne Bleu
+     mène aux règles de gauche puis à « Retour », celui de Rouge aux règles de droite puis à « Lancer », sans boucler) ;
+     gauche et droite gardent la valeur des choix et des interrupteurs, et ailleurs (« Lancer », « Retour ») passent à
+     la colonne voisine ; LB/RB et Tab changent de colonne depuis n'importe quelle entrée. Après avoir quitté un groupe,
+     la direction inverse ramène à l'entrée quittée, même après un pas de côté dans le nouveau groupe (de « Retour » à
+     « Lancer », haut ramène à la colonne d'où l'on venait). Le stick garde sa lecture (le vertical l'emporte au-delà du
+     seuil) : une diagonale descend, ne change jamais de colonne. Les autres écrans gardent leur navigation. Test du
+     navigateur ajouté : descendre chaque colonne jusqu'en bas, atteindre « Retour » et « Lancer », revenir, Tab dans
+     les règles, LB/RB depuis un choix, stick en diagonale et stick tenu vers le bas (répétition) sans passer à droite.
    - Place allumée (`is-lit`) plus visible : un cadre blanc épais qui se resserre sur la plaque (1 s), et le losange
      de l'équipe qui grossit puis retombe. Seul l'écran Jouer allume des places.
    - Repères des manettes (losanges et libellé) affichés aussi sur Jouer, à droite de la barre d'aides ; la ligne
