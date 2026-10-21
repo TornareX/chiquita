@@ -1,0 +1,70 @@
+---
+version: 1
+slug: "src-ui-menu-css"
+primary_target: "src/ui/menu.css"
+related_targets: ["src/ui/menu.ts","src/ui/screens","src/ui/pauseMenu.ts","src/ui/onlineLobby.ts"]
+---
+
+# Menus de Padel Smash
+
+## Scope
+
+Tous les écrans affichés par le composant de menu commun (`src/ui/menu.ts`, apparence dans `src/ui/menu.css`) :
+accueil, Jouer, Réglages, Entraînement, salon et salle en ligne, pause. Le HUD de match aura son propre brief.
+
+Mode : **Operate**. Le joueur vient lancer une partie, régler sa place ou ses préférences, puis jouer ; l'écran
+doit se lire depuis le canapé et se piloter à la manette sans hésiter.
+
+## Audience and job
+
+- Joueurs sur un canapé, à 2-3 m d'une télé, manette en main (jusqu'à 4) ; clavier et souris possibles.
+- Tâches : lancer un match en quelques secondes ; choisir le format, qui tient chaque place, le niveau des IA et
+  les règles ; régler ses préférences ; créer ou rejoindre une salle à code ; reprendre ou quitter en pause.
+- États qui comptent : focus (toujours visible), entrée principale (« Lancer »), choix à flèches, interrupteur,
+  désactivé, saisie de nom, place allumée quand une manette se signale, place à soi en ligne, message d'erreur
+  (serveur introuvable).
+
+## Constraints
+
+- Comportement inchangé : mêmes entrées, même navigation (haut/bas, gauche/droite sur les choix, A/Entrée, B/Échap),
+  mêmes classes et attributs (`data-screen`, `data-item`, `.is-focused`…) dont dépendent les tests.
+- L'apparence passe par les variables et les classes de `menu.css` ; aucun style dans la logique.
+- Fond de l'accueil fixe (encre et maille), titre en typo seule, tout en français, pas de sons dans cette passe.
+- Police embarquée, rien chargé depuis un service tiers.
+- Lisible en 1280×720 comme en 1920×1080 ; zone de sécurité de 5 % sur les bords d'une télé.
+
+## Direction contract
+
+THESIS : Un menu de jeu de sport compétitif construit avec la grammaire du grillage de padel : chaque entrée est
+une plaque biseautée à 45°, le focus est la balle qui frappe la maille. Il refuse le menu par défaut des jeux web :
+un panneau gris arrondi centré, une liste de boutons pâles et un liseré de focus.
+
+OWN-WORLD : Fond encre `#0D0B1A` traversé d'une maille violette à 45° (`#7A3CFF` très bas en opacité). Plaques
+`#1B1631` aux coins coupés à 45° ; titres et valeurs en Archivo étroite italique 900, texte courant en Archivo
+normale. Bleu `#2F6BFF` et rouge `#FF4D3D` marquent les équipes en bande épaisse sur la plaque. Le jaune balle
+`#E6FF2E` est réservé au focus et à l'action principale. Petits repères en losange.
+
+STORY : Le joueur comprend d'un coup d'œil où il est (titre d'écran), ce qu'il a sélectionné (la plaque jaune) et
+ce que fait chaque bouton de la manette (barre d'aides en bas). Il lance un match sans lire un mot de trop.
+
+FIRST VIEWPORT : Accueil : titre « PADEL SMASH » en grand, italique, à gauche, légèrement penché, au-dessus de la
+liste. Les quatre entrées (Jouer, En ligne, Entraînement, Réglages) en plaques larges et hautes ; « Jouer » a le
+focus au départ, en jaune. Barre d'aides manette en bas (A Valider, B Retour) et repères des manettes branchées en
+losanges à droite. Les écrans de réglage gardent la liste verticale, plus dense, avec le titre en haut à gauche.
+
+FORM : Monde « Grillage », piste B de la planche du 21/10/2026, imposée par l'utilisateur, sans tirage. Mouvement
+signature : le focus, une plaque qui passe au jaune balle et glisse de quelques pixels avec un rebond court, comme
+une balle dans la maille. seed: none (unavailable)
+
+FINISH : unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Memorable moment
+
+Passer d'une entrée à l'autre à la croix : les plaques s'allument l'une après l'autre en jaune, avec le petit
+rebond, comme une balle qui court le long du grillage.
+
+## Unresolved
+
+- Accueil : liste verticale (navigation actuelle) ou tuiles horizontales comme la maquette (navigation gauche/droite
+  à ajouter) ; à trancher à l'étape 4.
+- Taille minimale du texte courant, à valider depuis le canapé (cible de départ ~24 px à 1080p).

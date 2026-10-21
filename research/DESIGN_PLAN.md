@@ -97,8 +97,11 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    `npm run captures` (`CAPTURES=apres npm run captures` pour l'après ; `E2E_PORT`/`E2E_SERVEUR` si les ports sont
    pris).
 1. **Fondations.** `/impeccable init` → `PRODUCT.md` : jeu de canapé en 2 contre 2, manette d'abord, télé à 2-3 m,
-   références (Premier Padel, Rocket League), ton, contraintes HUD du §1. Puis `DESIGN.md` à partir de la piste
-   Grillage (couleurs, typo, formes, focus, mouvement, règles du §1).
+   références (Premier Padel, Rocket League), ton, contraintes HUD du §1. Puis le **contrat de direction** des menus
+   (`.impeccable/surfaces/src-ui-menu-css.md`) : thèse, monde Grillage, premier écran, mouvement signature.
+   *Fait.* Changement de méthode : Impeccable n'écrit pas `DESIGN.md` avant de construire. Son agent documentaliste
+   l'écrit à la fin, à partir de ce qui est réellement construit (avec `.impeccable/design.json`), après la relecture
+   finale. Le HUD aura son propre contrat à l'étape 8.
 2. **Tokens et nettoyage.** `src/ui/theme.css` (variables communes), échelle unique du §4, police embarquée.
    `menu.css` passe sur ces variables. Les styles écrits dans le code du HUD et des écrans annexes deviennent des
    classes (`hud.css`…), **sans changer leur apparence** : les captures doivent rester quasi identiques.
