@@ -90,16 +90,33 @@ export function createOnlineLobby(
     },
   });
 
+  /*
+   * Deux écrans en colonnes, comme « Jouer » (`layout: 'columns'`, navigation spatiale). En ligne : son nom et avec
+   * quoi on joue en haut, puis deux moitiés, créer une salle à gauche, rejoindre avec un code à droite. Salle : le
+   * code en grand en haut à droite, Bleu à gauche et Rouge à droite, le match dessous, « Lancer » en bas à droite.
+   */
   const homeScreen: MenuScreen = {
     id: 'en-ligne',
     title: 'Jouer en ligne',
     hint: 'Crée une salle et donne son code à tes amis, ou tape le code d’une salle.',
+    layout: 'columns',
     back: () => actions.home(),
     items: () => {
-      const items: MenuItem[] = [
-        { kind: 'text', id: 'nom', label: 'Ton nom', value: name, maxLength: 20, charset: NAME_CHARS, placeholder: 'Ton nom', set: (v) => (name = v) },
-        deviceItem(),
-        { kind: 'action', id: 'creer', label: 'Créer une salle', primary: true, run: () => actions.create(saveName()) },
+      const items: MenuItem[] = [];
+      // Serveur injoignable : « Réessayer » d'abord, il prend le focus.
+      if (unreachable) items.push({ kind: 'action', id: 'reessayer', label: 'Réessayer', primary: true, group: 'actions', run: () => actions.retry() });
+      items.push(
+        { kind: 'text', id: 'nom', label: 'Ton nom', value: name, maxLength: 20, charset: NAME_CHARS, placeholder: 'Joueur', group: 'joueur', set: (v) => (name = v) },
+        { ...deviceItem(), group: 'joueur' },
+        {
+          kind: 'action',
+          id: 'creer',
+          label: 'Créer une salle',
+          hint: 'Tu reçois un code de 4 lettres à donner à tes amis.',
+          primary: !unreachable,
+          group: 'creer',
+          run: () => actions.create(saveName()),
+        },
         {
           kind: 'text',
           id: 'code',
@@ -107,14 +124,14 @@ export function createOnlineLobby(
           value: code,
           maxLength: 4,
           charset: CODE_CHARS,
-          placeholder: 'CODE',
+          placeholder: '____',
+          group: 'rejoindre',
           set: (v) => (code = v.toUpperCase()),
           submit: join,
         },
-        { kind: 'action', id: 'rejoindre', label: 'Rejoindre', run: join },
-      ];
-      if (unreachable) items.push({ kind: 'action', id: 'reessayer', label: 'Réessayer', run: () => actions.retry() });
-      items.push({ kind: 'action', id: 'retour', label: 'Retour à l’accueil', run: () => actions.home() });
+        { kind: 'action', id: 'rejoindre', label: 'Rejoindre', group: 'rejoindre', run: join },
+        { kind: 'action', id: 'retour', label: 'Retour à l’accueil', group: 'actions', run: () => actions.home() },
+      );
       return items;
     },
   };
@@ -122,40 +139,62 @@ export function createOnlineLobby(
   const roomScreen: MenuScreen = {
     id: 'salle',
     title: 'Salle',
+    hint: 'Donne ce code à tes amis : ils le tapent dans « Jouer en ligne ». Les places libres sont jouées par l’IA.',
+    layout: 'columns',
     back: () => actions.leave(),
     items: () => {
       if (!room) return [];
       const host = room.host === room.you;
       const doubles = room.format === 'double';
       const levelLabel = LEVELS.find((l) => l.value === room!.level)?.label ?? 'IA';
+      const seats = doubles ? [0, 2, 1, 3] : [0, 1];
       const items: MenuItem[] = [
-        { kind: 'info', id: 'code-salle', text: room.code, tags: ['room-code'] },
-        { kind: 'info', id: 'aide', text: 'Donne ce code à tes amis. Les places libres sont jouées par l’IA.' },
-        { kind: 'heading', id: 'places', text: 'Places' },
+        { kind: 'info', id: 'code-salle', text: room.code, tags: ['room-code'], group: 'code' },
+        { kind: 'heading', id: 'bleu', text: 'Bleu', tags: ['blue'], group: 'bleu' },
+        { kind: 'heading', id: 'rouge', text: 'Rouge', tags: ['red'], group: 'rouge' },
       ];
-      // Bleus d'abord (côté de la caméra), comme dans « Jouer ».
-      for (const i of doubles ? [0, 2, 1, 3] : [0, 1]) {
+      // Qui tient la place, en grand ; la place et ce que fait A, dessous.
+      for (const i of seats) {
         const holder = room.seats[i] ?? null;
         const member = room.members.find((m) => m.id === holder);
         const mine = holder === room.you;
         const free = holder === null;
-        const who = member ? `${member.name}${mine ? ' (toi)' : ''}` : levelLabel;
+        const where = playerName(i, doubles, true);
+        const todo = room.playing ? undefined : mine ? 'Laisser à l’IA' : free ? 'Prendre cette place' : undefined;
         items.push({
           kind: 'action',
           id: `place-${i}`,
-          label: `${playerName(i, doubles)} : ${who}`,
-          tags: [i % 2 === 0 ? 'blue' : 'red', ...(mine ? ['is-mine'] : [])],
-          hint: room.playing ? undefined : mine ? 'Laisser à l’IA' : free ? 'Prendre cette place' : undefined,
+          label: member ? `${member.name}${mine ? ' (toi)' : ''}` : levelLabel,
+          tags: [i % 2 === 0 ? 'blue' : 'red', 'seat', mine ? 'is-mine' : free ? 'is-free' : 'is-taken'],
+          hint: todo ? `${where} · ${todo}` : where,
           disabled: room.playing || !(free || mine),
+          group: i % 2 === 0 ? 'bleu' : 'rouge',
           run: () => actions.seat(mine ? null : i),
         });
       }
-      items.push(deviceItem());
+      // Sans place, on regarde le match. Salle pleine : on le dit à qui n'a rien pu prendre.
+      const taken = room.seats.slice(0, seats.length);
+      const watchers = room.members.filter((m) => !taken.includes(m.id));
+      if (watchers.some((m) => m.id === room!.you)) {
+        const full = taken.every((holder) => holder !== null);
+        items.push({
+          kind: 'info',
+          id: 'sans-place',
+          text: full
+            ? 'Salle pleine : toutes les places sont prises, tu regarderas le match.'
+            : 'Tu n’as pas de place : prends une place libre, sinon tu regarderas le match.',
+          tags: ['notice'],
+          group: 'notice',
+        });
+      } else if (watchers.length > 0) {
+        const names = watchers.map((m) => m.name).join(', ');
+        items.push({ kind: 'info', id: 'sans-place', text: `Sans place, ${watchers.length > 1 ? 'regardent' : 'regarde'} le match : ${names}.`, tags: ['notice'], group: 'notice' });
+      }
+      items.push({ kind: 'heading', id: 'match', text: 'Match', group: 'match' }, { ...deviceItem(), group: 'match' });
       if (host && !room.playing) {
         const format = room.format;
         const level = room.level;
         items.push(
-          { kind: 'heading', id: 'match', text: 'Match' },
           {
             kind: 'choice',
             id: 'format',
@@ -165,6 +204,7 @@ export function createOnlineLobby(
               { value: 'simple', label: 'Simple (1 contre 1)' },
               { value: 'double', label: 'Double (2 contre 2)' },
             ],
+            group: 'match',
             set: (f: DuelFormat) => actions.setup(f, level),
           },
           {
@@ -173,15 +213,16 @@ export function createOnlineLobby(
             label: 'Niveau de l’IA',
             value: level,
             options: LEVELS,
+            group: 'match',
             set: (l: AiLevel) => actions.setup(format, l),
           },
-          { kind: 'action', id: 'lancer', label: 'Lancer le match', primary: true, run: () => actions.start() },
+          { kind: 'action', id: 'lancer', label: 'Lancer le match', primary: true, group: 'actions', run: () => actions.start() },
         );
       } else if (!room.playing) {
         const hostName = room.members.find((m) => m.id === room!.host)?.name ?? 'l’hôte';
-        items.push({ kind: 'info', id: 'attente', text: `En attente de ${hostName}, qui lance le match.` });
+        items.push({ kind: 'info', id: 'attente', text: `En attente de ${hostName}, qui lance le match.`, tags: ['waiting'], group: 'actions' });
       }
-      items.push({ kind: 'action', id: 'quitter-salle', label: 'Quitter la salle', run: () => actions.leave() });
+      items.push({ kind: 'action', id: 'quitter-salle', label: 'Quitter la salle', group: 'actions', run: () => actions.leave() });
       return items;
     },
   };
@@ -200,13 +241,15 @@ export function createOnlineLobby(
       menu.message(message);
     },
     status(message): void {
-      menu.message(message);
+      menu.message(message, 'status');
     },
     unreachable(message): void {
+      // Coupé depuis une salle : on dit d'abord que la liaison est perdue.
+      const lost = room !== null;
       room = null;
       unreachable = true;
       menu.show(homeScreen);
-      menu.message(message);
+      menu.message(lost ? `Connexion perdue. ${message}` : message);
     },
     hide(): void {
       menu.hide();

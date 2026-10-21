@@ -65,12 +65,95 @@ for (const size of SIZES) {
       await menuItem(page, 'lancer');
       await page.waitForFunction(() => window.__duel?.online?.() != null, null, { timeout: 30_000 });
       await page.waitForFunction(() => window.__duel!.duel.tick > 240, null, { timeout: 30_000 });
+      // Liaison perdue pendant le match : le bandeau, affiché à la main (couper le serveur des tests n'est pas possible).
+      await page.evaluate(() => {
+        const banner = document.getElementById('online-banner')!;
+        banner.textContent = 'Connexion perdue, reconnexion…';
+        banner.hidden = false;
+      });
+      await shot(page, '14-coupure');
+      await page.evaluate(() => (document.getElementById('online-banner')!.hidden = true));
       await page.keyboard.press('Escape');
       await page.locator('#pause-menu').waitFor();
       await shot(page, '13-pause-en-ligne');
       await page.goto('/?enligne&serveur=localhost:1');
       await page.locator('#online-lobby .menu-message').waitFor();
       await shot(page, '12-serveur-introuvable');
+    });
+
+    test('en ligne, à plusieurs', async ({ browser }) => {
+      test.setTimeout(90_000);
+      const open = async (name: string) => {
+        const context = await browser.newContext({ viewport: { width: size.width, height: size.height } });
+        const page = await context.newPage();
+        await page.goto(`/?enligne&serveur=${GAME_SERVER}`);
+        await page.locator('#online-lobby[data-screen="en-ligne"]').waitFor();
+        await page.fill('[data-item="nom"] input', name);
+        return page;
+      };
+      // Code inconnu.
+      const host = await open('Xavier');
+      await host.fill('[data-item="code"] input', 'ZZZZ');
+      await menuItem(host, 'rejoindre');
+      await host.locator('#online-lobby .menu-message:not(:empty)').waitFor();
+      await shot(host, '12b-code-inconnu');
+
+      // Un ami rejoint : ce que voit l'invité (il attend l'hôte).
+      await menuItem(host, 'creer');
+      const code = (await host.locator('.room-code').textContent())!;
+      const guest = await open('Ami');
+      await guest.fill('[data-item="code"] input', code);
+      await menuItem(guest, 'rejoindre');
+      await guest.locator('[data-item="attente"]').waitFor();
+      await host.locator('[data-item="place-1"]', { hasText: 'Ami' }).waitFor();
+      await shot(guest, '11b-salle-invite');
+
+      // En simple, la salle est pleine pour un troisième.
+      await host.locator('[data-item="format"] .menu-prev').click();
+      await host.locator('[data-item="format"] .menu-value', { hasText: 'Simple' }).waitFor();
+      const third = await open('Léa');
+      await third.fill('[data-item="code"] input', code);
+      await menuItem(third, 'rejoindre');
+      await third.locator('[data-item="sans-place"]').waitFor();
+      await shot(third, '11c-salle-pleine');
+      await shot(host, '11d-salle-hote-simple');
+    });
+
+    test('en ligne, code à la manette', async ({ page }) => {
+      await page.addInitScript(() => {
+        const fake = {
+          index: 0,
+          id: 'manette virtuelle',
+          connected: true,
+          mapping: 'standard',
+          axes: [0, 0, 0, 0],
+          buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+        };
+        (window as unknown as { __pad: typeof fake }).__pad = fake;
+        navigator.getGamepads = () => [fake as unknown as Gamepad];
+      });
+      await page.goto(`/?enligne&serveur=${GAME_SERVER}`);
+      await page.locator('#online-lobby[data-screen="en-ligne"]').waitFor();
+      const tap = async (button: number) => {
+        for (const pressed of [true, false]) {
+          await page.evaluate(
+            ([b, p]) => {
+              (window as unknown as { __pad: { buttons: { pressed: boolean; value: number }[] } }).__pad.buttons[b as number] = { pressed: p as boolean, value: p ? 1 : 0 };
+            },
+            [button, pressed],
+          );
+          await page.waitForTimeout(60);
+        }
+      };
+      await page.locator('[data-item="code"]').hover();
+      await tap(0);
+      // E, M, puis la troisième case.
+      for (let i = 0; i < 5; i++) await tap(12);
+      await tap(15);
+      for (let i = 0; i < 12; i++) await tap(12);
+      await tap(15);
+      await page.mouse.move(0, 0);
+      await shot(page, '10b-code-manette');
     });
 
     test('match', async ({ page }) => {

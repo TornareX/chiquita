@@ -114,8 +114,8 @@ export class Lobby {
         return;
       case 'join': {
         const target = this.rooms.get(String(message.code).toUpperCase());
-        if (!target) return member.send({ t: 'error', message: 'Aucune salle avec ce code.' });
-        if (target.match) return member.send({ t: 'error', message: 'Le match de cette salle a déjà commencé.' });
+        if (!target) return member.send({ t: 'error', message: 'Aucune salle avec ce code : vérifie les 4 lettres avec tes amis.' });
+        if (target.match) return member.send({ t: 'error', message: 'Le match de cette salle a déjà commencé : crée ta salle, ou demande un autre code.' });
         this.leave(member);
         this.join(member, target);
         return;

@@ -132,31 +132,20 @@ export function startOnline(canvas: HTMLCanvasElement): void {
   connect();
 }
 
-/** Bandeau au milieu de l'écran (liaison perdue pendant le match). */
+/** Bandeau au milieu de l'écran (liaison perdue pendant le match) ; apparence dans `menu.css` (`#online-banner`). */
 function createBanner(): { show(text: string): void; hide(): void } {
   const banner = document.createElement('div');
   banner.id = 'online-banner';
-  Object.assign(banner.style, {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    padding: '12px 20px',
-    font: '600 18px system-ui, sans-serif',
-    color: '#fff',
-    background: 'rgba(10,16,24,0.85)',
-    borderRadius: '8px',
-    zIndex: '30',
-    display: 'none',
-  });
+  banner.setAttribute('role', 'status');
+  banner.hidden = true;
   document.body.append(banner);
   return {
     show(text): void {
       banner.textContent = text;
-      banner.style.display = 'block';
+      banner.hidden = false;
     },
     hide(): void {
-      banner.style.display = 'none';
+      banner.hidden = true;
     },
   };
 }

@@ -120,8 +120,8 @@ export interface Menu {
   pop(): void;
   /** Relit les entrées de l'écran courant (après un changement venu d'ailleurs). */
   refresh(): void;
-  /** Message sous les entrées (erreur, attente) ; chaîne vide pour l'effacer. */
-  message(text: string): void;
+  /** Message sous les entrées (`data-tone` : erreur par défaut, ou attente) ; chaîne vide pour l'effacer. */
+  message(text: string, tone?: 'error' | 'status'): void;
   /** Allume un instant une entrée (une place quand on appuie sur la manette qui la joue). */
   flash(id: string): void;
   hide(): void;
@@ -223,6 +223,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
   let elements = new Map<string, HTMLElement>();
   let focusedId: string | null = null;
   let messageText = '';
+  let messageTone: 'error' | 'status' = 'error';
   /** Texte en cours d'édition à la manette : l'entrée et la position de la lettre. */
   let editing: { id: string; at: number } | null = null;
   /** Fiche de l'entrée sélectionnée (disposition `detail`) : son nom et son explication. */
@@ -331,13 +332,15 @@ export function createMenu(options: MenuOptions = {}): Menu {
         });
         if (editing?.id === item.id) {
           row.classList.add('is-editing');
-          // Lettre en cours d'édition à la manette.
+          // Lettre en cours d'édition à la manette : toutes les cases d'un texte court (un code), sinon les lettres
+          // tapées et la case en cours. Puis la légende de la croix.
           const letters = el('span', 'menu-letters');
-          for (let i = 0; i < item.maxLength; i++) {
+          const shown = item.maxLength <= 6 ? item.maxLength : Math.min(item.maxLength, Math.max(item.value.length, editing.at) + 1);
+          for (let i = 0; i < shown; i++) {
             const letter = el('span', `menu-letter${i === editing.at ? ' is-current' : ''}`, item.value[i] ?? '·');
             letters.append(letter);
           }
-          row.append(letters);
+          row.append(letters, el('p', 'menu-hint menu-edit-hint', 'Haut et bas : la lettre · Gauche et droite : la case · A : terminé'));
         }
       }
       if (item.kind !== 'text') {
@@ -406,6 +409,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
     }
     const message = el('p', 'menu-message', messageText);
     message.setAttribute('role', 'status');
+    message.dataset.tone = messageTone;
     children.push(message);
     // Le champ en cours de saisie au clavier garde le focus : on ne remplace pas la page sous les doigts.
     const active = document.activeElement;
@@ -495,9 +499,10 @@ export function createMenu(options: MenuOptions = {}): Menu {
     } else {
       const chars = item.charset;
       const value = item.value.padEnd(editing.at + 1, ' ').slice(0, item.maxLength);
-      const current = value[editing.at] ?? ' ';
-      const index = chars.indexOf(current);
-      const next = index < 0 ? chars[0]! : chars[(index + (dir === 'up' ? 1 : -1) + chars.length) % chars.length]!;
+      // Une case vide (après la fin) part de la première lettre en montant, de la dernière en descendant.
+      const blank = editing.at >= item.value.length;
+      const index = blank ? -1 : chars.indexOf(value[editing.at] ?? ' ');
+      const next = index < 0 ? chars[dir === 'up' ? 0 : chars.length - 1]! : chars[(index + (dir === 'up' ? 1 : -1) + chars.length) % chars.length]!;
       item.set((value.slice(0, editing.at) + next + value.slice(editing.at + 1)).trimEnd());
     }
     render();
@@ -666,10 +671,13 @@ export function createMenu(options: MenuOptions = {}): Menu {
     refresh(): void {
       if (!root.hidden) render();
     },
-    message(text): void {
+    message(text, tone = 'error'): void {
       messageText = text;
-      const line = panel.querySelector('.menu-message');
-      if (line) line.textContent = text;
+      messageTone = tone;
+      const line = panel.querySelector<HTMLElement>('.menu-message');
+      if (!line) return;
+      line.textContent = text;
+      line.dataset.tone = tone;
     },
     flash(id): void {
       const element = panel.querySelector<HTMLElement>(`[data-item="${CSS.escape(id)}"]`);

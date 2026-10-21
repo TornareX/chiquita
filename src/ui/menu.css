@@ -13,6 +13,8 @@
  *   [data-back='non'] : B ne fait rien sur cet écran)
  *   [data-layout] (list, tiles, columns, detail), .menu-group[data-group] (entrées rangées ensemble, en colonnes)
  *   .menu-detail, .menu-detail-title, .menu-detail-text (fiche de l'entrée sélectionnée, disposition detail)
+ *   .menu-message[data-tone] (error, status), .menu-edit-hint (légende de la saisie à la manette)
+ *   En ligne : .room-code, .seat (+ .is-free / .is-taken / .is-mine), .notice, .waiting, #online-banner
  */
 :root {
   --u: var(--ui-px);
@@ -183,13 +185,46 @@
   color: var(--menu-error);
   font-weight: 700;
 }
+/* Un message (en ligne) : une plaque teintée de rouge, un losange rouge ; une attente, sur une plaque neutre. */
+.menu-message:not(:empty) {
+  --bevel: calc(12 * var(--u));
+  align-self: start;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: calc(12 * var(--u)) calc(30 * var(--u)) calc(12 * var(--u)) calc(22 * var(--u));
+  background: color-mix(in oklab, var(--plate) 78%, var(--red));
+  color: var(--white);
+  clip-path: polygon(
+    var(--bevel) 0,
+    100% 0,
+    100% calc(100% - var(--bevel)),
+    calc(100% - var(--bevel)) 100%,
+    0 100%,
+    0 var(--bevel)
+  );
+}
 .menu-message:not(:empty)::before {
   content: '';
   flex: none;
-  width: calc(12 * var(--u));
-  height: calc(12 * var(--u));
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
   background: var(--red);
+  box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink);
   transform: rotate(45deg);
+}
+.menu-message[data-tone='status']:not(:empty) {
+  background: var(--plate);
+  color: var(--ink-soft);
+}
+.menu-message[data-tone='status']:not(:empty)::before {
+  background: var(--violet);
+  animation: menu-waiting 0.8s ease-in-out infinite alternate;
+}
+@keyframes menu-waiting {
+  to {
+    opacity: 0.3;
+  }
 }
 
 /*
@@ -499,23 +534,17 @@
   background: var(--ball);
   color: var(--ink);
 }
-
-/* Code d'une salle en ligne : la plus grosse valeur de l'écran, sur sa propre plaque. */
-.menu-info.room-code {
-  --bevel: calc(22 * var(--u));
+/* À la manette, les cases remplacent le champ, et la légende de la croix suit. */
+.menu-item.is-editing .menu-input {
+  display: none;
+}
+.menu-item.is-editing .menu-letters {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   margin: calc(8 * var(--u)) 0;
-  padding: calc(14 * var(--u)) 0 calc(10 * var(--u));
-  background: var(--plate);
-  color: var(--white);
-  font-family: var(--ui-font-brand);
-  font-size: calc(96 * var(--u));
-  font-stretch: 75%;
-  font-style: italic;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.22em;
-  text-indent: 0.22em;
-  text-align: center;
+}
+.menu-edit-hint {
+  font-size: var(--menu-small-size);
 }
 
 /* Aides manette en bas d'écran : A valide, B revient. */
@@ -575,15 +604,14 @@
   word-spacing: calc(6 * var(--u));
 }
 
-/* Repères des manettes branchées, à droite de la barre d'aides (accueil, Jouer) : un losange plein par manette. */
+/* Repères des manettes branchées, à droite de la barre d'aides (accueil, Jouer, en ligne) : un losange plein par manette. */
 .menu-pads {
   display: none;
   gap: calc(14 * var(--u));
   margin-left: auto;
   padding-right: calc(6 * var(--u));
 }
-.menu[data-screen='accueil'] .menu-pads,
-.menu[data-screen='jouer'] .menu-pads {
+.menu:is([data-screen='accueil'], [data-screen='jouer'], [data-screen='en-ligne'], [data-screen='salle']) .menu-pads {
   display: flex;
   align-items: center;
 }
@@ -1099,6 +1127,296 @@
   line-height: 1.45;
 }
 
+/*
+ * En ligne (`onlineLobby.ts`), en colonnes comme « Jouer ». Salon : son nom et sa manette en haut, puis créer une
+ * salle à gauche et rejoindre avec un code à droite. Salle : le code en héros en haut à droite, Bleu à gauche et
+ * Rouge à droite, le match dessous ; en bas, « Quitter » sous la colonne de gauche, « Lancer » sous celle de droite.
+ */
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-panel {
+  grid-template-rows: auto auto auto auto auto 1fr auto auto;
+}
+.menu[data-screen='en-ligne'] .menu-panel {
+  grid-template-areas:
+    'title title'
+    'hint hint'
+    'joueur joueur'
+    'creer rejoindre'
+    '. .'
+    '. .'
+    'message message'
+    'actions actions';
+}
+.menu[data-screen='salle'] .menu-panel {
+  grid-template-areas:
+    'title code'
+    'hint code'
+    'bleu rouge'
+    'notice notice'
+    'match match'
+    '. .'
+    'message message'
+    'actions actions';
+}
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-message {
+  margin-top: calc(16 * var(--u));
+}
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-message:empty {
+  display: none;
+}
+
+/* Les deux colonnes de la ligne : une entrée chacune, ou plusieurs placées. */
+.menu-group:is([data-group='joueur'], [data-group='match']),
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-group[data-group='actions'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--columns-gap);
+  row-gap: var(--menu-gap);
+}
+.menu-group[data-group='joueur'] {
+  grid-area: joueur;
+  margin-top: calc(34 * var(--u));
+}
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-group[data-group='actions'] {
+  align-items: stretch;
+  margin-top: calc(24 * var(--u));
+}
+.menu-group[data-group='actions'] :is([data-item='retour'], [data-item='quitter-salle']) {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+.menu-group[data-group='actions'] :is([data-item='reessayer'], [data-item='lancer'], [data-item='attente']) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Créer une salle : une grande plaque écrite comme un titre, sa phrase dessous. */
+.menu-group[data-group='creer'] {
+  grid-area: creer;
+  align-self: stretch;
+  margin-top: calc(40 * var(--u));
+}
+.menu-item[data-item='creer'] {
+  --menu-bevel: calc(30 * var(--u));
+  flex: 1;
+  min-height: calc(330 * var(--u));
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.menu-item[data-item='creer']::after {
+  background: var(--mesh), var(--plate-bg);
+}
+.menu-item[data-item='creer'] .menu-button {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 calc(36 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: calc(72 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.menu-item[data-item='creer'] .menu-hint {
+  flex-basis: auto;
+  margin: calc(12 * var(--u)) calc(36 * var(--u)) calc(30 * var(--u));
+  font-size: calc(22 * var(--u));
+}
+.menu-group[data-group='rejoindre'] {
+  grid-area: rejoindre;
+  margin-top: calc(40 * var(--u));
+}
+/* Le code à taper : quatre grandes lettres, comme sur l'écran de la salle. */
+.menu-item[data-item='code'] {
+  padding-top: calc(14 * var(--u));
+  padding-bottom: calc(18 * var(--u));
+}
+.menu-item[data-item='code'] .menu-label {
+  flex-basis: 100%;
+}
+.menu-item[data-item='code'] .menu-input {
+  --bevel: calc(14 * var(--u));
+  flex-basis: 100%;
+  max-width: none;
+  height: calc(150 * var(--u));
+  font-family: var(--ui-font-brand);
+  font-size: calc(112 * var(--u));
+  font-stretch: 75%;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.menu-item[data-item='code'] .menu-letters {
+  justify-content: center;
+  gap: calc(16 * var(--u));
+  font-size: calc(100 * var(--u));
+}
+.menu-item[data-item='code'] .menu-letter {
+  --bevel: calc(16 * var(--u));
+  width: calc(124 * var(--u));
+  height: calc(150 * var(--u));
+}
+.menu-item[data-item='code'] .menu-edit-hint {
+  text-align: center;
+}
+.menu-group[data-group='rejoindre'] .menu-action .menu-button,
+.menu-group[data-group='actions'] .menu-action .menu-button {
+  padding: 0 calc(36 * var(--u));
+}
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-group[data-group='actions'] .menu-action.is-primary {
+  font-size: calc(40 * var(--u));
+}
+.menu:is([data-screen='en-ligne'], [data-screen='salle']) .menu-group[data-group='actions'] .menu-action.is-primary .menu-button {
+  min-height: calc(76 * var(--u));
+}
+
+/* Code de la salle : le héros de l'écran, en lettres immenses et espacées, faciles à dicter. */
+.menu-group[data-group='code'] {
+  grid-area: code;
+  align-self: stretch;
+  justify-content: center;
+}
+.menu-info.room-code {
+  --bevel: calc(30 * var(--u));
+  margin: 0;
+  padding: calc(18 * var(--u)) 0 calc(10 * var(--u));
+  background: var(--mesh), var(--plate);
+  color: var(--white);
+  font-family: var(--ui-font-brand);
+  font-size: calc(168 * var(--u));
+  font-stretch: 75%;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-align: center;
+}
+
+/*
+ * Places de la salle : le nom de qui la tient en grand, la place et ce que fait A dessous. Un humain : losange plein,
+ * nom en blanc ; l'IA : losange vide, sur la maille, en plus pâle. La place d'un autre se lit sans s'estomper.
+ */
+.menu-item.seat .menu-button {
+  font-family: var(--ui-font-brand);
+  font-size: calc(36 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.menu-item.seat .menu-hint {
+  margin-left: calc(54 * var(--u));
+}
+.menu-item.seat.is-free:not(.is-focused) {
+  --plate-fg: var(--ink-muted);
+}
+.menu-item.seat.is-free::after {
+  background: var(--mesh), var(--plate-bg);
+}
+.menu-item.seat.is-free > :first-child::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 calc(3 * var(--u)) var(--team);
+}
+.menu-item.seat.is-taken.is-disabled {
+  opacity: 1;
+}
+.menu-item.seat.is-mine {
+  --menu-edge-width: calc(5 * var(--u));
+}
+.menu-group[data-group='notice'] {
+  grid-area: notice;
+}
+.menu-info:is(.notice, .waiting) {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  margin: calc(14 * var(--u)) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--menu-text-size);
+}
+.menu-info:is(.notice, .waiting)::before {
+  content: '';
+  flex: none;
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  background: var(--violet);
+  transform: rotate(45deg);
+}
+.menu-info.waiting {
+  align-self: center;
+  margin: 0;
+}
+.menu-info.waiting::before {
+  animation: menu-waiting 0.8s ease-in-out infinite alternate;
+}
+.menu-group[data-group='match'] {
+  grid-area: match;
+}
+.menu-group[data-group='match'] .menu-heading {
+  grid-column: 1 / -1;
+  margin-top: calc(20 * var(--u));
+}
+.menu-group[data-group='match'] [data-item='peripherique'] {
+  grid-column: 1;
+  grid-row: 2;
+}
+.menu-group[data-group='match'] :is([data-item='format'], [data-item='niveau']) {
+  grid-column: 2;
+}
+
+/* Liaison perdue pendant un match en ligne : un bandeau au milieu, liseré de rouge, qui bat tant qu'on attend. */
+#online-banner {
+  --bevel: calc(18 * var(--u));
+  position: fixed;
+  z-index: 30;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: calc(18 * var(--u));
+  padding: calc(22 * var(--u)) calc(40 * var(--u));
+  background: var(--mesh), rgba(13, 11, 26, 0.94);
+  box-shadow: inset 0 0 0 calc(4 * var(--u)) var(--red);
+  color: var(--white);
+  clip-path: polygon(
+    var(--bevel) 0,
+    100% 0,
+    100% calc(100% - var(--bevel)),
+    calc(100% - var(--bevel)) 100%,
+    0 100%,
+    0 var(--bevel)
+  );
+  font-family: var(--ui-font-brand);
+  font-size: calc(40 * var(--u));
+  font-stretch: var(--ui-brand-stretch);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
+}
+#online-banner::before {
+  content: '';
+  flex: none;
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+  background: var(--red);
+  transform: rotate(45deg);
+  animation: menu-waiting 0.8s ease-in-out infinite alternate;
+}
+#online-banner[hidden] {
+  display: none;
+}
+
 /* Bouton de pause, en haut à droite pendant un match (souris). */
 #pause-button {
   --bevel: calc(10 * var(--u));
@@ -1140,7 +1458,10 @@
     animation-duration: 0.01s;
   }
   .menu-item.is-lit > :first-child::before,
-  .menu-dim .menu-screen-hint::before {
+  .menu-dim .menu-screen-hint::before,
+  .menu-message::before,
+  .menu-info.waiting::before,
+  #online-banner::before {
     animation: none;
   }
 }

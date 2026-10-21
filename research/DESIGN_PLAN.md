@@ -244,6 +244,31 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    places (pré-remplies dans « Jouer » et en ligne) » est long (`clarify`, étape 10) ; le jugement depuis le canapé,
    à la manette, surtout la lisibilité de la pause sur un match qui bouge.
 7. **En ligne** : salon, code de salle, places, erreurs (serveur introuvable, salle pleine, coupure).
+   *Fait.* Xavier a choisi **les deux moitiés + le code en haut** pour la salle et **Créer | Rejoindre** pour le
+   salon. Les deux écrans passent en `layout: 'columns'` (navigation spatiale, LB/RB et Tab). Décisions :
+   - Salon : nom et « Je joue avec » en haut ; à gauche « Créer une salle » en grande plaque maillée avec sa phrase,
+     à droite le code (champ en grandes lettres espacées, quatre traits en attente) et « Rejoindre » ; « Retour » en
+     bas à gauche. Serveur introuvable : « Réessayer » devient l'action principale en bas à droite et prend le focus.
+   - Salle : le code en héros en haut à droite (168 `--ui-px`, lettres espacées, plaque maillée), la phrase pour le
+     donner à gauche ; Bleu à gauche, Rouge à droite ; chaque place montre **qui la tient en grand** et, dessous, la
+     place et ce que fait A. Humain : losange plein ; IA : losange vide, sur la maille, plus pâle ; la place d'un autre
+     ne s'estompe plus ; la sienne : « (toi) » et un liseré blanc épais. Le match dessous (« Je joue avec » à gauche,
+     format et niveau à droite pour l'hôte) ; « Quitter » sous la colonne de gauche, « Lancer » sous celle de droite ;
+     l'invité voit « En attente de X » à la place de « Lancer ».
+   - Erreurs : `menu.message(texte, 'error' | 'status')` (`data-tone`) ; erreur en plaque rouge avec losange, attente
+     (« Connexion au serveur… ») en plaque neutre. Code inconnu et match commencé disent quoi faire (textes du
+     serveur). Salle pleine : « Salle pleine : toutes les places sont prises, tu regarderas le match. » ; l'hôte voit
+     qui regarde sans place. Coupure en salle : « Connexion perdue. » devant le message. Coupure en match : le bandeau
+     `#online-banner` passe en CSS (plaque encre liserée de rouge, losange qui bat), sans styles dans le code.
+   - Saisie à la manette : les cases remplacent le champ pendant l'édition (toutes pour un code, les lettres tapées
+     et la case en cours pour un nom), avec la légende de la croix ; une case vide part de A en montant.
+   - Repères des manettes aussi sur les écrans en ligne.
+   - Tests : `parcoursEnLigne.spec.ts` (720p/1080p sans défilement, disposition, croix spatiale ; code inconnu et
+     salle pleine) ; le parcours atteint « Lancer » par la droite depuis « Quitter ». Captures ajoutées : `10b`,
+     `11b`, `11c`, `11d`, `12b`, `14-coupure`.
+   Restent : le jugement à la manette depuis le canapé ; la valeur longue « Clavier bleu (ZQSD + …) » de « Je joue
+   avec » dans une demi-colonne en 720p, pas vérifiée à l'œil ; le test `menu.spec.ts` de saisie à la manette a
+   échoué une fois en série (tape de 80 ms manquée sous charge), vert seul trois fois.
 8. **HUD de match**, maquette d'abord : score et sets, service, punto de oro, annonces (point, faute, por tres,
    ralenti), étiquettes des joueurs, état réseau en ligne. Simple et double, les deux côtés de la caméra.
 9. **Écrans annexes** : tutoriel et guides de coups, labo, test manette, affichage des entrées. Tokens et
