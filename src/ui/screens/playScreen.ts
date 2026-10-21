@@ -40,6 +40,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
   const place = (i: number): MenuItem[] => {
     const controller = setup.players[i]!;
     const team = i % 2 === 0 ? 'blue' : 'red';
+    const group = i % 2 === 0 ? 'bleu' : 'rouge';
     const pads = connectedGamepads();
     const items: MenuItem[] = [
       {
@@ -47,6 +48,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
         id: `place-${i}`,
         label: playerName(i, match.doubles, true),
         tags: [team],
+        group,
         value: controller,
         options: CONTROLLERS.map((c) => {
           const pad = padOf(c);
@@ -70,6 +72,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
         id: `place-${i}-course`,
         label: 'Course',
         tags: [team, 'sub'],
+        group,
         value: setup.assists[i],
         options: ASSIST_LEVELS.map((a) => ({ value: a, label: ASSIST_LABELS[a] })),
         set: (a) => (setup.assists[i] = a),
@@ -80,6 +83,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
       id: `place-${i}-main`,
       label: 'Main',
       tags: [team, 'sub'],
+      group,
       value: setup.hands[i],
       options: HANDS.map((h) => ({ value: h, label: HAND_LABELS[h] })),
       set: (h) => (setup.hands[i] = h),
@@ -91,6 +95,8 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
     id: 'jouer',
     title: 'Jouer',
     hint: 'Appuie sur un bouton d’une manette ou une touche d’un clavier : sa place s’allume.',
+    // Les deux moitiés du court : Bleu à gauche, Rouge à droite, les règles dessous, « Lancer » en bas à droite.
+    layout: 'columns',
     items: () => {
       const pads = connectedGamepads();
       const items: MenuItem[] = [
@@ -98,6 +104,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
           kind: 'choice',
           id: 'format',
           label: 'Format',
+          group: 'format',
           value: match.doubles,
           options: [
             { value: false, label: 'Simple (1 contre 1)' },
@@ -108,21 +115,24 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
             changed();
           },
         },
-        { kind: 'heading', id: 'places', text: 'Places' },
+        { kind: 'heading', id: 'bleu', text: 'Bleu', tags: ['blue'], group: 'bleu' },
+        { kind: 'heading', id: 'rouge', text: 'Rouge', tags: ['red'], group: 'rouge' },
         ...placeOrder().flatMap(place),
         {
           kind: 'info',
           id: 'manettes',
           tags: ['pads'],
+          group: 'manettes',
           text: pads.length
             ? pads.map((pad, n) => `Manette ${n + 1} : ${pad.id.replace(/\s*\(.*$/, '')}`).join(' · ')
             : 'Aucune manette détectée : appuie sur un de ses boutons pour la réveiller.',
         },
-        { kind: 'heading', id: 'regles', text: 'Règles' },
+        { kind: 'heading', id: 'regles', text: 'Règles', group: 'regles' },
         {
           kind: 'toggle',
           id: 'libre',
           label: 'Échange libre, sans score',
+          group: 'regles',
           value: match.free,
           set: (free) => {
             match.free = free;
@@ -137,6 +147,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
             kind: 'choice',
             id: 'sets',
             label: 'Sets',
+            group: 'regles',
             value: match.setsToWin,
             options: [
               { value: 1, label: 'Un set' },
@@ -148,6 +159,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
             kind: 'choice',
             id: 'jeux',
             label: 'Jeux par set',
+            group: 'regles',
             value: match.gamesPerSet,
             options: games.map((n) => ({ value: n, label: String(n) })),
             set: (n: number) => (match.gamesPerSet = n),
@@ -156,6 +168,7 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
             kind: 'toggle',
             id: 'punto',
             label: 'Punto de oro (point décisif à 40-40)',
+            group: 'regles',
             value: match.goldenPoint,
             set: (on) => (match.goldenPoint = on),
           },
@@ -168,12 +181,13 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
           id: 'pression',
           label: 'Pression des balles',
           hint: 'Vertes, jaunes, rouges : la balle difficile se joue plus vite.',
+          group: 'regles',
           value: setup.pressure,
           options: pressures.map((p) => ({ value: p, label: pressureLabel(p) })),
           set: (p: number) => (setup.pressure = p),
         },
-        { kind: 'action', id: 'lancer', label: 'Lancer le match', primary: true, run: () => launch(setup) },
-        { kind: 'action', id: 'retour', label: 'Retour', run: () => menu.pop() },
+        { kind: 'action', id: 'lancer', label: 'Lancer le match', primary: true, group: 'actions', run: () => launch(setup) },
+        { kind: 'action', id: 'retour', label: 'Retour', group: 'actions', run: () => menu.pop() },
       );
       return items;
     },

@@ -177,6 +177,32 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    sur les autres écrans (Jouer surtout) et leur couleur d'équipe ; l'accent circonflexe d'« ENTRAÎNEMENT » touche le
    haut de la ligne dans les titres d'écran en liste (interligne 0,9, étape 6) ; le jugement depuis le canapé.
 5. **Jouer** : l'écran le plus dense (places des 4 joueurs, IA, règles). Maquette d'abord (`shape`).
+   *Fait.* Trois organisations proposées (colonnes par équipe, places en cartes avec règles repliées, deux colonnes
+   « qui joue / le match ») ; Xavier a choisi **les deux moitiés du court**. Décisions :
+   - Nouvelle disposition du menu commun, `layout: 'columns'`, et regroupement des entrées (`group` sur une entrée,
+     rendu en `.menu-group[data-group]`) ; les autres écrans n'en ont pas et ne changent pas (captures identiques, au
+     survol de la souris et au code de salle près). La liste `.menu-items` passe en `display: contents` et le panneau
+     devient une grille : titre à gauche et « Format » à droite, l'aide sur une ligne, **Bleu à gauche, Rouge à
+     droite** (chaque place suivie de sa course et de sa main), la ligne des manettes, puis les **règles sur deux
+     colonnes** alignées sur celles des équipes (échange libre, sets, jeux | punto de oro, pression, qui prend la
+     hauteur de deux entrées avec son explication), et en bas à droite **« Lancer le match »** en grande plaque,
+     « Retour » juste avant. Plaques un peu plus hautes que dans une liste (58 et 46 `--ui-px`).
+   - Tout tient dans la zone de sécurité sans défiler, en 1280×720 et 1920×1080, en simple comme en double, y compris
+     le pire cas (quatre places humaines, quatre lignes « Course ») ; « Lancer » reste au-dessus de la barre d'aides.
+   - Nom de l'équipe en tête de sa moitié : bandeau en parallélogramme à sa couleur (blanc sur bleu, encre sur rouge).
+   - Navigation : haut et bas suivent l'ordre de lecture, inchangé (Format → Bleu → Rouge → règles → Lancer →
+     Retour), gauche et droite changent la valeur comme partout. **LB/RB** (Tab et Maj+Tab au clavier) sautent à
+     l'entrée de la colonne voisine la plus proche en hauteur (Bleu ↔ Rouge, règles de gauche ↔ de droite, Retour ↔
+     Lancer), en boucle avec deux colonnes. Seulement sur un écran en colonnes ; l'aide « LB RB Colonne » s'ajoute
+     alors à la barre d'aides. Test du navigateur ajouté (`menu.spec.ts`) : 720p et 1080p, pire cas sans défilement,
+     équipes de part et d'autre, Tab, LB/RB, place allumée, et Tab sans effet sur un écran en liste.
+   - Place allumée (`is-lit`) plus visible : un cadre blanc épais qui se resserre sur la plaque (1 s), et le losange
+     de l'équipe qui grossit puis retombe. Seul l'écran Jouer allume des places.
+   - Repères des manettes (losanges et libellé) affichés aussi sur Jouer, à droite de la barre d'aides ; la ligne
+     sous Bleu garde le nom de chaque manette.
+   Restent : couleur d'équipe des repères des manettes ; « (pas branchée) » allonge beaucoup la valeur d'une place
+   (à raccourcir avec `clarify`, étape 10) ; symboles LB/RB selon la manette ; le jugement depuis le canapé, à la
+   manette, surtout le saut LB/RB et la lisibilité de l'allumage.
 6. **Pause, Réglages, Entraînement.**
 7. **En ligne** : salon, code de salle, places, erreurs (serveur introuvable, salle pleine, coupure).
 8. **HUD de match**, maquette d'abord : score et sets, service, punto de oro, annonces (point, faute, por tres,

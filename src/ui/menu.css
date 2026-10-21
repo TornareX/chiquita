@@ -9,8 +9,9 @@
  *   .is-disabled, .is-on, .is-editing, .is-lit ; équipes .blue / .red, sous-entrée .sub ; places .is-mine)
  *   .menu-button, .menu-label, .menu-control, .menu-arrow, .menu-value, .menu-input, .menu-letters, .menu-letter
  *   (.is-current), .menu-hint
- *   .menu-pad-hints, .menu-pad-hint (.is-back), .menu-pad-key (aides manette en bas d'écran ; [data-back='non'] :
- *   B ne fait rien sur cet écran)
+ *   .menu-pad-hints, .menu-pad-hint (.is-back, .is-jump), .menu-pad-key (aides manette en bas d'écran ;
+ *   [data-back='non'] : B ne fait rien sur cet écran)
+ *   [data-layout] (list, tiles, columns), .menu-group[data-group] (entrées rangées ensemble, en colonnes)
  */
 :root {
   --u: var(--ui-px);
@@ -291,21 +292,34 @@
 .menu-item.is-mine:not(.is-focused) {
   --plate-edge: var(--white);
 }
-/* Place allumée quand sa manette se signale : un éclair blanc qui s'éteint. */
+/*
+ * Place allumée quand sa manette se signale : un éclair blanc, un cadre épais qui se resserre sur la plaque, et le
+ * losange de l'équipe qui grossit puis retombe.
+ */
 .menu-item.is-lit::before {
-  animation: menu-lit-edge 0.8s ease-out;
+  animation: menu-lit-edge 1s ease-out;
 }
 .menu-item.is-lit::after {
-  animation: menu-lit-plate 0.8s ease-out;
+  animation: menu-lit-plate 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.menu-item.is-lit > :first-child::before {
+  animation: menu-lit-mark 0.6s var(--menu-bounce);
 }
 @keyframes menu-lit-edge {
-  from {
+  from,
+  25% {
     background: var(--white);
   }
 }
 @keyframes menu-lit-plate {
   from {
-    background: color-mix(in oklab, var(--plate-bg) 55%, var(--white));
+    inset: calc(8 * var(--u));
+    background: color-mix(in oklab, var(--plate-bg) 45%, var(--white));
+  }
+}
+@keyframes menu-lit-mark {
+  from {
+    transform: rotate(45deg) scale(1.9);
   }
 }
 
@@ -546,15 +560,29 @@
   background: var(--white);
   color: var(--ink);
 }
+/* LB RB : sauter à la colonne voisine, seulement sur un écran en colonnes. */
+.menu-pad-hint.is-jump {
+  display: none;
+}
+.menu[data-layout='columns'] .menu-pad-hint.is-jump {
+  display: flex;
+}
+.menu-pad-hint.is-jump .menu-pad-key {
+  width: auto;
+  padding: 0 calc(12 * var(--u));
+  border-radius: calc(18 * var(--u));
+  word-spacing: calc(6 * var(--u));
+}
 
-/* Repères des manettes branchées, à droite de la barre d'aides (accueil) : un losange plein par manette. */
+/* Repères des manettes branchées, à droite de la barre d'aides (accueil, Jouer) : un losange plein par manette. */
 .menu-pads {
   display: none;
   gap: calc(14 * var(--u));
   margin-left: auto;
   padding-right: calc(6 * var(--u));
 }
-.menu[data-screen='accueil'] .menu-pads {
+.menu[data-screen='accueil'] .menu-pads,
+.menu[data-screen='jouer'] .menu-pads {
   display: flex;
   align-items: center;
 }
@@ -671,6 +699,146 @@
   line-height: 1.3;
 }
 
+/*
+ * Colonnes (`data-layout='columns'`, Jouer) : les deux moitiés du court. Titre et format en haut, Bleu à gauche et
+ * Rouge à droite, les règles dessous sur deux colonnes, « Lancer » en bas à droite. Tout tient dans la zone de
+ * sécurité, sans défiler, en simple comme en double ; les entrées se rangent par groupe (`data-group`).
+ */
+/* Plaques un peu plus hautes que dans une liste : la place est là, et l'écran se lit de loin. */
+.menu[data-layout='columns'] {
+  --menu-row-height: calc(58 * var(--u));
+  --menu-sub-height: calc(46 * var(--u));
+}
+.menu[data-layout='columns'] .menu-panel {
+  --columns-gap: calc(56 * var(--u));
+  position: absolute;
+  inset: var(--ui-safe-y) var(--ui-safe-x) calc(var(--ui-safe-y) + 84 * var(--u));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto 1fr auto;
+  grid-template-areas:
+    'title format'
+    'hint hint'
+    'bleu rouge'
+    'pads pads'
+    'regles regles'
+    '. .'
+    'message actions';
+  column-gap: var(--columns-gap);
+  align-items: start;
+  width: auto;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  mask-image: none;
+  animation: none;
+}
+.menu[data-layout='columns'] .menu-items {
+  display: contents;
+}
+.menu[data-layout='columns'] .menu-title {
+  grid-area: title;
+  align-self: end;
+  margin: 0;
+}
+.menu[data-layout='columns'] .menu-screen-hint {
+  grid-area: hint;
+  max-width: none;
+  margin: calc(10 * var(--u)) 0 0;
+}
+.menu[data-layout='columns'] .menu-message {
+  grid-area: message;
+  align-self: end;
+  margin: 0;
+}
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--menu-gap);
+  min-width: 0;
+}
+.menu-group[data-group='format'] {
+  grid-area: format;
+  align-self: end;
+}
+.menu-group[data-group='bleu'] {
+  grid-area: bleu;
+}
+.menu-group[data-group='rouge'] {
+  grid-area: rouge;
+}
+.menu-group[data-group='manettes'] {
+  grid-area: pads;
+}
+.menu-group[data-group='manettes'] .menu-info {
+  margin: calc(10 * var(--u)) 0 0;
+}
+
+/* Nom d'une équipe en tête de sa moitié : un bandeau à sa couleur (texte encre sur le rouge). */
+.menu-heading.blue,
+.menu-heading.red {
+  align-self: flex-start;
+  margin: calc(18 * var(--u)) 0 calc(6 * var(--u));
+  padding: calc(4 * var(--u)) calc(34 * var(--u)) calc(4 * var(--u)) calc(24 * var(--u));
+  clip-path: polygon(calc(14 * var(--u)) 0, 100% 0, calc(100% - 14 * var(--u)) 100%, 0 100%);
+  font-size: calc(32 * var(--u));
+  letter-spacing: 0.06em;
+}
+.menu-heading.blue {
+  background: var(--blue);
+  color: var(--white);
+}
+.menu-heading.red {
+  background: var(--red);
+  color: var(--ink);
+}
+.menu-heading.blue::before,
+.menu-heading.blue::after,
+.menu-heading.red::before,
+.menu-heading.red::after {
+  content: none;
+}
+
+/* Règles : deux colonnes alignées sur celles des équipes, lues de haut en bas puis à droite. */
+.menu-group[data-group='regles'] {
+  grid-area: regles;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto repeat(3, auto);
+  grid-auto-flow: column;
+  column-gap: var(--columns-gap);
+  row-gap: var(--menu-gap);
+}
+.menu-group[data-group='regles'] .menu-heading {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  margin-top: calc(16 * var(--u));
+}
+/* La pression et son explication occupent la hauteur de deux entrées. */
+.menu-group[data-group='regles'] [data-item='pression'] {
+  grid-row: span 2;
+}
+
+/* « Lancer » en bas à droite, « Retour » juste avant lui. */
+.menu-group[data-group='actions'] {
+  grid-area: actions;
+  flex-direction: row-reverse;
+  align-items: stretch;
+  gap: calc(18 * var(--u));
+  margin-top: calc(24 * var(--u));
+}
+.menu-group[data-group='actions'] .menu-action.is-primary {
+  flex: 1;
+  font-size: calc(40 * var(--u));
+}
+.menu-group[data-group='actions'] .menu-action.is-primary .menu-button {
+  min-height: calc(76 * var(--u));
+  padding: 0 calc(36 * var(--u));
+}
+.menu-group[data-group='actions'] .menu-action:not(.is-primary) .menu-button {
+  padding: 0 calc(36 * var(--u));
+}
+
 /* Bouton de pause, en haut à droite pendant un match (souris). */
 #pause-button {
   --bevel: calc(10 * var(--u));
@@ -710,5 +878,8 @@
   .menu-item.is-lit::before,
   .menu-item.is-lit::after {
     animation-duration: 0.01s;
+  }
+  .menu-item.is-lit > :first-child::before {
+    animation: none;
   }
 }

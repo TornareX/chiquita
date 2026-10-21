@@ -163,3 +163,68 @@ test('accueil en tuiles : gauche et droite passent d’une tuile à l’autre, h
   await tap(page, 15);
   await expect(focused(page)).toHaveAttribute('data-item', first!);
 });
+
+test('Jouer en colonnes : Bleu à gauche, Rouge à droite, tout tient sans défiler ; LB/RB et Tab changent de colonne', async ({ page }) => {
+  for (const size of [
+    { width: 1280, height: 720 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('/');
+    await page.locator('[data-item="jouer"] button').click();
+    const menu = page.locator('#accueil');
+    await expect(menu).toHaveAttribute('data-layout', 'columns');
+    await page.locator('[data-item="format"] .menu-next').click();
+    // Pire cas : quatre places humaines, chacune avec sa course et sa main.
+    for (const i of [3, 2, 1, 0]) {
+      const value = page.locator(`[data-item="place-${i}"] .menu-value`);
+      for (let k = 0; k < 12 && !(await value.innerText()).startsWith(`Manette ${i + 1}`); k++) await page.locator(`[data-item="place-${i}"] .menu-next`).click();
+    }
+    await expect(page.locator('[data-item$="-course"]')).toHaveCount(4);
+    const fits = await page.evaluate(() => {
+      const panel = document.querySelector('#accueil .menu-panel')!;
+      const launch = document.querySelector('[data-item="lancer"]')!.getBoundingClientRect();
+      const hints = document.querySelector('#accueil .menu-pad-hints')!.getBoundingClientRect();
+      return panel.scrollHeight <= panel.clientHeight && launch.bottom <= hints.top;
+    });
+    expect(fits).toBe(true);
+    // Chaque équipe dans sa moitié.
+    const left = async (id: string) => (await page.locator(`[data-item="${id}"]`).boundingBox())!.x;
+    expect(await left('place-0')).toBeLessThan(size.width / 2);
+    expect(await left('place-2')).toBeLessThan(size.width / 2);
+    expect(await left('place-1')).toBeGreaterThan(size.width / 2);
+    expect(await left('place-3')).toBeGreaterThan(size.width / 2);
+  }
+
+  // Clavier : bas suit l'ordre de lecture ; Tab passe à l'autre équipe, à la même hauteur ; droite change la valeur.
+  await page.locator('[data-item="place-0"]').hover();
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-0');
+  await page.keyboard.press('ArrowDown');
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-0-course');
+  await page.keyboard.press('Tab');
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-1-course');
+  await page.keyboard.press('Shift+Tab');
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-0-course');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowRight');
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-0');
+  await expect(page.locator('[data-item="place-0"] .menu-value')).not.toHaveText(/Manette 1/);
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('[data-item="place-0"] .menu-value')).toHaveText(/Manette 1/);
+
+  // Manette : RB et LB changent de colonne ; un bouton de la manette 1 allume sa place.
+  await plugPad(page);
+  await tap(page, 5);
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-1');
+  await tap(page, 4);
+  await expect(focused(page)).toHaveAttribute('data-item', 'place-0');
+  await tap(page, 2);
+  await expect(page.locator('[data-item="place-0"]')).toHaveClass(/is-lit/);
+  await expect(page.locator('#accueil .menu-pad-hint.is-jump')).toBeVisible();
+
+  // Les écrans en liste ne changent pas : Tab n'y déplace pas le focus du menu.
+  await page.keyboard.press('Escape');
+  await page.locator('[data-item="reglages"] button').click();
+  await expect(page.locator('#accueil')).toHaveAttribute('data-layout', 'list');
+  await expect(page.locator('#accueil .menu-pad-hint.is-jump')).toBeHidden();
+});

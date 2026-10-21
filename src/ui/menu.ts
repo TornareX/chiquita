@@ -24,6 +24,8 @@ interface ItemBase {
   disabled?: boolean;
   /** Classes en plus (par exemple l'équipe d'une place : `blue`, `red`), pour la feuille de style. */
   tags?: string[];
+  /** Groupe (`data-group`) : les entrées d'un même groupe sont rangées ensemble, pour la feuille de style. */
+  group?: string;
 }
 
 /** Une action : valider la lance. */
@@ -71,6 +73,7 @@ export interface InfoItem {
   id: string;
   text: string;
   tags?: string[];
+  group?: string;
 }
 
 /** Un titre de groupe. */
@@ -78,6 +81,8 @@ export interface HeadingItem {
   kind: 'heading';
   id: string;
   text: string;
+  tags?: string[];
+  group?: string;
 }
 
 export type MenuItem = ActionItem | ChoiceItem<any> | ToggleItem | TextItem | InfoItem | HeadingItem; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -88,10 +93,11 @@ export interface MenuScreen {
   title: string;
   hint?: string;
   /**
-   * Disposition des entrées (`data-layout`) : en liste (par défaut), ou en tuiles côte à côte (accueil), où gauche et
-   * droite passent aussi d'une entrée à l'autre.
+   * Disposition des entrées (`data-layout`) : en liste (par défaut) ; en tuiles côte à côte (accueil), où gauche et
+   * droite passent aussi d'une entrée à l'autre ; ou en colonnes (Jouer), où haut et bas suivent l'ordre de lecture,
+   * gauche et droite changent la valeur, et LB/RB (Tab au clavier) sautent à la colonne voisine, à la même hauteur.
    */
-  layout?: 'list' | 'tiles';
+  layout?: 'list' | 'tiles' | 'columns';
   /** Les entrées, relues à chaque rafraîchissement (`Menu.refresh`). */
   items(): MenuItem[];
   /** B, Échap : revenir. Sans `back`, l'écran précédent de la pile ; à la racine, rien. */
@@ -130,7 +136,7 @@ export interface MenuOptions {
 }
 
 /** Boutons de la disposition standard. */
-const PAD = { a: 0, b: 1, up: 12, down: 13, left: 14, right: 15 } as const;
+const PAD = { a: 0, b: 1, lb: 4, rb: 5, up: 12, down: 13, left: 14, right: 15 } as const;
 /** Stick poussé au-delà : une direction. */
 const STICK_THRESHOLD = 0.55;
 /** Répétition d'une direction tenue : premier délai, puis cadence (ms). */
@@ -141,6 +147,8 @@ type Direction = 'up' | 'down' | 'left' | 'right';
 interface PadSnapshot {
   a: boolean;
   b: boolean;
+  lb: boolean;
+  rb: boolean;
   dir: Direction | null;
 }
 
@@ -152,7 +160,7 @@ function readPad(pad: Gamepad): PadSnapshot {
   else if (pressed(PAD.down) || y > STICK_THRESHOLD) dir = 'down';
   else if (pressed(PAD.left) || x < -STICK_THRESHOLD) dir = 'left';
   else if (pressed(PAD.right) || x > STICK_THRESHOLD) dir = 'right';
-  return { a: pressed(PAD.a), b: pressed(PAD.b), dir };
+  return { a: pressed(PAD.a), b: pressed(PAD.b), lb: pressed(PAD.lb), rb: pressed(PAD.rb), dir };
 }
 
 const focusable = (item: MenuItem): item is Exclude<MenuItem, InfoItem | HeadingItem> =>
@@ -172,6 +180,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
   for (const [key, text, extra] of [
     ['A', 'Valider', ''],
     ['B', 'Retour', ' is-back'],
+    ['LB RB', 'Colonne', ' is-jump'],
   ] as const) {
     const hint = document.createElement('span');
     hint.className = `menu-pad-hint${extra}`;
@@ -245,7 +254,7 @@ export function createMenu(options: MenuOptions = {}): Menu {
   };
 
   const renderItem = (item: MenuItem): HTMLElement => {
-    if (item.kind === 'heading') return el('h2', 'menu-heading', item.text);
+    if (item.kind === 'heading') return el('h2', ['menu-heading', ...(item.tags ?? [])].join(' '), item.text);
     if (item.kind === 'info') {
       const info = el('p', ['menu-info', ...(item.tags ?? [])].join(' '), item.text);
       info.dataset.item = item.id;
@@ -361,10 +370,17 @@ export function createMenu(options: MenuOptions = {}): Menu {
     const children: HTMLElement[] = [title];
     if (screen.hint) children.push(el('p', 'menu-screen-hint', screen.hint));
     const list = el('div', 'menu-items');
+    const groups = new Map<string, HTMLElement>();
     for (const item of items) {
       const node = renderItem(item);
       if (focusable(item)) elements.set(item.id, node);
-      list.append(node);
+      let parent: HTMLElement = list;
+      if (item.group) {
+        parent = groups.get(item.group) ?? list.appendChild(el('div', 'menu-group'));
+        parent.dataset.group = item.group;
+        groups.set(item.group, parent);
+      }
+      parent.append(node);
     }
     children.push(list);
     const message = el('p', 'menu-message', messageText);
@@ -399,6 +415,23 @@ export function createMenu(options: MenuOptions = {}): Menu {
   };
 
   const focusedItem = (): MenuItem | undefined => items.find((i) => i.id === focusedId);
+
+  /**
+   * En colonnes : l'entrée de la colonne voisine (`step` = -1 à gauche, 1 à droite) la plus proche en hauteur ; sans
+   * colonne de ce côté, celle de l'autre côté (avec deux colonnes, LB et RB passent toutes deux à l'autre).
+   */
+  const jump = (step: number): void => {
+    if (current()?.layout !== 'columns' || focusedId === null) return;
+    const from = elements.get(focusedId)?.getBoundingClientRect();
+    if (!from) return;
+    const middle = (r: DOMRect): { x: number; y: number } => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    const here = middle(from);
+    const others = [...elements].map(([id, element]) => ({ id, at: middle(element.getBoundingClientRect()) }));
+    const side = (s: number) => others.filter((o) => (o.at.x - here.x) * s > from.width / 2);
+    const candidates = side(step).length ? side(step) : side(-step);
+    const best = candidates.sort((a, b) => Math.abs(a.at.y - here.y) - Math.abs(b.at.y - here.y) || Math.abs(a.at.x - here.x) - Math.abs(b.at.x - here.x))[0];
+    if (best) setFocus(best.id);
+  };
 
   /** Édition d'un texte à la manette. */
   const editText = (item: TextItem, dir: Direction): void => {
@@ -464,6 +497,11 @@ export function createMenu(options: MenuOptions = {}): Menu {
         event.stopImmediatePropagation();
         return direction(event.code === 'ArrowLeft' ? 'left' : 'right');
       }
+      if (event.code === 'Tab' && current()?.layout === 'columns') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return jump(event.shiftKey ? -1 : 1);
+      }
       if (event.code === 'Enter' || event.code === 'NumpadEnter' || (event.code === 'Space' && !inInput)) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -499,10 +537,12 @@ export function createMenu(options: MenuOptions = {}): Menu {
     for (const pad of pads) {
       const state = readPad(pad);
       // Une manette qui apparaît se réveille sur un appui : elle part de « rien de tenu ».
-      const before = previous.get(pad.index) ?? { a: false, b: false, dir: null };
+      const before = previous.get(pad.index) ?? { a: false, b: false, lb: false, rb: false, dir: null };
       previous.set(pad.index, state);
       if (state.b && !before.b) armedBack.add(pad.index);
       if (!state.b && before.b && armedBack.delete(pad.index)) back();
+      if (state.lb && !before.lb) jump(-1);
+      if (state.rb && !before.rb) jump(1);
       if (state.a && !before.a) armed.add(pad.index);
       if (!state.a && before.a && armed.delete(pad.index)) {
         const item = focusedItem();
