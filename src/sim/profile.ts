@@ -494,6 +494,12 @@ export interface CounterWallTuning {
   maxRoom: number;
   /** Balle qui s'éloigne vers la vitre plus vite que ça (m/s). */
   minSpeed: number;
+  /**
+   * Le geste de contre-vitre n'est proposé qu'au joueur à au moins tant du filet (m) : plus près, pousser le stick
+   * droit vers l'avant reste le coup sec. À 3,9 m du filet, une volée bloquée devenait une préparation de contre-vitre
+   * (journal des frappes, 22/10).
+   */
+  readyDepth: number;
   /** Point de chute visé, en distance au filet chez l'adversaire : coup normal, frappe parfaite. */
   depth: number;
   depthPerfect: number;
@@ -912,6 +918,9 @@ export const REALISTIC: PhysicsProfile = {
       glassRoom: 0.2,
       maxRoom: 3.5, // au-delà, la balle file dans le grillage au-dessus de la vitre ou retombe dans le filet
       minSpeed: 1,
+      // Juste devant la ligne de service : le point d'impact, derrière lui, est entre la ligne et la vitre, là où Xavier
+      // la joue (22/10). [à calibrer en jouant]
+      readyDepth: 6.5,
       depth: 4.5,
       depthPerfect: 6,
       width: 1.8,

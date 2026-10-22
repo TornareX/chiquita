@@ -130,3 +130,42 @@ describe('balle qui rebondit dans les pieds', () => {
     }
   });
 });
+
+describe('contre-vitre', () => {
+  /** Échange en cours : le joueur 1 a frappé, la balle a rebondi chez le joueur 0, placé en `z`. */
+  function receiving(z: number, ball: ReturnType<typeof createBall>, bounces: number): Duel {
+    const duel = new Duel();
+    duel.phase = 'rally';
+    duel.lastHitter = 1;
+    duel.hits = 3;
+    duel.bounces = bounces;
+    duel.players[1].lastHitTick = duel.tick;
+    const player = duel.players[0];
+    player.pos = player.prevPos = vec3(0.6, 0, z);
+    player.assist = 'off';
+    duel.ball = ball;
+    return duel;
+  }
+
+  it('au filet, elle n’est pas proposée : pousser le stick reste le coup sec (volée bloquée)', () => {
+    // Le cas du journal : à 3,9 m du filet, balle basse et rapide qui va rebondir derrière lui, il recule.
+    const duel = receiving(-3.9, createBall(vec3(0, 1.2, 1), vec3(0, 0, -13.5)), 0);
+    duel.players[0].vel = vec3(0, 0, -3);
+    expect(duel.counterWallReady(0)).toBe(false);
+    // Au fond, la même balle passée : proposée.
+    const deep = receiving(-7.5, createBall(vec3(0, 0.6, -6.5), vec3(0, -1, -8)), 1);
+    deep.players[0].vel = vec3(0, 0, -3);
+    expect(deep.counterWallReady(0)).toBe(true);
+  });
+
+  it('balle basse et lente qui va mourir avant le point idéal : la contre-vitre part quand même', () => {
+    const duel = receiving(-8.4, createBall(vec3(0, 0.17, -8.1), vec3(0, -0.5, -5.2)), 1);
+    const wall = { prepared: true, wall: true };
+    duel.step([{ stick: { forward: 0, right: 0 }, shot: 'overhead', swing: wall }, NEUTRAL_ARCADE]);
+    for (let i = 0; i < 0.6 / SIM_DT && !duel.result && duel.players[0].lastHitTick === -Infinity; i++) {
+      duel.step([{ stick: { forward: 0, right: 0 }, shot: null, swing: { ...wall, end: 'straight' } }, NEUTRAL_ARCADE]);
+    }
+    expect(duel.shot?.player).toBe(0);
+    expect(duel.shot?.counterWall).toBe(true);
+  });
+});

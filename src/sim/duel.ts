@@ -222,6 +222,8 @@ export interface CounterWallChance {
   glass: Vec3;
   /** Jouable : à portée, entre `ahead` m devant le joueur et `late` s après le point idéal. */
   playable: boolean;
+  /** Pas encore au point idéal, mais elle sera trop basse en y arrivant (second rebond) : elle se joue là où elle est. */
+  dropping: boolean;
 }
 
 /** Ce qu'une frappe ajoute aux réglages de base. */
@@ -1191,7 +1193,7 @@ export class Duel {
       // Relâcher par rapport au passage de la balle au point idéal, connu dès qu'elle est en vue.
       if (engagement.counterWall.timing === null && chance) engagement.counterWall.timing = chance.timing - elapsed;
       const timing = engagement.counterWall.timing;
-      if (chance?.playable && chance.timing >= 0 && timing !== null) return this.counterWallHit(index, chance, timing);
+      if (chance?.playable && (chance.timing >= 0 || chance.dropping) && timing !== null) return this.counterWallHit(index, chance, timing);
       const gone = chance ? chance.timing > r.counterWall.late : !this.passesBehind(index);
       if (gone || elapsed >= r.counterWall.wait) {
         engagement.missReason = 'contreVitre';
@@ -1352,9 +1354,11 @@ export class Duel {
    */
   counterWallReady(index: number): boolean {
     if (this.phase !== 'rally' || !this.isReceiving(index)) return false;
+    const player = this.players[index]!;
+    // Loin de sa vitre (au filet), pas de contre-vitre : le coup sec reste le coup sec.
+    if (Math.abs(player.pos.z) < this.profile.rally.counterWall.readyDepth) return false;
     if (this.counterWall(index)) return true;
     if (!this.passesBehind(index)) return false;
-    const player = this.players[index]!;
     // Il court vers sa vitre, ou il l'attend entre elle et la balle qui a rebondi.
     const waiting = this.bounces > 0 && this.ball !== null && (player.pos.z - this.ball.pos.z) * player.side > 0;
     return waiting || player.vel.z * player.side > 1;
@@ -1407,7 +1411,11 @@ export class Duel {
       ball.pos.y >= t.low &&
       ball.pos.y <= t.high &&
       room >= t.glassRoom;
-    return { timing, distance, lateral, glass, playable };
+    // Balle basse et lente qui tomberait sous `low` avant le point idéal (journal des frappes, 22/10 : contre-vitre
+    // préparée, rien ne part, second rebond) : la raquette la prend tout de suite.
+    const wait = -timing;
+    const dropping = timing < 0 && ball.pos.y + ball.vel.y * wait - (this.profile.gravity * wait * wait) / 2 < t.low;
+    return { timing, distance, lateral, glass, playable, dropping };
   }
 
   /**
