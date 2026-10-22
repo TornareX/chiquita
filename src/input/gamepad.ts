@@ -22,6 +22,8 @@ export interface PadState {
    * clavier et de la souris (`virtualStick.ts`). Repère de l'écran.
    */
   aim?: { right: number; up: number };
+  /** Bouton de contre-vitre tenu (RB / R1) : à la manette, il la prépare (`swingStick.ts`). */
+  wallButton?: boolean;
 }
 
 export const IDLE_PAD: PadState = { stick: { up: 0, right: 0 }, shot: null, assistButton: false };
@@ -64,7 +66,7 @@ export function readGamepad(pad: Gamepad, swing?: SwingStick, dt = 0): PadState 
   const face = SHOT_BUTTONS.find(([i]) => button(i))?.[1] ?? null;
   const shot = buttonsEnabled() ? face : null;
   const aim = rightStickAxes(pad.axes[2] ?? 0, -(pad.axes[3] ?? 0));
-  return applySwing({ stick: { up: y, right: x }, shot, assistButton: button(8), face, aim }, swing, dt);
+  return applySwing({ stick: { up: y, right: x }, shot, assistButton: button(8), face, aim, wallButton: button(5) }, swing, dt);
 }
 
 /**
@@ -75,7 +77,9 @@ export function readGamepad(pad: Gamepad, swing?: SwingStick, dt = 0): PadState 
 export function applySwing(state: PadState, swing?: SwingStick, dt = 0): PadState {
   if (!swing) return state;
   const right = state.aim ?? { right: 0, up: 0 };
-  const gesture = swing.update(right.right, right.up, dt);
+  // Une manette donne son bouton de contre-vitre : la contre-vitre s'y prépare, plus au geste.
+  if (state.wallButton !== undefined) swing.wallByButton = true;
+  const gesture = swing.update(right.right, right.up, dt, state.wallButton ?? false);
   const { shot } = state;
   return {
     ...state,
@@ -127,5 +131,7 @@ export function mergePads(a: PadState, b: PadState): PadState {
     face: a.face ?? b.face ?? null,
     // Stick droit : le plus poussé, pour que le geste se reconnaisse une seule fois sur les deux sources.
     ...((a.aim ?? b.aim) ? { aim: strongest(a.aim ?? { right: 0, up: 0 }, b.aim ?? { right: 0, up: 0 }) } : {}),
+    // Bouton de contre-vitre : celui de la manette, s'il y en a une.
+    ...(a.wallButton !== undefined || b.wallButton !== undefined ? { wallButton: (a.wallButton ?? false) || (b.wallButton ?? false) } : {}),
   };
 }

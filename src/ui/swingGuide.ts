@@ -136,6 +136,8 @@ export function createSwingGuide(): SwingGuide {
         if (parts) parts.root.style.display = 'none';
         return;
       }
+      // Bouton de contre-vitre : RB sur Xbox, R1 sur PlayStation.
+      const rb = source?.kind === 'pad' && source.family === 'playstation' ? 'R1' : 'RB';
       const now = performance.now();
       if (swing.count !== seen) {
         seen = swing.count;
@@ -154,12 +156,20 @@ export function createSwingGuide(): SwingGuide {
       p.root.style.left = `${left}px`;
       p.root.style.bottom = `${bottom}px`;
       // Les noms des coups suivent la balle à jouer ; contre-vitre : geste inversé, sans fins à choisir.
-      const naming = `${wall ? 'vitre' : context}:${source ? sourceKey(source) : ''}`;
+      const naming = `${wall ? 'vitre' : context}:${source ? sourceKey(source) : ''}:${swing.wallByButton}`;
       if (named !== naming) {
         named = naming;
         const shots = SWING_SHOTS[context];
         for (const key of ['straight', 'arc', 'letGo'] as const) for (const l of p.labels[key]) l.textContent = wall ? '' : shots[key];
-        p.hint.innerHTML = say(wall ? (source?.kind === 'keyboard' ? '{k:up} : préparer · {k:down} ou lâché : frapper' : 'en avant : préparer · vers toi ou lâché : frapper') : 'préparer : stick droit tiré vers toi');
+        p.hint.innerHTML = say(
+          wall
+            ? swing.wallByButton
+              ? `${rb} tenu : préparer · en avant : frapper · ${rb} lâché : annuler`
+              : source?.kind === 'keyboard'
+                ? '{k:up} : préparer · {k:down} ou lâché : frapper'
+                : 'en avant : préparer · vers toi ou lâché : frapper'
+            : 'préparer : stick droit tiré vers toi',
+        );
         p.flick.innerHTML = wall
           ? 'contre la vitre, elle repasse le filet'
           : `${source?.kind === 'keyboard' ? say('sans préparer, appui sec sur {k:up}') : 'sans préparer, coup sec ↑'} : ${escapeHtml(shots.flick)}`;
@@ -175,8 +185,8 @@ export function createSwingGuide(): SwingGuide {
         light(null);
         text =
           swing.phase === 'wallArmed'
-            ? `<span class="swing-lit">${say('Contre-vitre : ramène le stick vers toi pour frapper')}</span>`
-            : say('Contre-vitre possible : stick en avant pour préparer');
+            ? `<span class="swing-lit">${say(swing.wallByButton ? 'Contre-vitre : stick droit vers l’avant pour frapper' : 'Contre-vitre : ramène le stick vers toi pour frapper')}</span>`
+            : say(swing.wallByButton ? `Contre-vitre possible : tiens ${rb}` : 'Contre-vitre possible : stick en avant pour préparer');
       } else if (swing.phase === 'swing' && swing.sideSeen) {
         light('arc');
         text = `${escapeHtml(SWING_SHOTS[context].arc)}… finis le geste`;

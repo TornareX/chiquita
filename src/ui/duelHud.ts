@@ -61,7 +61,7 @@ const STICK_HELP = [
   'Puis tout droit : coup normal · en arc : lob · lâché : chiquita',
   'De volée : préparé = volée coupée · coup sec vers l’avant sans préparer = volée bloquée',
   'Au-dessus de la tête : tout droit = smash · en arc = víbora · lâché = feinte · coup sec = bandeja',
-  'Balle qui file vers ta vitre (repère sur la vitre) : stick droit en avant, puis vers toi = contre-vitre',
+  'Contre-vitre : balle passée, entre toi et ta vitre : tiens RB (R1), puis stick droit vers l’avant · lâche RB pour annuler',
   'Service : tire le stick vers toi pour lâcher la balle, ramène-le tout droit au sommet du rebond',
   'Assistance : bouton Affichage · Réglages : Start',
 ];

@@ -715,13 +715,15 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       view.bubble.scale.set(scale * 2.67, scale, 1);
       view.bubble.position.set(pos.x, 2.15 + scale * 0.5, pos.z);
     }
-    // Contre-vitre : il se tourne vers sa vitre quand il la prépare (stick tiré vers elle) et pendant qu'il la joue.
+    // Contre-vitre : il se tourne vers sa vitre quand il la prépare (RB / R1 tenu, ou stick tiré vers elle) et pendant
+    // qu'il la joue.
     const chance = duel.counterWall(index);
     const wallStrike = player.lastHit?.counterWall === true && (duel.tick - player.lastHitTick) * SIM_DT < WALL_STRIKE;
     const prepared = player.engagement;
     const aimsWall =
       prepared !== null &&
-      (prepared.letPass === true ||
+      (prepared.swing?.wall === true ||
+        prepared.letPass === true ||
         prepared.counterWall !== undefined ||
         (chance !== null && !prepared.swing && player.stick.forward <= -duel.profile.rally.counterWall.stick));
     view.anim.turn += ((wallStrike || aimsWall ? 1 : 0) - view.anim.turn) * (1 - Math.exp(-WALL_TURN * frameTime));

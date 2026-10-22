@@ -878,9 +878,10 @@ export class Duel {
     const pressed = cmd.shot !== null && cmd.shot !== player.heldShot ? cmd.shot : null;
     player.heldShot = cmd.shot;
     if (cmd.call) player.call = { kind: cmd.call, tick: this.tick };
-    // Relâcher le bouton déclenche le coup préparé.
+    // Relâcher le bouton déclenche le coup préparé. Contre-vitre au bouton (manette) lâchée sans fin de geste : annulée.
     if (player.engagement && player.engagement.releaseTick === null && cmd.shot === null) {
-      player.engagement.releaseTick = this.tick;
+      if (player.engagement.swing?.wall && !cmd.swing?.end) player.engagement = null;
+      else player.engagement.releaseTick = this.tick;
     }
 
     if (this.phase === 'over') {

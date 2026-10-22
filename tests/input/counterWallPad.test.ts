@@ -45,3 +45,60 @@ describe('contre-vitre à la manette, en reculant depuis le filet', () => {
     for (const strike of [0, 0.1, 0.2]) expect(play('balle-qui-meurt', strike)?.counterWall).toBe(true);
   });
 });
+
+/**
+ * Contre-vitre au bouton (Xavier, 23/10) : RB / R1 tenu dès que le geste est proposé (il se tourne vers sa vitre), stick
+ * droit vers l'avant `strike` s après le rebond. `release` : RB lâché à ce moment-là au lieu de frapper.
+ */
+function playButton(id: string, strike: number, release = false): { duel: Duel; shot: DuelShot | null; turned: boolean } {
+  const duel = new Duel(null);
+  duel.players[0].assist = 'off';
+  duel.players[0].prepMove = 'bloque';
+  SITUATIONS.find((s) => s.id === id)!.start(duel);
+  const swing = new SwingStick();
+  let bounceTick: number | null = null;
+  let offered = false;
+  let turned = false;
+  for (let i = 0; i < 6 / SIM_DT && !duel.result && duel.players[0].lastHitTick === -Infinity && duel.players[0].lastWhiffTick === -Infinity; i++) {
+    if (bounceTick === null && duel.bounces === 1) bounceTick = duel.tick;
+    offered ||= duel.counterWallReady(0);
+    const now = bounceTick !== null && duel.tick - bounceTick >= Math.round(strike / SIM_DT);
+    const raw: PadState = {
+      stick: { up: -1, right: 0 },
+      shot: null,
+      assistButton: false,
+      aim: { right: 0, up: now && !release ? 1 : 0 },
+      wallButton: offered && !(now && release),
+    };
+    duel.step([quantizeCommands(toCommands(applySwing(raw, swing, SIM_DT), true, false)), NEUTRAL_ARCADE]);
+    turned ||= duel.players[0].engagement?.swing?.wall === true;
+    if (now && release && i % 60 === 0 && duel.tick - bounceTick! > Math.round((strike + 1) / SIM_DT)) break;
+  }
+  return { duel, shot: duel.shot?.player === 0 ? duel.shot : null, turned };
+}
+
+describe('contre-vitre au bouton (RB / R1), impact au stick droit vers l’avant', () => {
+  it('lob qui passe : RB tenu, puis stick en avant quand elle passe derrière lui : contre-vitre parfaite', () => {
+    const { shot, turned } = playButton('lob-qui-passe', 0.45);
+    expect(turned).toBe(true);
+    expect(shot?.counterWall).toBe(true);
+    expect(shot?.perfect).toBe(true);
+  });
+
+  it('balle qui meurt : RB tenu, stick en avant avant le second rebond : contre-vitre', () => {
+    for (const strike of [0, 0.1, 0.2]) expect(playButton('balle-qui-meurt', strike).shot?.counterWall).toBe(true);
+  });
+
+  it('RB lâché sans frapper : annulée, ni frappe ni coup dans le vide', () => {
+    const { duel, shot } = playButton('lob-qui-passe', 0.2, true);
+    expect(shot).toBeNull();
+    expect(duel.players[0].lastWhiffTick).toBe(-Infinity);
+  });
+
+  it('sans RB, pousser le stick vers l’avant reste un coup sec, même quand la contre-vitre est possible', () => {
+    const swing = new SwingStick();
+    swing.wallReady = true;
+    const state = applySwing({ stick: { up: 0, right: 0 }, shot: null, assistButton: false, aim: { right: 0, up: 1 }, wallButton: false }, swing, SIM_DT);
+    expect(state.gesture).toEqual({ prepared: false, end: 'straight' });
+  });
+});

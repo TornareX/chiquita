@@ -12,7 +12,9 @@ export type { SwingEnd };
  *   - **lâché** (le stick revient au centre et y reste) : chiquita ; au-dessus de la tête, feinte de smash ;
  * - **sans préparation** : un coup sec vers l'avant depuis le centre, quand on n'a pas le temps : coup moins
  *   fort et moins précis ; de volée, volée bloquée ; au-dessus de la tête, bandeja ;
- * - **contre-vitre**, quand le jeu la propose (`wallReady`) : tourné vers sa vitre, le geste est inversé. Stick
+ * - **contre-vitre**, à la manette (`wallByButton`) : RB / R1 tenu prépare (le joueur se tourne vers sa vitre), le stick
+ *   droit poussé vers l'avant frappe, et RB / R1 lâché sans frapper annule. Proposée à Xavier (23/10) pour ne plus la
+ *   confondre avec le coup sec. Au clavier, quand le jeu la propose (`wallReady`) : tourné vers sa vitre, le geste est inversé. Stick
  *   poussé vers l'avant : préparation ; ramené vers soi (vers sa vitre), ou lâché : frappe contre la vitre.
  *
  * Pour la simulation, le geste parle le langage des boutons : un coup maintenu pendant la préparation,
@@ -75,17 +77,32 @@ export class SwingStick {
   sideSeen = false;
   /** Nombre de gestes finis : change à chaque coup joué au stick. */
   count = 0;
-  /** Contre-vitre proposée par le jeu à ce pas : pousser vers l'avant depuis le repos la prépare. */
+  /**
+   * Contre-vitre proposée par le jeu à ce pas. Au geste (clavier), pousser vers l'avant depuis le repos la prépare ; au
+   * bouton (manette), elle ne sert qu'à l'afficher.
+   */
   wallReady = false;
+  /** Contre-vitre au bouton (manette) plutôt qu'au geste : le bouton tenu est passé à `update`. */
+  wallByButton = false;
+  /** Au bouton : le stick était déjà en avant à la préparation, il doit revenir avant de frapper. */
+  private wallForward = false;
+  /** Bouton de contre-vitre tenu au pas précédent : seul un nouvel appui prépare. */
+  private wallWasHeld = false;
   private centerTime = 0;
   private swingTime = 0;
 
-  /** Un pas : position du stick droit (après zone morte), durée du pas (s). */
-  update(right: number, up: number, dt: number): SwingOutput {
+  /** Un pas : position du stick droit (après zone morte), durée du pas (s), et le bouton de contre-vitre tenu. */
+  update(right: number, up: number, dt: number, wallHeld = false): SwingOutput {
     const magnitude = Math.hypot(right, up);
     if (this.phase === 'armed' || this.phase === 'swing' || this.phase === 'wallArmed') {
       this.trail.push({ right, up });
       if (this.trail.length > 90) this.trail.shift();
+    }
+    if (this.wallByButton) {
+      const pressed = wallHeld && !this.wallWasHeld;
+      this.wallWasHeld = wallHeld;
+      const wall = this.wallButton(up, wallHeld, pressed);
+      if (wall) return wall;
     }
     switch (this.phase) {
       case 'done':
@@ -93,7 +110,7 @@ export class SwingStick {
         if (magnitude < SWING.center) this.phase = 'idle';
         return { shot: null };
       case 'idle':
-        if (this.wallReady && up >= SWING.arm) {
+        if (!this.wallByButton && this.wallReady && up >= SWING.arm) {
           this.phase = 'wallArmed';
           this.prepared = true;
           this.centerTime = 0;
@@ -135,6 +152,29 @@ export class SwingStick {
         } else this.centerTime = 0;
         return { shot: HELD, swing: { prepared: true, wall: true } };
     }
+  }
+
+  /**
+   * Contre-vitre au bouton : appuyé au repos (ou juste après un coup), il prépare ; le stick droit poussé vers
+   * l'avant frappe ; lâché sans frapper, il annule (aucune frappe). `null` : le bouton ne change rien à ce pas.
+   */
+  private wallButton(up: number, held: boolean, pressed: boolean): SwingOutput | null {
+    if (this.phase === 'wallArmed') {
+      if (!held) {
+        this.phase = 'idle';
+        this.prepared = false;
+        return { shot: null };
+      }
+      if (up >= SWING.front && !this.wallForward) return this.releaseWall('straight');
+      if (up < SWING.front) this.wallForward = false;
+      return { shot: HELD, swing: { prepared: true, wall: true } };
+    }
+    if (!pressed || (this.phase !== 'idle' && this.phase !== 'done')) return null;
+    this.phase = 'wallArmed';
+    this.prepared = true;
+    this.wallForward = up >= SWING.front;
+    this.trail.length = 0;
+    return { shot: HELD, swing: { prepared: true, wall: true } };
   }
 
   private releaseWall(end: SwingEnd): SwingOutput {
