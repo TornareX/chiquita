@@ -407,7 +407,9 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
     - Capture `29-annonce-point` en 1080p, 4K et ultra-large : l'annonce du point est déjà remplacée par le service
       quand la capture tombe (capture lente d'un grand écran pendant que le jeu tourne) ; visible en 720p, 768p et
       4:3, et vérifiée en direct en 1080p.
-    Restent : les points ouverts ci-dessus (à trancher par Xavier) ; dans le labo détaillé, le guide du geste peut
+    **Décision de Xavier (22/10/2026)** : la passe est livrée en l'état ; les points ouverts restent ici et seront
+    jugés depuis le canapé, à la manette.
+    Restent : les points ouverts ci-dessus ; dans le labo détaillé, le guide du geste peut
     couvrir l'aide en bas à droite ; le bandeau « POR TRES ! » couvre brièvement le bas du tableau (choix de l'étape
     8) ; la barre d'aides sur la carte d'une leçon ; le jugement depuis le canapé, à la manette, de toute la passe.
 
