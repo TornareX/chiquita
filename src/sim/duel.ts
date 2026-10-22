@@ -259,7 +259,7 @@ interface HitExtra {
  *   balle, lente et profonde ;
  * - `chiquita` : X stick vers soi, balle après rebond : lente et basse, elle plonge aux pieds du joueur
  *   au filet, qui doit remonter la balle ;
- * - `block` : coup normal ou coupé armé trop tard (moins de `blockPrep` s) : on ne fait que bloquer.
+ * - `block` : coup normal ou coupé armé trop tard (moins de `blockPrep` s, `volleyPrep` de volée) : on ne fait que bloquer.
  */
 export type ShotStyle = 'cut' | 'punch' | 'low' | 'chiquita' | 'block';
 
@@ -286,7 +286,7 @@ export function shotStyle(
 ): ShotStyle | null {
   const r = profile.rally;
   if (outside || (kind !== 'slice' && kind !== 'normal')) return null;
-  if (prepared < r.blockPrep) return 'block';
+  if (prepared < (volley ? r.volleyPrep : r.blockPrep)) return 'block';
   const chiquita = !volley && kind === 'slice' && (touch || stick.forward <= -r.overheadStick);
   // Sous la bande du filet, au filet : on remonte la balle, quel que soit le geste (sauf la chiquita).
   if (ball && !chiquita && ball.height < r.lowVolleyHeight && (volley || ball.nearNet)) return 'low';
@@ -1238,7 +1238,9 @@ export class Duel {
       // Raquette partie en avance, balle qui arrive et passera à portée au plus `earlyWait` s après le relâcher : elle
       // l'attend, le coup sera jugé en avance. Sinon (balle encore loin, ou qui ne vient pas), la fenêtre normale : coup
       // dans le vide, on peut réarmer.
-      const coming = ((timing < 0 && passing <= r.reach) || (mustBounce && !ball.out)) && elapsed - Math.min(0, timing) <= r.earlyWait;
+      // Balle qui rebondit dans ses pieds, au ras du sol : elle remonte aussitôt, la raquette l'attend (demi-volée).
+      const atFeet = ball.pos.y < r.hitLow && timing <= lateWindow && flatDistance(ball.pos, player.pos) <= r.reach * r.lateReach;
+      const coming = ((timing < 0 && passing <= r.reach) || (mustBounce && !ball.out) || atFeet) && elapsed - Math.min(0, timing) <= r.earlyWait;
       const wait = coming ? Math.max(r.earlyWait, this.racketWindow(engagement, ball, player)) : this.racketWindow(engagement, ball, player);
       if (elapsed >= wait) this.whiff(index);
       return;
@@ -1593,7 +1595,7 @@ export class Duel {
    */
   private racketWindow(engagement: Engagement, ball: Ball, player: DuelPlayer): number {
     const r = this.profile.rally;
-    const armed = !(engagement.swing && !engagement.swing.prepared) && ((engagement.releaseTick ?? this.tick) - engagement.pressTick) * SIM_DT >= r.blockPrep;
+    const armed = !(engagement.swing && !engagement.swing.prepared) && ((engagement.releaseTick ?? this.tick) - engagement.pressTick) * SIM_DT >= r.volleyPrep;
     const volley = armed && this.bounces === 0 && Math.abs(player.pos.z) < r.volleyZone;
     return volley ? swingWindow(length(ball.vel), this.profile) : r.swingWindow;
   }
@@ -1636,7 +1638,9 @@ export class Duel {
     // Au padel, la volée se joue coupée : la balle reste basse, même après la vitre.
     const spin = volley && kind === 'normal' && !touch ? r.volleySpin : null;
     const spinScale = 1 - Math.max(0, heightOff) * r.overheadHighSpin;
-    const solved = given ?? solveShot(tuning, contact, target, perfect, this.profile, speedFactor, error * r.pressure.clearance, spin, spinScale);
+    // Volée coupée, basse ou bloquée : l'erreur ne fait pas monter la balle, elle part longue ou large (`volleyClearance`).
+    const clearance = error * r.pressure.clearance * (volley && style !== null ? r.pressure.volleyClearance : 1);
+    const solved = given ?? solveShot(tuning, contact, target, perfect, this.profile, speedFactor, clearance, spin, spinScale);
     const ball = this.ball!;
     // Prise trop basse : la balle part plus à plat, vers le filet. Coup haut sous la hauteur des yeux, ou
     // balle ramassée aux pieds et mal frappée.

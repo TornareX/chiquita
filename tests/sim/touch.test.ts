@@ -181,8 +181,12 @@ describe('toucher : volée coupée, chiquita, blocage', () => {
   });
 
   it('armer trop tard : coup bloqué, plus lent qu’un coup préparé', () => {
-    const drive = (pressAt: number): DuelShot =>
-      answer(incoming('normal', vec3(0, 1, 7), { forward: 0, right: 0 }, vec3(0.6, 0, -3)), 'normal', { forward: 0, right: 0 }, pressAt)!;
+    // Le coup se joue de volée : on lui rend le seuil des autres coups (la volée a le sien, plus court : volley.test.ts).
+    const drive = (pressAt: number): DuelShot => {
+      const duel = incoming('normal', vec3(0, 1, 7), { forward: 0, right: 0 }, vec3(0.6, 0, -3));
+      duel.profile.rally.volleyPrep = duel.profile.rally.blockPrep;
+      return answer(duel, 'normal', { forward: 0, right: 0 }, pressAt)!;
+    };
     const prepared = drive(0);
     // Appui au dernier moment : la balle arrive à portée moins de 0,3 s plus tard.
     const plannedTick = (() => {

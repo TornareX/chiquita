@@ -363,6 +363,12 @@ export interface RallyTuning {
    * plage latérale × `blockWidth`) ; la vitesse est pleine à `fullPrep` s. Pas une jauge : au-delà, rien de plus.
    */
   blockPrep: number;
+  /**
+   * De volée, la préparation qui suffit pour couper la volée (s) : au filet, la balle arrive vite et le geste est
+   * court. À 0,3 s comme les autres coups, le journal des frappes (22/10) montrait des volées préparées 0,1-0,29 s
+   * jugées bloquées.
+   */
+  volleyPrep: number;
   fullPrep: number;
   blockSpeed: number;
   blockWidth: number;
@@ -421,6 +427,12 @@ export interface PressureTuning {
   netDip: number;
   /** Volée coupée : l'erreur est multipliée par 1 + `cutRush` × pression (balle pressée, coupé raté). */
   cutRush: number;
+  /**
+   * Volée coupée, basse ou bloquée : part de `clearance` gardée. Une volée ratée part longue ou large,
+   * mais reste basse. Entière, l'erreur la faisait passer 0,3 m plus haut, et la vitesse fondait pour y arriver (15 →
+   * 10 m/s, sommet 1,7 m) : la volée coupée ressemblait à un lob (journal des frappes, 22/10).
+   */
+  volleyClearance: number;
   /** Au-dessus de la tête, l'erreur est multipliée par ce facteur (balle haute = balle d'attaque). */
   overheadFactor: number;
   /**
@@ -731,7 +743,9 @@ export const REALISTIC: PhysicsProfile = {
       long: 0.7,
       netLow: 0.35, // [à calibrer en jouant]
       netDip: 3,
-      cutRush: 1.5, // [à calibrer en jouant]
+      cutRush: 1, // 1,5 avant le journal des frappes (volées coupées ratées à 0,75 d’erreur en moyenne) ; à 0,6, les volées
+      // coupées concluaient trop : 5,7 coups par point entre IA au lieu de 6 [à calibrer en jouant]
+      volleyClearance: 0.3, // [à calibrer en jouant]
       overheadFactor: 0.5,
       // Bloquer un smash au filet : possible avec une frappe parfaite, une faute sinon (16 m/s et moins : rien ne change).
       paceEasy: 15, // [à calibrer en jouant]
@@ -907,6 +921,7 @@ export const REALISTIC: PhysicsProfile = {
       speedLoss: 0.35,
     },
     blockPrep: 0.3,
+    volleyPrep: 0.12, // [à calibrer en jouant]
     fullPrep: 0.6,
     blockSpeed: 0.6,
     blockWidth: 0.5,

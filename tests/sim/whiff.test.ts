@@ -106,3 +106,27 @@ describe('volée au filet, raquette prête', () => {
     expect(duel.players[1].lastWhiffReason).toBe('portee');
   });
 });
+
+describe('balle qui rebondit dans les pieds', () => {
+  it('la raquette prête attend qu’elle remonte : demi-volée, pas dans le vide', () => {
+    for (const x of [0.9, 1.2]) {
+      const duel = new Duel();
+      duel.phase = 'rally';
+      duel.lastHitter = 0;
+      duel.hits = 2;
+      duel.players[0].lastHitTick = duel.tick;
+      const player = duel.players[1];
+      player.pos = player.prevPos = vec3(0, 0, 5.3);
+      player.assist = 'off';
+      // À 9 m/s, elle rebondit à hauteur du joueur, à `x` m sur le côté (le cas du journal : relâché 0,3 s avant).
+      const flight = 4.3 / 9;
+      duel.ball = createBall(vec3(-x, 1, 1), vec3(0, (4.9 * flight * flight - 1) / flight, 9));
+      const hold = { stick: { forward: 0, right: 0 }, shot: 'normal' as const };
+      while (duel.ball!.pos.z < 5.3 - 0.3 * 9) duel.step([NEUTRAL_ARCADE, hold]);
+      for (let i = 0; i < 0.8 / SIM_DT && player.lastHitTick === -Infinity && player.lastWhiffTick === -Infinity; i++) duel.step();
+      expect(player.lastWhiffTick).toBe(-Infinity);
+      expect(duel.shot?.player).toBe(1);
+      expect(duel.shot?.volley).toBe(false);
+    }
+  });
+});
