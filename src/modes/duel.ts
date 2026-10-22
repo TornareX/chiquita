@@ -183,7 +183,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     onQuit: () => {
       void (online?.connection.leave() ?? Promise.resolve()).then(() => (location.href = '/'));
     },
-    blocked: () => padTest.isOpen,
+    blocked: () => overlayOpen(),
   });
   /**
    * Frappe au geste du stick droit, une par manette puis une par côté du clavier (touches, et souris pour le bleu) ;
@@ -193,6 +193,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   const playerSwings: (SwingStick | null)[] = [null, null, null, null];
   const inputs = createInputDisplay(swings && playerSwings);
   const journal = createSwingJournal();
+  /** Fenêtre par-dessus la partie, qui la met en pause comme le menu : test de manette, panneau « raté » du journal. */
+  const overlayOpen = (): boolean => padTest.isOpen || (journal?.isOpen ?? false);
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
@@ -249,6 +251,8 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
       netRestart = true;
     }
     assistHeld[index] = state.assistButton;
+    // Bouton Y, sans effet en jeu : « raté » pour le journal des frappes.
+    if (pad) journal?.flag(duel, index, state.face === 'lob');
     // Joueur du camp où est la caméra (dans son dos) : haut de l'écran = vers le filet.
     return toCommands(state, duel.players[index]!.side === viewpoint.side, settings.farOwnView);
   };
@@ -412,7 +416,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
       const session = onlineClient.session;
       const { replayed, rollbacks, stalls } = session.stats;
       // Menu ouvert : le match continue chez les autres ; sa place ne bouge plus.
-      const paused = menu.isOpen || padTest.isOpen;
+      const paused = menu.isOpen || overlayOpen();
       onlineClient.step((_, index) => (paused ? NEUTRAL_ARCADE : read(index, pads)), performance.now());
       online.connection.flush();
       // Reparti de l'état du serveur pendant ce pas : nouveau moteur, nouveaux compteurs.
@@ -458,7 +462,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     last = now;
     // Start sur n'importe quelle manette : ouvre ou ferme les réglages.
     const start = connectedGamepads().some((pad) => pad.buttons[START_BUTTON]?.pressed ?? false);
-    if (start && !startHeld && !padTest.isOpen) menu.toggle();
+    if (start && !startHeld && !overlayOpen()) menu.toggle();
     startHeld = start;
     // Ralenti du coup gagnant : la partie en cours attend ; un appui le passe.
     const anyButton = connectedGamepads().some((pad) => pad.buttons.some((b) => b.pressed));
@@ -472,7 +476,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
         skipPressed = false;
       }
     }
-    if (replay && !menu.isOpen && !padTest.isOpen) {
+    if (replay && !menu.isOpen && !overlayOpen()) {
       replayAlpha = replay.advance(frameTime, () => view.afterStep());
       if (replay.done || skipPressed || (anyButton && !skipHeld)) {
         replay = null;
@@ -484,9 +488,9 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     skipPressed = false;
     const replaying = replay !== null;
     // Menu ouvert : partie en pause. Micro-pause : simulation figée, le temps réel écoulé n'est pas rattrapé.
-    if (!replaying && (online || (!menu.isOpen && !padTest.isOpen)) && now >= hitstopUntil) alpha = loop.advance(frameTime);
+    if (!replaying && (online || (!menu.isOpen && !overlayOpen())) && now >= hitstopUntil) alpha = loop.advance(frameTime);
     const renderStart = performance.now();
-    if (replay) view.render(replayAlpha, frameTime * replay.speed, menu.isOpen || padTest.isOpen);
+    if (replay) view.render(replayAlpha, frameTime * replay.speed, menu.isOpen || overlayOpen());
     else view.render(frozen() ? 0 : alpha, frameTime, now < hitstopUntil || frozen());
     perf?.frame(frameTime, performance.now() - renderStart, view.info());
     if (netHud) {
@@ -497,7 +501,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.
     audio.ambience(settings.sound && !menu.isOpen ? mood.stir : -1);
     hud.update(duel, sources, buttons, settings.inputDisplay === 'full');
-    inputs.render(duel, states, buttons, menu.isOpen || padTest.isOpen ? 'off' : settings.inputDisplay);
+    inputs.render(duel, states, buttons, menu.isOpen || overlayOpen() ? 'off' : settings.inputDisplay);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
