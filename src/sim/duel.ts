@@ -1218,28 +1218,34 @@ export class Duel {
     const heightOk = ball.pos.y >= r.hitLow && ball.pos.y <= (overhead ? r.overheadHigh : r.hitHigh);
     const reach = r.reach * (timing > 0 ? r.lateReach : 1);
     const lateWindow = high ? r.overheadLateWindow : r.lateWindow;
+    // Dans son camp ; ou dehors après le rebond (salida de pista) : le joueur sorti la joue où qu'elle soit.
+    const inCamp = ball.pos.z * player.side > 0 || (this.bounces > 0 && outsideCourt(ball.pos));
+    // Distance (horizontale) à laquelle la balle passera du joueur : à portée, elle vient à lui.
+    const passing = contactTiming(ball, player, 0).miss;
+    // Le service doit rebondir avant d'être renvoyé ; la balle laissée passer aussi.
+    const mustBounce = this.bounces === 0 && (this.hits === 1 || engagement.letPass === true);
     const playable =
       // Sortie avant le rebond : faute, déjà jugée. Après le rebond, elle se rattrape dehors.
       !(ball.out && this.bounces === 0) &&
-      // Le service doit rebondir avant d'être renvoyé.
-      !(this.hits === 1 && this.bounces === 0) &&
-      !(engagement.letPass && this.bounces === 0) &&
-      ball.pos.z * player.side > 0 &&
+      !mustBounce &&
+      inCamp &&
       heightOk &&
       flatDistance(ball.pos, player.pos) <= reach &&
       timing <= lateWindow;
     if (!playable) {
-      engagement.missReason =
-        ball.pos.z * player.side <= 0 ? 'camp' : !heightOk ? 'hauteur' : timing > lateWindow ? 'passee' : flatDistance(ball.pos, player.pos) > reach ? 'portee' : 'regle';
+      engagement.missReason = !inCamp ? 'camp' : !heightOk ? 'hauteur' : timing > lateWindow ? 'passee' : flatDistance(ball.pos, player.pos) > reach ? 'portee' : 'regle';
       engagement.missTiming = timing;
-      // Volée préparée, raquette partie en avance (la balle arrive) : sur une balle lente, elle l'attend plus longtemps.
-      // Pas le coup sec ni le coup au sol : relâchés trop tôt, ils restent dans le vide (on peut réarmer).
-      const armed = !(engagement.swing && !engagement.swing.prepared) && (engagement.releaseTick - engagement.pressTick) * SIM_DT >= r.blockPrep;
-      const waits = armed && this.bounces === 0 && Math.abs(player.pos.z) < r.volleyZone && timing < 0;
-      const wait = waits ? swingWindow(length(ball.vel), this.profile) : r.swingWindow;
-      if ((this.tick - engagement.releaseTick) * SIM_DT >= wait) this.whiff(index);
+      // Raquette partie en avance, balle qui arrive et passera à portée au plus `earlyWait` s après le relâcher : elle
+      // l'attend, le coup sera jugé en avance. Sinon (balle encore loin, ou qui ne vient pas), la fenêtre normale : coup
+      // dans le vide, on peut réarmer.
+      const coming = ((timing < 0 && passing <= r.reach) || (mustBounce && !ball.out)) && elapsed - Math.min(0, timing) <= r.earlyWait;
+      const wait = coming ? Math.max(r.earlyWait, this.racketWindow(engagement, ball, player)) : this.racketWindow(engagement, ball, player);
+      if (elapsed >= wait) this.whiff(index);
       return;
     }
+    // Raquette prête qui attend déjà la balle : elle la frappe à son passage à côté du joueur, pas dès qu'elle entre à
+    // portée (`earlyWait` au plus).
+    if (timing < 0 && passing <= r.reach && elapsed > this.racketWindow(engagement, ball, player) && elapsed < r.earlyWait) return;
     const volley = this.bounces === 0;
     const outside = outsideCourt(ball.pos);
     // Dehors, on renvoie la balle en lob par-dessus le mur ; B sur une balle basse : coup défensif, coupé.
@@ -1247,12 +1253,15 @@ export class Duel {
     // Volée contre une balle lourde : le relâcher se juge aussi. Raquette tendue d'avance, la balle arrive dessus
     // quand elle veut, et c'était une frappe parfaite à coup sûr ; maintenant, c'est une frappe en avance.
     const pace = volley && kind !== 'overhead' && !outside ? volleyPace(length(ball.vel), this.profile) : 0;
-    const waited = (this.tick - engagement.releaseTick) * SIM_DT - r.pressure.volleySweep;
+    const waited = elapsed - r.pressure.volleySweep;
+    // Raquette qui a attendu la balle au-delà de sa fenêtre normale : raquette prête, la balle arrive dessus. Le coup se
+    // juge sur la balle comme les autres, mais il n'est jamais parfait, et le coup normal ou coupé n'est que bloqué.
+    const ahead = Math.max(0, elapsed - this.racketWindow(engagement, ball, player));
     const judged = timing - pace * Math.max(0, waited);
     // Balle verte, jaune ou rouge : sous pression, la sous-fenêtre parfaite rétrécit (réflexes).
     const pressure = this.pressureOf(index, kind, ball.pos.y, dhypot(ball.vel.x, ball.vel.z), length(player.vel));
     const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure - r.pressure.paceShrink * pace;
-    const perfect = judged >= -r.perfectBefore * shrink && judged <= r.perfectAfter * shrink && miss <= r.sweetSpot;
+    const perfect = ahead === 0 && judged >= -r.perfectBefore * shrink && judged <= r.perfectAfter * shrink && miss <= r.sweetSpot;
     // Erreur du coup : pression, timing, et balle trop loin du point idéal.
     let error = shotError(pressure, judged, miss, perfect, this.profile);
     if (kind === 'overhead') {
@@ -1296,12 +1305,18 @@ export class Duel {
     // préparation (au stick : le coup sec, sans tirer le stick vers soi).
     const prepared = engagement.swing && !engagement.swing.prepared ? 0 : (this.tick - engagement.pressTick) * SIM_DT;
     const nearNet = Math.abs(ball.pos.z) < r.lowVolleyNet;
-    const style = shotStyle(kind, volley, outside, player.stick, prepared, this.profile, engagement.swing?.end === 'letGo', {
+    const touchStyle = shotStyle(kind, volley, outside, player.stick, prepared, this.profile, engagement.swing?.end === 'letGo', {
       height: ball.pos.y,
       pressure,
       perfect,
       nearNet,
     });
+    // Raquette qui a attendu la balle : seulement bloquée (moins forte, moins large), sauf un toucher qui l'est déjà
+    // (volée basse, chiquita).
+    const blocked = ahead > 0 && !outside && (kind === 'slice' || kind === 'normal') && (touchStyle === null || touchStyle === 'cut' || touchStyle === 'punch');
+    const style = blocked ? 'block' : touchStyle;
+    // Bloqué alors qu'il était préparé : la vitesse d'un coup bloqué quand même.
+    const blockPower = blocked && prepared >= r.blockPrep ? r.blockSpeed : 1;
     // La volée coupée demande du temps : pressée, elle rate plus souvent (plus haute, plus longue).
     if (style === 'cut') error = Math.min(1, error * (1 + r.pressure.cutRush * pressure));
     const styled = style ? STYLE_TUNING[style] : undefined;
@@ -1324,7 +1339,7 @@ export class Duel {
     if (early) aimed = vec3(aimed.x, aimed.y, aimed.z - player.side * miscue * r.pressure.miscueLong);
     const dip = miscue > 0 && !early ? miscue * r.pressure.miscueDip : 0;
     const target = lateDrift(aimed, player.side, timing, this.profile);
-    this.hit(index, kind, ball.pos, target, perfect, judged, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing, miscue, dip });
+    this.hit(index, kind, ball.pos, target, perfect, judged, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing, miscue, dip, power: blockPower });
   }
 
   /**
@@ -1570,6 +1585,17 @@ export class Duel {
     const speed = dhypot(this.ball.vel.x, this.ball.vel.z);
     const kind = engagement.kind === 'overhead' && plan.contact.y < this.profile.rally.overheadLow ? 'slice' : engagement.kind;
     return this.pressureOf(index, kind, plan.contact.y, speed, 0, plan.tick);
+  }
+
+  /**
+   * Fenêtre normale de la raquette relâchée (s) : volée préparée au filet, plus longue sur une balle lente
+   * (`swingWindow`) ; sinon `swingWindow` du profil. Au-delà, elle n'attend que la balle qui arrive (`earlyWait`).
+   */
+  private racketWindow(engagement: Engagement, ball: Ball, player: DuelPlayer): number {
+    const r = this.profile.rally;
+    const armed = !(engagement.swing && !engagement.swing.prepared) && ((engagement.releaseTick ?? this.tick) - engagement.pressTick) * SIM_DT >= r.blockPrep;
+    const volley = armed && this.bounces === 0 && Math.abs(player.pos.z) < r.volleyZone;
+    return volley ? swingWindow(length(ball.vel), this.profile) : r.swingWindow;
   }
 
   /** Coup dans le vide : relâché sans balle à portée. Le joueur peut réarmer. */

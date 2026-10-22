@@ -155,6 +155,12 @@ export interface RallyTuning {
   swingSlowSpeed: number;
   swingFastSpeed: number;
   /**
+   * Raquette partie en avance sur une balle qui arrive et passera à portée : si elle arrive au plus tant (s) après le
+   * relâcher, la raquette l'attend, au sol comme de volée, préparée ou non. Relâché bien plus tôt : coup dans le vide. Le coup est alors jugé en avance (moins bon), mais il ne part plus dans le vide :
+   * le journal des frappes (22/10) montrait des lobs et des volées ratés à 0,1-0,3 s d'avance.
+   */
+  earlyWait: number;
+  /**
    * Pas d'ajustement : en placement manuel, stick gauche bloqué pendant la préparation, le joueur fait seul
    * les derniers pas vers le point d'impact s'il est à moins de tant (m). Comme le split-step suivi d'un pas des pros :
    * préparer tôt au filet ne fige plus le joueur à côté de la chiquita.
@@ -627,6 +633,7 @@ export const REALISTIC: PhysicsProfile = {
     swingWindowSlow: 0.32, // [à calibrer en jouant]
     swingSlowSpeed: 11,
     swingFastSpeed: 20,
+    earlyWait: 0.5, // [à calibrer en jouant]
     adjustStep: 1.3, // [à calibrer en jouant]
     sweetSpot: 0.45,
     lateDriftLateral: 2.5,

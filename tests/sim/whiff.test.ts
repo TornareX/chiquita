@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest';
+import { Bot, DEFAULT_BOT, type BotOptions } from '../../src/sim/bot';
+import { createBall } from '../../src/sim/ball';
+import { NEUTRAL_ARCADE } from '../../src/sim/commands';
+import { SIM_DT } from '../../src/sim/constants';
+import { Duel, type DuelShot } from '../../src/sim/duel';
+import { HALF_WIDTH } from '../../src/sim/constants';
+import { vec3 } from '../../src/sim/vec3';
+
+/**
+ * Coups dans le vide injustes (journal des frappes, 22/10) : relâché un peu tôt sur une balle qui arrive, la raquette
+ * l'attend ; dehors, après le rebond, la balle se joue même passée de l'autre côté du filet.
+ */
+function play(seconds: number, seed: number, options: BotOptions): { shots: DuelShot[]; whiffs: (string | null)[] } {
+  const duel = new Duel();
+  for (const player of duel.players) player.assist = 'full';
+  const bots = [new Bot(0, seed, options), new Bot(1, seed + 1, options)] as const;
+  const shots: DuelShot[] = [];
+  const whiffs: (string | null)[] = [];
+  while (duel.time < seconds) {
+    duel.step([bots[0].commands(duel), bots[1].commands(duel)]);
+    if (duel.shot && !duel.shot.serve) shots.push(duel.shot);
+    for (const player of duel.players) if (player.lastWhiffTick === duel.tick - 1) whiffs.push(player.lastWhiffReason);
+  }
+  return { shots, whiffs };
+}
+
+describe('raquette partie en avance', () => {
+  it('relâché 0,3 s trop tôt : la balle est frappée, en avance, jamais dans le vide', () => {
+    const { shots, whiffs } = play(60, 7, { ...DEFAULT_BOT, release: { offset: -0.3, spread: 0 } });
+    expect(shots.length).toBeGreaterThan(20);
+    // Plus de coup dans le vide sur une balle qui arrivait : seule reste la balle qui a passé le joueur mal placé.
+    expect(whiffs.filter((reason) => reason !== 'passee')).toEqual([]);
+    // Jugés en avance : presque jamais parfaits (le bot relâche par rapport à son point prévu, pas à la balle).
+    const low = shots.filter((shot) => shot.kind !== 'overhead');
+    expect(low.filter((shot) => shot.perfect).length).toBeLessThan(low.length * 0.1);
+  });
+
+  it('relâché en avance, le coup est moins bon que relâché à temps', () => {
+    const early = play(60, 7, { ...DEFAULT_BOT, release: { offset: -0.3, spread: 0 } }).shots;
+    const onTime = play(60, 7, { ...DEFAULT_BOT, release: { offset: 0, spread: 0 } }).shots;
+    const error = (list: DuelShot[]): number => list.reduce((a, s) => a + s.error, 0) / list.length;
+    expect(error(early)).toBeGreaterThan(error(onTime));
+  });
+});
+
+describe('dehors après le rebond', () => {
+  it('la balle passée de l’autre côté du filet, hors du terrain, se joue encore', () => {
+    const duel = new Duel();
+    for (let i = 0; i < 0.5 / SIM_DT; i++) duel.step();
+    // Échange en cours : le joueur 1 a frappé, la balle a rebondi chez le joueur 0 (camp z < 0) puis est sortie sur le
+    // côté ; dehors, elle a passé la ligne du filet et file vers le joueur 0, sorti la chercher.
+    duel.phase = 'rally';
+    duel.lastHitter = 1;
+    duel.hits = 3;
+    duel.bounces = 1;
+    const x = HALF_WIDTH + 1.5;
+    const player = duel.players[0];
+    player.pos = vec3(x, 0, 1.4);
+    player.vel = vec3(0, 0, 0);
+    duel.players[1].lastHitTick = duel.tick;
+    // Sortie par-dessus la vitre latérale (por tres) : en jeu tant qu'elle ne touche pas le sol dehors.
+    duel.ball = { ...createBall(vec3(x + 0.6, 1, 0.3), vec3(0, 0.5, 3)), out: true };
+    duel.exit = { hitter: 1, wall: 'sidePosX', tick: duel.tick, pos: vec3(HALF_WIDTH, 3, -2) };
+    const hold = { stick: { forward: 0, right: 0 }, shot: 'normal' as const };
+    for (let i = 0; i < 0.1 / SIM_DT; i++) duel.step([hold, NEUTRAL_ARCADE]);
+    const before = player.lastHitTick;
+    for (let i = 0; i < 0.6 / SIM_DT && player.lastHitTick === before; i++) duel.step();
+    expect(player.lastHitTick).not.toBe(before);
+    expect(duel.shot?.player).toBe(0);
+  });
+});
+
+describe('volée au filet, raquette prête', () => {
+  /**
+   * Joueur 1 au filet, figé (sans assistance), balle du joueur 0 qui passe à `side` m de lui. Il prépare puis relâche
+   * `early` s avant qu'elle arrive à sa hauteur : le cas du journal (« j'ai préparé, poussé, et je rate la balle »).
+   */
+  function volleyAt(side: number, early: number): Duel {
+    const duel = new Duel();
+    duel.phase = 'rally';
+    duel.lastHitter = 0;
+    duel.hits = 2;
+    duel.players[0].lastHitTick = duel.tick;
+    const player = duel.players[1];
+    player.pos = player.prevPos = vec3(0, 0, 2.5);
+    player.assist = 'off';
+    duel.ball = createBall(vec3(side, 1.4, -3), vec3(0, 2.5, 10));
+    const hold = { stick: { forward: 0, right: 0 }, shot: 'normal' as const };
+    while (duel.ball!.pos.z < 2.5 - early * 10) duel.step([NEUTRAL_ARCADE, hold]);
+    for (let i = 0; i < 0.8 / SIM_DT && player.lastHitTick === -Infinity && player.lastWhiffTick === -Infinity; i++) duel.step();
+    return duel;
+  }
+
+  it('relâché 0,4 s avant, balle à 1,2 m : volée bloquée, pas dans le vide', () => {
+    const duel = volleyAt(1.2, 0.4);
+    expect(duel.players[1].lastWhiffTick).toBe(-Infinity);
+    expect(duel.shot?.player).toBe(1);
+    expect(duel.shot?.volley).toBe(true);
+    expect(duel.shot?.style).toBe('block');
+  });
+
+  it('balle à 2,5 m : hors de portée, dans le vide', () => {
+    const duel = volleyAt(2.5, 0.25);
+    expect(duel.players[1].lastHitTick).toBe(-Infinity);
+    expect(duel.players[1].lastWhiffReason).toBe('portee');
+  });
+});
