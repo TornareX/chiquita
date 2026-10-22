@@ -41,8 +41,9 @@ un panneau gris arrondi centré, une liste de boutons pâles et un liseré de fo
 
 OWN-WORLD : Fond encre `#0D0B1A` traversé d'une maille violette à 45° (`#7A3CFF` très bas en opacité). Plaques
 `#1B1631` aux coins coupés à 45° ; titres et valeurs en Archivo étroite italique 900, texte courant en Archivo
-normale. Bleu `#2F6BFF` et rouge `#FF4D3D` marquent les équipes en bande épaisse sur la plaque. Le jaune balle
-`#E6FF2E` est réservé au focus et à l'action principale. Petits repères en losange.
+normale. Bleu ciel `#3CC4FF` et rouge `#FF4D3D` (choix du 21/10/2026, étape 8) teintent la plaque d'une équipe
+et son losange, texte encre sur l'un ou l'autre. Le jaune balle `#E6FF2E` est réservé au focus et à l'action
+principale. Petits repères en losange.
 
 STORY : Le joueur comprend d'un coup d'œil où il est (titre d'écran), ce qu'il a sélectionné (la plaque jaune) et
 ce que fait chaque bouton de la manette (barre d'aides en bas). Il lance un match sans lire un mot de trop.

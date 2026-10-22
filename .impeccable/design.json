@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T02:04:30+00:00",
+  "title": "Design System: Padel Smash",
+  "extensions": {
+    "colorMeta": {
+      "ball": {
+        "role": "primary",
+        "displayName": "Jaune balle",
+        "canonical": "#e6ff2e",
+        "oklch": "oklch(95.0% 0.209 116.9)",
+        "tonalRamp": [
+          "oklch(15% 0.073 116.9)",
+          "oklch(25% 0.115 116.9)",
+          "oklch(35% 0.167 116.9)",
+          "oklch(48% 0.209 116.9)",
+          "oklch(60% 0.209 116.9)",
+          "oklch(72% 0.188 116.9)",
+          "oklch(84% 0.126 116.9)",
+          "oklch(95% 0.063 116.9)"
+        ]
+      },
+      "violet": {
+        "role": "secondary",
+        "displayName": "Violet arène",
+        "canonical": "#7a3cff",
+        "oklch": "oklch(55.7% 0.263 289.3)",
+        "tonalRamp": [
+          "oklch(15% 0.092 289.3)",
+          "oklch(25% 0.145 289.3)",
+          "oklch(35% 0.211 289.3)",
+          "oklch(48% 0.263 289.3)",
+          "oklch(60% 0.263 289.3)",
+          "oklch(72% 0.237 289.3)",
+          "oklch(84% 0.158 289.3)",
+          "oklch(95% 0.079 289.3)"
+        ]
+      },
+      "blue": {
+        "role": "tertiary",
+        "displayName": "Bleu ciel (équipe Bleu)",
+        "canonical": "#3cc4ff",
+        "oklch": "oklch(77.4% 0.141 231.9)",
+        "tonalRamp": [
+          "oklch(15% 0.049 231.9)",
+          "oklch(25% 0.077 231.9)",
+          "oklch(35% 0.112 231.9)",
+          "oklch(48% 0.141 231.9)",
+          "oklch(60% 0.141 231.9)",
+          "oklch(72% 0.126 231.9)",
+          "oklch(84% 0.084 231.9)",
+          "oklch(95% 0.042 231.9)"
+        ]
+      },
+      "blue-partner": {
+        "role": "tertiary",
+        "displayName": "Bleu partenaire",
+        "canonical": "#a6e6ff",
+        "oklch": "oklch(89.0% 0.073 224.2)",
+        "tonalRamp": [
+          "oklch(15% 0.026 224.2)",
+          "oklch(25% 0.040 224.2)",
+          "oklch(35% 0.058 224.2)",
+          "oklch(48% 0.073 224.2)",
+          "oklch(60% 0.073 224.2)",
+          "oklch(72% 0.066 224.2)",
+          "oklch(84% 0.044 224.2)",
+          "oklch(95% 0.022 224.2)"
+        ]
+      },
+      "red": {
+        "role": "tertiary",
+        "displayName": "Rouge (équipe Rouge)",
+        "canonical": "#ff4d3d",
+        "oklch": "oklch(67.1% 0.217 29.2)",
+        "tonalRamp": [
+          "oklch(15% 0.076 29.2)",
+          "oklch(25% 0.119 29.2)",
+          "oklch(35% 0.173 29.2)",
+          "oklch(48% 0.217 29.2)",
+          "oklch(60% 0.217 29.2)",
+          "oklch(72% 0.195 29.2)",
+          "oklch(84% 0.130 29.2)",
+          "oklch(95% 0.065 29.2)"
+        ]
+      },
+      "red-partner": {
+        "role": "tertiary",
+        "displayName": "Rouge partenaire",
+        "canonical": "#ff9e94",
+        "oklch": "oklch(79.5% 0.118 26.4)",
+        "tonalRamp": [
+          "oklch(15% 0.041 26.4)",
+          "oklch(25% 0.065 26.4)",
+          "oklch(35% 0.094 26.4)",
+          "oklch(48% 0.118 26.4)",
+          "oklch(60% 0.118 26.4)",
+          "oklch(72% 0.106 26.4)",
+          "oklch(84% 0.071 26.4)",
+          "oklch(95% 0.035 26.4)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Encre",
+        "canonical": "#0d0b1a",
+        "oklch": "oklch(16.1% 0.031 288.5)",
+        "tonalRamp": [
+          "oklch(15% 0.011 288.5)",
+          "oklch(25% 0.017 288.5)",
+          "oklch(35% 0.025 288.5)",
+          "oklch(48% 0.031 288.5)",
+          "oklch(60% 0.031 288.5)",
+          "oklch(72% 0.028 288.5)",
+          "oklch(84% 0.019 288.5)",
+          "oklch(95% 0.009 288.5)"
+        ]
+      },
+      "plate": {
+        "role": "neutral",
+        "displayName": "Plaque",
+        "canonical": "#1b1631",
+        "oklch": "oklch(22.2% 0.052 290.1)",
+        "tonalRamp": [
+          "oklch(15% 0.018 290.1)",
+          "oklch(25% 0.028 290.1)",
+          "oklch(35% 0.041 290.1)",
+          "oklch(48% 0.052 290.1)",
+          "oklch(60% 0.052 290.1)",
+          "oklch(72% 0.046 290.1)",
+          "oklch(84% 0.031 290.1)",
+          "oklch(95% 0.015 290.1)"
+        ]
+      },
+      "plate-raised": {
+        "role": "neutral",
+        "displayName": "Plaque levée",
+        "canonical": "#261f45",
+        "oklch": "oklch(26.9% 0.069 289.4)",
+        "tonalRamp": [
+          "oklch(15% 0.024 289.4)",
+          "oklch(25% 0.038 289.4)",
+          "oklch(35% 0.055 289.4)",
+          "oklch(48% 0.069 289.4)",
+          "oklch(60% 0.069 289.4)",
+          "oklch(72% 0.062 289.4)",
+          "oklch(84% 0.041 289.4)",
+          "oklch(95% 0.021 289.4)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "Blanc",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(25% 0.000 89.9)",
+          "oklch(35% 0.000 89.9)",
+          "oklch(48% 0.000 89.9)",
+          "oklch(60% 0.000 89.9)",
+          "oklch(72% 0.000 89.9)",
+          "oklch(84% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "ink-fg": {
+        "role": "neutral",
+        "displayName": "Texte",
+        "canonical": "#f3f0ff",
+        "oklch": "oklch(96.2% 0.020 295.2)",
+        "tonalRamp": [
+          "oklch(15% 0.007 295.2)",
+          "oklch(25% 0.011 295.2)",
+          "oklch(35% 0.016 295.2)",
+          "oklch(48% 0.020 295.2)",
+          "oklch(60% 0.020 295.2)",
+          "oklch(72% 0.018 295.2)",
+          "oklch(84% 0.012 295.2)",
+          "oklch(95% 0.006 295.2)"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Texte doux",
+        "canonical": "#e4deff",
+        "oklch": "oklch(91.5% 0.045 293.8)",
+        "tonalRamp": [
+          "oklch(15% 0.016 293.8)",
+          "oklch(25% 0.025 293.8)",
+          "oklch(35% 0.036 293.8)",
+          "oklch(48% 0.045 293.8)",
+          "oklch(60% 0.045 293.8)",
+          "oklch(72% 0.041 293.8)",
+          "oklch(84% 0.027 293.8)",
+          "oklch(95% 0.014 293.8)"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Texte éteint",
+        "canonical": "#b3a9de",
+        "oklch": "oklch(76.2% 0.076 293.2)",
+        "tonalRamp": [
+          "oklch(15% 0.027 293.2)",
+          "oklch(25% 0.042 293.2)",
+          "oklch(35% 0.061 293.2)",
+          "oklch(48% 0.076 293.2)",
+          "oklch(60% 0.076 293.2)",
+          "oklch(72% 0.068 293.2)",
+          "oklch(84% 0.045 293.2)",
+          "oklch(95% 0.023 293.2)"
+        ]
+      },
+      "ink-line": {
+        "role": "neutral",
+        "displayName": "Fil",
+        "canonical": "#6e6596",
+        "oklch": "oklch(53.5% 0.076 292.0)",
+        "tonalRamp": [
+          "oklch(15% 0.027 292.0)",
+          "oklch(25% 0.042 292.0)",
+          "oklch(35% 0.061 292.0)",
+          "oklch(48% 0.076 292.0)",
+          "oklch(60% 0.076 292.0)",
+          "oklch(72% 0.069 292.0)",
+          "oklch(84% 0.046 292.0)",
+          "oklch(95% 0.023 292.0)"
+        ]
+      },
+      "quality-good": {
+        "role": "status",
+        "displayName": "Réussi",
+        "canonical": "#3fe39a",
+        "oklch": "oklch(81.5% 0.169 159.1)",
+        "tonalRamp": [
+          "oklch(15% 0.059 159.1)",
+          "oklch(25% 0.093 159.1)",
+          "oklch(35% 0.135 159.1)",
+          "oklch(48% 0.169 159.1)",
+          "oklch(60% 0.169 159.1)",
+          "oklch(72% 0.152 159.1)",
+          "oklch(84% 0.102 159.1)",
+          "oklch(95% 0.051 159.1)"
+        ]
+      },
+      "quality-warn": {
+        "role": "status",
+        "displayName": "Imprécis",
+        "canonical": "#ff8a1f",
+        "oklch": "oklch(74.8% 0.176 55.4)",
+        "tonalRamp": [
+          "oklch(15% 0.062 55.4)",
+          "oklch(25% 0.097 55.4)",
+          "oklch(35% 0.141 55.4)",
+          "oklch(48% 0.176 55.4)",
+          "oklch(60% 0.176 55.4)",
+          "oklch(72% 0.158 55.4)",
+          "oklch(84% 0.105 55.4)",
+          "oklch(95% 0.053 55.4)"
+        ]
+      },
+      "quality-bad": {
+        "role": "status",
+        "displayName": "Raté",
+        "canonical": "#ff3b6b",
+        "oklch": "oklch(66.3% 0.229 12.6)",
+        "tonalRamp": [
+          "oklch(15% 0.080 12.6)",
+          "oklch(25% 0.126 12.6)",
+          "oklch(35% 0.183 12.6)",
+          "oklch(48% 0.229 12.6)",
+          "oklch(60% 0.229 12.6)",
+          "oklch(72% 0.206 12.6)",
+          "oklch(84% 0.138 12.6)",
+          "oklch(95% 0.069 12.6)"
+        ]
+      },
+      "mesh-wire": {
+        "role": "secondary",
+        "displayName": "Fil de maille",
+        "canonical": "rgba(122, 60, 255, 0.16)",
+        "note": "Le violet arène à 16 %, tracé en deux dégradés répétés à ±45° (pas de 33 --ui-px, fil de 1 px) : --mesh."
+      },
+      "pill-bg": {
+        "role": "neutral",
+        "displayName": "Encre de plaque",
+        "canonical": "rgba(13, 11, 26, 0.9)",
+        "note": "Petites plaques du HUD sur la scène 3D."
+      },
+      "panel-bg": {
+        "role": "neutral",
+        "displayName": "Encre de panneau",
+        "canonical": "rgba(13, 11, 26, 0.94)",
+        "note": "Panneaux des écrans annexes sur la scène 3D."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Titre « PADEL SMASH » de l'accueil, italique, capitales, penché de -3°.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "banner": {
+        "displayName": "Banner",
+        "purpose": "Bandeau des effets (por tres) ; italique, capitales.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Titre de chaque écran (menus, annexes) ; italique, capitales, blanc.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "call": {
+        "displayName": "Call",
+        "purpose": "Annonces du match, trois mots au plus ; italique, capitales.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "tile": {
+        "displayName": "Tile",
+        "purpose": "Tuiles de l'accueil (88 pour « Jouer ») ; italique, capitales.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "score-points": {
+        "displayName": "Score-points",
+        "purpose": "Chiffres du tableau (points 52, jeux 42, noms 40) ; italique, tabulaires.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Intertitres, après un losange violet et avant un fil ; italique, capitales, ink-soft.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "value": {
+        "displayName": "Value",
+        "purpose": "Valeur d'un choix à flèches ou d'un interrupteur ; italique, tabulaires.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texte des entrées de menu et des écrans annexes.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "body-hud": {
+        "displayName": "Body-hud",
+        "purpose": "Texte courant du HUD.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Aides, explications, informations ; plancher des menus.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Barre d'aides manette (A Valider, B Retour) ; italique, capitales.",
+        "unit": "--ui-px (1 = 1 px en 1920x1080)"
+      }
+    },
+    "scale": [
+      {
+        "name": "--ui-px",
+        "value": "calc(min(100vw, 100vh * 16 / 9) / 1920)",
+        "purpose": "Unité unique : 1 = 1 px en 1920x1080, suit la fenêtre."
+      },
+      {
+        "name": "--ui-safe-x",
+        "value": "5vw",
+        "purpose": "Zone de sécurité télé, bords gauche et droit."
+      },
+      {
+        "name": "--ui-safe-y",
+        "value": "5vh",
+        "purpose": "Zone de sécurité télé, haut et bas."
+      },
+      {
+        "name": "--ui-frame-x",
+        "value": "max(var(--ui-safe-x), (100vw - 1728 * var(--ui-px)) / 2)",
+        "purpose": "Cadre des menus ; 1728 --ui-px centrés en ultra-large."
+      }
+    ],
+    "bevels": [
+      {
+        "name": "letter",
+        "value": "calc(8 * var(--ui-px))",
+        "purpose": "Case de lettre d'un code ou d'un nom."
+      },
+      {
+        "name": "input",
+        "value": "calc(10 * var(--ui-px))",
+        "purpose": "Champ de saisie."
+      },
+      {
+        "name": "annex",
+        "value": "calc(12 * var(--ui-px))",
+        "purpose": "--ui-bevel : plaques des écrans annexes, messages."
+      },
+      {
+        "name": "menu",
+        "value": "calc(16 * var(--ui-px))",
+        "purpose": "--menu-bevel : entrée de menu."
+      },
+      {
+        "name": "hud",
+        "value": "calc(22 * var(--ui-px))",
+        "purpose": "--hud-bevel : plaques d'équipe du tableau, coin extérieur."
+      },
+      {
+        "name": "call",
+        "value": "calc(28 * var(--ui-px))",
+        "purpose": "Parallélogramme des annonces."
+      },
+      {
+        "name": "tile",
+        "value": "calc(36 * var(--ui-px))",
+        "purpose": "Tuiles de l'accueil."
+      },
+      {
+        "name": "banner",
+        "value": "calc(40 * var(--ui-px))",
+        "purpose": "Bandeau des effets."
+      }
+    ],
+    "patterns": [
+      {
+        "name": "mesh",
+        "value": "repeating-linear-gradient(45deg, rgba(122, 60, 255, 0.16) 0 1px, transparent 1px calc(33 * var(--ui-px))), repeating-linear-gradient(-45deg, rgba(122, 60, 255, 0.16) 0 1px, transparent 1px calc(33 * var(--ui-px)))",
+        "purpose": "Maille violette du fond des menus, des tuiles et des fiches."
+      },
+      {
+        "name": "hud-net-mesh",
+        "value": "repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.45) 0 1.5px, transparent 1.5px 9px), repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.45) 0 1.5px, transparent 1.5px 9px)",
+        "purpose": "Bout de filet du tableau."
+      },
+      {
+        "name": "hud-call-mesh",
+        "value": "repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.14) 0 2px, transparent 2px 20px), repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.14) 0 2px, transparent 2px 20px)",
+        "purpose": "Maille claire sur le violet des grandes annonces."
+      },
+      {
+        "name": "team-plate-blue",
+        "value": "color-mix(in oklab, var(--plate) 74%, var(--blue))",
+        "purpose": "Plaque d'une place Bleu dans les menus."
+      },
+      {
+        "name": "team-plate-red",
+        "value": "color-mix(in oklab, var(--plate) 80%, var(--red))",
+        "purpose": "Plaque d'une place Rouge dans les menus."
+      },
+      {
+        "name": "error-plate",
+        "value": "color-mix(in oklab, var(--plate) 78%, var(--red))",
+        "purpose": "Plaque d'un message d'erreur."
+      }
+    ],
+    "shadows": [
+      {
+        "name": "diamond-ring",
+        "value": "0 0 0 calc(2 * var(--ui-px)) var(--ink)",
+        "purpose": "Anneau d'encre qui détache un losange (3 dans le HUD). Pas une élévation."
+      },
+      {
+        "name": "inset-edge",
+        "value": "inset 0 0 0 calc(3 * var(--ui-px)) var(--team)",
+        "purpose": "Place d'une équipe en ligne ; 4 en rouge pour une place fautive."
+      },
+      {
+        "name": "scene-text",
+        "value": "0 calc(2 * var(--ui-px)) calc(6 * var(--ui-px)) rgba(13, 11, 26, 0.9)",
+        "purpose": "text-shadow d'un texte des écrans annexes posé sans plaque sur la 3D."
+      },
+      {
+        "name": "title-offset",
+        "value": "calc(7 * var(--ui-px)) calc(7 * var(--ui-px)) 0 var(--violet)",
+        "purpose": "text-shadow de « SMASH » sur l'accueil uniquement ; exception de la maquette, à ne pas réutiliser."
+      }
+    ],
+    "motion": [
+      {
+        "name": "focus-bounce",
+        "value": "transform 220ms cubic-bezier(0.3, 1.9, 0.55, 1)",
+        "purpose": "Glissement du focus d'une plaque (12 --ui-px, 16 vers le haut pour une tuile)."
+      },
+      {
+        "name": "call-slam",
+        "value": "160ms cubic-bezier(0.2, 0.9, 0.3, 1) ; scale 1.35 -> 0.96 -> 1, opacity 0 -> 1",
+        "purpose": "Arrivée d'une annonce du match (duelHud.ts)."
+      },
+      {
+        "name": "seat-lit",
+        "value": "1s cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Place allumée quand sa manette se signale."
+      },
+      {
+        "name": "waiting-pulse",
+        "value": "0.8s ease-in-out infinite alternate, opacity -> 0.3",
+        "purpose": "Losange d'une attente."
+      },
+      {
+        "name": "hud-fade",
+        "value": "opacity 0.25s / 0.3s",
+        "purpose": "Retour des frappes et ligne des joueurs."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce)",
+        "purpose": "Coupe le glissement, le claquement et les battements."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "720p",
+        "value": "1280x720"
+      },
+      {
+        "name": "1080p",
+        "value": "1920x1080 (référence, 1 --ui-px = 1 px)"
+      },
+      {
+        "name": "4k",
+        "value": "3840x2160"
+      },
+      {
+        "name": "4-3",
+        "value": "4:3, échelle 16:9 conservée"
+      },
+      {
+        "name": "ultra-large",
+        "value": "plus large que 16:9, cadre de 1728 --ui-px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Entrée de menu",
+      "kind": "button",
+      "refersTo": "menu-plate",
+      "description": "Plaque de maille au repos, survol en plaque levée, focus jaune balle qui glisse avec un rebond.",
+      "html": "<div class=\"ds-plate\" tabindex=\"0\"><span>Niveau des IA</span><b class=\"ds-value\">Normale</b></div>",
+      "css": ".ds-plate { --bevel: calc(16 * var(--ui-px)); display: flex; justify-content: space-between; align-items: center; min-height: calc(52 * var(--ui-px)); padding: 0 calc(26 * var(--ui-px)); background: var(--plate); color: var(--ink-fg); font: 600 calc(24 * var(--ui-px))/1.3 var(--ui-font-text); outline: none; transition: transform 220ms cubic-bezier(0.3, 1.9, 0.55, 1); clip-path: polygon(var(--bevel) 0, 100% 0, 100% calc(100% - var(--bevel)), calc(100% - var(--bevel)) 100%, 0 100%, 0 var(--bevel)); } .ds-plate:hover { background: var(--plate-raised); } .ds-plate:focus-visible { background: var(--ball); color: var(--ink); transform: translateX(calc(12 * var(--ui-px))); } .ds-value { font-family: var(--ui-font-brand); font-stretch: 75%; font-style: italic; font-weight: 900; font-size: calc(27 * var(--ui-px)); font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Action principale",
+      "kind": "button",
+      "refersTo": "menu-plate-primary",
+      "description": "« Lancer » / « Reprendre » : liseré et mot jaune balle au repos, plaque pleine au focus.",
+      "html": "<button class=\"ds-primary\">Lancer</button>",
+      "css": ".ds-primary { --bevel: calc(16 * var(--ui-px)); position: relative; isolation: isolate; border: 0; min-height: calc(76 * var(--ui-px)); padding: 0 calc(36 * var(--ui-px)); background: var(--ball); color: var(--ball); font-size: calc(40 * var(--ui-px)); letter-spacing: 0.02em; transition: transform 220ms cubic-bezier(0.3, 1.9, 0.55, 1); font-family: var(--ui-font-brand); font-stretch: 62%; font-style: italic; font-weight: 900; text-transform: uppercase; clip-path: polygon(var(--bevel) 0, 100% 0, 100% calc(100% - var(--bevel)), calc(100% - var(--bevel)) 100%, 0 100%, 0 var(--bevel)); } .ds-primary::after { content: ''; position: absolute; inset: calc(3 * var(--ui-px)); z-index: -1; --bevel: calc(15 * var(--ui-px)); background: var(--plate); clip-path: polygon(var(--bevel) 0, 100% 0, 100% calc(100% - var(--bevel)), calc(100% - var(--bevel)) 100%, 0 100%, 0 var(--bevel)); } .ds-primary:hover::after { background: var(--plate-raised); } .ds-primary:focus-visible { color: var(--ink); outline: none; transform: translateX(calc(12 * var(--ui-px))); } .ds-primary:focus-visible::after { background: var(--ball); }"
+    },
+    {
+      "name": "Tuile d'accueil",
+      "kind": "card",
+      "refersTo": "menu-tile",
+      "description": "Grande plaque maillée de l'accueil, mot en bas ; au focus elle devient jaune et monte.",
+      "html": "<button class=\"ds-tile\"><span class=\"ds-tile-word\">Jouer</span><span class=\"ds-tile-hint\">Un match sur cet écran, contre l'IA ou entre amis.</span></button>",
+      "css": ".ds-tile { --bevel: calc(36 * var(--ui-px)); display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; width: calc(400 * var(--ui-px)); min-height: calc(360 * var(--ui-px)); padding: 0 calc(32 * var(--ui-px)) calc(30 * var(--ui-px)); border: 0; background: var(--mesh), var(--plate); color: var(--ink-fg); text-align: left; transition: transform 220ms cubic-bezier(0.3, 1.9, 0.55, 1); clip-path: polygon(var(--bevel) 0, 100% 0, 100% calc(100% - var(--bevel)), calc(100% - var(--bevel)) 100%, 0 100%, 0 var(--bevel)); } .ds-tile-word { font-family: var(--ui-font-brand); font-stretch: 62%; font-style: italic; font-weight: 900; text-transform: uppercase; font-size: calc(56 * var(--ui-px)); line-height: 0.9; } .ds-tile-hint { margin-top: calc(12 * var(--ui-px)); color: var(--ink-muted); font: 600 calc(22 * var(--ui-px))/1.3 var(--ui-font-text); } .ds-tile:hover { background: var(--mesh), var(--plate-raised); } .ds-tile:focus-visible { outline: none; background: var(--mesh), var(--ball); color: var(--ink); transform: translateY(calc(-16 * var(--ui-px))); } .ds-tile:focus-visible .ds-tile-hint { color: var(--ink); }"
+    },
+    {
+      "name": "Champ de saisie",
+      "kind": "input",
+      "refersTo": "text-input",
+      "description": "Champ d'encre coupé à 45° dans la plaque ; curseur jaune balle.",
+      "html": "<input class=\"ds-input\" placeholder=\"Ton nom\">",
+      "css": ".ds-input { --bevel: calc(10 * var(--ui-px)); height: calc(40 * var(--ui-px)); padding: 0 calc(16 * var(--ui-px)); border: 0; background: var(--ink); color: var(--ink-fg); caret-color: var(--ball); font: 700 calc(24 * var(--ui-px)) var(--ui-font-text); outline: none; clip-path: polygon(var(--bevel) 0, 100% 0, 100% calc(100% - var(--bevel)), calc(100% - var(--bevel)) 100%, 0 100%, 0 var(--bevel)); } .ds-input::placeholder { color: var(--ink-muted); } .ds-input:focus-visible { box-shadow: inset 0 0 0 calc(3 * var(--ui-px)) var(--ball); }"
+    },
+    {
+      "name": "Intertitre",
+      "kind": "nav",
+      "refersTo": "title",
+      "description": "Losange violet, le mot en étroite italique 900, puis un fil jusqu'au bord.",
+      "html": "<h3 class=\"ds-heading\">Règles</h3>",
+      "css": ".ds-heading { display: flex; align-items: center; gap: calc(14 * var(--ui-px)); margin: 0; color: var(--ink-soft); font-size: calc(26 * var(--ui-px)); letter-spacing: 0.04em; font-family: var(--ui-font-brand); font-stretch: 62%; font-style: italic; font-weight: 900; text-transform: uppercase; } .ds-heading::before { content: ''; width: calc(12 * var(--ui-px)); height: calc(12 * var(--ui-px)); background: var(--violet); transform: rotate(45deg); } .ds-heading::after { content: ''; flex: 1; height: 1px; background: var(--ink-line); }"
+    },
+    {
+      "name": "Bandeau d'équipe",
+      "kind": "chip",
+      "refersTo": "team-heading-blue",
+      "description": "Nom d'une équipe en parallélogramme, à sa couleur, texte encre.",
+      "html": "<span class=\"ds-team ds-team-blue\">Bleu</span> <span class=\"ds-team ds-team-red\">Rouge</span>",
+      "css": ".ds-team { display: inline-block; padding: calc(4 * var(--ui-px)) calc(34 * var(--ui-px)) calc(4 * var(--ui-px)) calc(24 * var(--ui-px)); color: var(--ink); font-size: calc(32 * var(--ui-px)); letter-spacing: 0.06em; font-family: var(--ui-font-brand); font-stretch: 62%; font-style: italic; font-weight: 900; text-transform: uppercase; clip-path: polygon(calc(14 * var(--ui-px)) 0, 100% 0, calc(100% - calc(14 * var(--ui-px))) 100%, 0 100%); } .ds-team-blue { background: var(--blue); } .ds-team-red { background: var(--red); }"
+    },
+    {
+      "name": "Aides manette",
+      "kind": "nav",
+      "refersTo": "pad-key",
+      "description": "Barre du bas : touche A pleine blanche, touche B en anneau, libellés en étroite italique 800.",
+      "html": "<div class=\"ds-pad-hints\"><span class=\"ds-pad-hint\"><i class=\"ds-key ds-key-on\">A</i>Valider</span><span class=\"ds-pad-hint\"><i class=\"ds-key\">B</i>Retour</span></div>",
+      "css": ".ds-pad-hints { display: flex; gap: calc(34 * var(--ui-px)); color: var(--ink-fg); font-family: var(--ui-font-brand); font-size: calc(21 * var(--ui-px)); font-stretch: 80%; font-style: italic; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; } .ds-pad-hint { display: flex; align-items: center; gap: calc(10 * var(--ui-px)); } .ds-key { display: grid; place-items: center; width: calc(36 * var(--ui-px)); height: calc(36 * var(--ui-px)); box-sizing: border-box; border: calc(3 * var(--ui-px)) solid var(--white); border-radius: 50%; font-size: calc(19 * var(--ui-px)); font-stretch: 100%; font-style: normal; font-weight: 900; } .ds-key-on { background: var(--white); color: var(--ink); }"
+    },
+    {
+      "name": "Tableau de score",
+      "kind": "custom",
+      "refersTo": "score-team-blue",
+      "description": "Plaque Bleu | jeux | points | filet | points | jeux | plaque Rouge, au centre du haut.",
+      "html": "<div class=\"ds-board\"><div class=\"ds-board-team ds-board-blue\"><i class=\"ds-diamond\"></i>Bleu</div><div class=\"ds-board-games\">1</div><div class=\"ds-board-points\">15</div><div class=\"ds-board-net\"></div><div class=\"ds-board-points\">30</div><div class=\"ds-board-games\">0</div><div class=\"ds-board-team ds-board-red\">Rouge</div></div>",
+      "css": ".ds-board { display: flex; height: calc(70 * var(--ui-px)); font-variant-numeric: tabular-nums; font-family: var(--ui-font-brand); font-stretch: 62%; font-style: italic; font-weight: 900; text-transform: uppercase; } .ds-board-team { display: flex; align-items: center; gap: calc(16 * var(--ui-px)); width: calc(212 * var(--ui-px)); padding: 0 calc(24 * var(--ui-px)); box-sizing: border-box; color: var(--ink); font-size: calc(40 * var(--ui-px)); } .ds-board-blue { justify-content: flex-end; background: var(--blue); clip-path: polygon(calc(22 * var(--ui-px)) 0, 100% 0, 100% 100%, 0 100%, 0 calc(22 * var(--ui-px))); } .ds-board-red { background: var(--red); clip-path: polygon(0 0, calc(100% - 22 * var(--ui-px)) 0, 100% calc(22 * var(--ui-px)), 100% 100%, 0 100%); } .ds-board-games { display: grid; place-items: center; width: calc(56 * var(--ui-px)); background: var(--ink); color: var(--white); font-size: calc(42 * var(--ui-px)); } .ds-board-points { display: grid; place-items: center; width: calc(96 * var(--ui-px)); background: var(--white); color: var(--ink); font-size: calc(52 * var(--ui-px)); } .ds-board-net { width: calc(22 * var(--ui-px)); background: repeating-linear-gradient(45deg, rgba(255,255,255,0.45) 0 1.5px, transparent 1.5px 9px), repeating-linear-gradient(-45deg, rgba(255,255,255,0.45) 0 1.5px, transparent 1.5px 9px), var(--ink); } .ds-diamond { width: calc(15 * var(--ui-px)); height: calc(15 * var(--ui-px)); background: var(--ball); box-shadow: 0 0 0 calc(3 * var(--ui-px)) var(--ink); rotate: 45deg; }"
+    },
+    {
+      "name": "Annonce",
+      "kind": "custom",
+      "refersTo": "call-plate-big",
+      "description": "Trois mots sur une plaque penchée de -4° ; ton « call » en violet maillé, texte jaune balle ; la raison dessous.",
+      "html": "<div class=\"ds-call\"><div class=\"ds-call-main\">Por tres !</div><div class=\"ds-call-sub\">La balle sort par la porte</div></div>",
+      "css": ".ds-call { display: inline-flex; flex-direction: column; align-items: center; rotate: -4deg; } .ds-call-main { padding: calc(4 * var(--ui-px)) calc(46 * var(--ui-px)) calc(8 * var(--ui-px)); background: repeating-linear-gradient(45deg, rgba(255,255,255,0.14) 0 2px, transparent 2px 20px), repeating-linear-gradient(-45deg, rgba(255,255,255,0.14) 0 2px, transparent 2px 20px), var(--violet); color: var(--ball); font-size: calc(62 * var(--ui-px)); line-height: 1; letter-spacing: 0.01em; white-space: nowrap; font-family: var(--ui-font-brand); font-stretch: 62%; font-style: italic; font-weight: 900; text-transform: uppercase; clip-path: polygon(calc(28 * var(--ui-px)) 0, 100% 0, calc(100% - calc(28 * var(--ui-px))) 100%, 0 100%); } .ds-call-sub { margin-top: calc(-6 * var(--ui-px)); padding: calc(4 * var(--ui-px)) calc(26 * var(--ui-px)) calc(5 * var(--ui-px)); background: var(--ink); color: var(--ink-fg); font: italic 700 calc(24 * var(--ui-px)) var(--ui-font-text); font-stretch: 85%; clip-path: polygon(calc(12 * var(--ui-px)) 0, 100% 0, calc(100% - calc(12 * var(--ui-px))) 100%, 0 100%); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Le grillage fait l'interface",
+    "overview": "Chaque pièce de l'interface vient du court de padel, et d'abord de son grillage : des plaques aux coins coupés à 45° comme une maille, des bandeaux en parallélogramme, des losanges pour les repères, et la maille elle-même tendue en fond, violette et discrète, sur une encre presque noire. L'énergie est celle d'un jeu de sport compétitif ; le niveau visuel, celui d'une retransmission de padel professionnel, sans copier ni l'un ni l'autre. Tout se lit depuis un canapé, à 2 ou 3 m d'une télé, manette en main.\n\nLa densité est faible et le contraste fort : peu de plaques, grandes, des titres criés en Archivo étroite italique 900 et en capitales, un texte courant en Archivo droite, court et en français. Le jaune balle est le seul accent chaud : il dit « c'est ici » (le focus, l'action principale) ou « c'est maintenant » (service, punto de oro, por tres). Le violet de l'arène porte la maille, les intertitres et les grandes annonces ; le bleu ciel et le rouge appartiennent aux équipes, et à elles seules.\n\nEn match, l'interface se tient sur les bords et en haut de l'écran, dans la zone de sécurité télé, et ne passe jamais sur le court, la balle, les joueurs ni les vitres. Ce monde refuse le menu de jeu web par défaut (panneau gris arrondi centré, boutons pâles, liseré de focus) et le HUD de pastilles grises semi-transparentes en police système.",
+    "keyCharacteristics": [
+      "Plaques biseautées à 45° en `clip-path`, jamais d'arrondi (hors les touches de manette dessinées).",
+      "Encre `ink` maillée de violet en fond ; plaques `plate` posées directement dessus, sans panneau.",
+      "Archivo variable embarquée : étroite italique 900 en capitales pour titres, valeurs et chiffres ; droite pour le texte.",
+      "Jaune balle réservé au focus, à l'action principale et à l'instant fort.",
+      "Une seule échelle, `--ui-px` : 1 unité = 1 px en 1920×1080, qui suit la fenêtre (720p à 4K, 4:3, ultra-large).",
+      "Aucune ombre d'élévation, aucun flou : la profondeur vient des aplats et du biseau."
+    ],
+    "rules": [
+      {
+        "name": "The Ball Rule",
+        "body": "Le jaune balle ne marque que deux choses : où est le focus (et l'action principale), et l'instant fort du match. Un titre, un décor ou un état ordinaire n'est jamais jaune.",
+        "section": "colors"
+      },
+      {
+        "name": "The Team Ownership Rule",
+        "body": "Bleu et rouge n'appartiennent qu'aux équipes et aux joueurs, d'une seule source (`src/render/teamColors.ts`, repris par `theme.css`). Le bleu reste nettement plus clair que le rouge (daltonisme).",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-On-Color Rule",
+        "body": "Tout texte posé sur bleu, rouge ou jaune est en encre, jamais en blanc.",
+        "section": "colors"
+      },
+      {
+        "name": "The Shout-And-Say Rule",
+        "body": "Ce qui se crie (titres, valeurs, chiffres, annonces, tuiles) est en étroite italique 900 et en capitales ; ce qui s'explique est en Archivo droite, en casse normale. Pas de troisième voix.",
+        "section": "typography"
+      },
+      {
+        "name": "The Couch Floor Rule",
+        "body": "Le texte courant vise 24 `--ui-px` dans les menus et 22 dans le HUD ; aucun texte de menu sous 20. Les panneaux qui doivent tenir en 720p (labo, retour des entrées, aide) gardent un plancher en pixels (12 à 13 px).",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Plate Rule",
+        "body": "Une plaque ne flotte jamais : elle change de teinte (repos, survol, focus) et glisse, elle ne prend pas d'ombre.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do mesurer toute taille en `--ui-px` (1 = 1 px en 1920×1080) et garder tout texte utile dans la zone de sécurité de 5 %.",
+      "Do couper les plaques à 45° en `clip-path` (biseau de 8 à 36 selon la taille) et dessiner les repères en losanges.",
+      "Do réserver le jaune balle `#e6ff2e` au focus, à l'action principale et à l'instant fort du match.",
+      "Do écrire en encre `#0d0b1a` sur le bleu, le rouge et le jaune.",
+      "Do prendre les couleurs d'équipe dans `theme.css` (`--blue`, `--red` et leurs partenaires), alignées sur `src/render/teamColors.ts`.",
+      "Do écrire titres, valeurs et chiffres en Archivo étroite italique 900 et en capitales, le reste en Archivo droite.",
+      "Do accompagner chaque couleur de qualité de son mot (« parfait ! », « raté »).",
+      "Do couper le glissement du focus et le claquement des annonces quand le mouvement réduit est demandé."
+    ],
+    "donts": [
+      "Don't arrondir une plaque, un panneau ou un bouton : seules les touches de manette dessinées sont rondes.",
+      "Don't poser une ombre portée, un flou ou un `backdrop-filter` sur l'interface ; le HUD ne doit rien coûter pendant l'échange.",
+      "Don't mettre de l'interface sur le court, la balle, les joueurs ou les vitres.",
+      "Don't écrire du texte blanc sur une couleur d'équipe ni sur le jaune balle.",
+      "Don't utiliser le bleu ou le rouge pour autre chose qu'une équipe, un joueur ou une erreur.",
+      "Don't reprendre l'ombre violette décalée de « SMASH » ailleurs : c'est une exception du titre de l'accueil, venue de la maquette choisie, pas un procédé du monde.",
+      "Don't charger une police ou une image depuis un service tiers : Archivo est embarquée.",
+      "Don't dépasser trois mots dans une annonce de match."
+    ]
+  }
+}

@@ -16,7 +16,7 @@ compétitive à la Rocket League, niveau visuel d'une retransmission Premier Pad
 |---|---|
 | Formes | Plaques biseautées à 45° (les mailles du grillage) ; bandeaux en parallélogramme ; losanges pour les petits repères ; motif de maille en fond, discret |
 | Typo | Archivo (licence OFL) : étroite, italique, 900 pour les titres et chiffres ; Archivo normale pour le texte courant |
-| Couleurs | Encre `#0D0B1A` (fond) · bleu `#2F6BFF` · rouge `#FF4D3D` · **balle `#E6FF2E` = l'action et le focus** · violet arène `#7A3CFF` · blanc |
+| Couleurs | Encre `#0D0B1A` (fond) · bleu `#3CC4FF` (bleu ciel depuis l'étape 8 ; `#2F6BFF` au départ) · rouge `#FF4D3D` · **balle `#E6FF2E` = l'action et le focus** · violet arène `#7A3CFF` · blanc |
 | Ton | Court, crié pour les moments forts (« POR TRES ! », « POINT ! »), clair partout ailleurs. Tout en français |
 
 Règles qui valent partout :
@@ -370,6 +370,46 @@ canapé (§5, étape 1). Ses avis sur le HUD se jugent à la manette, pas sur pa
    - Le jugement depuis le canapé, à la manette.
 10. **Finitions** : `audit`, `harden` (noms longs, 4 manettes, déconnexion, 4:3, 1366×768, 4K, ultra-large),
     `clarify`, `polish`, `detect`. Captures après dans `screenshots/design/apres/`.
+    *Fait.* Relectures `audit`, `harden`, `clarify`, `polish`, `detect`, puis relecture finale et `DESIGN.md`.
+    - **Textes** (`clarify`) : plus d'espagnol dans le décor (« ALLEZ ! » et « POR TRES ! » sur les panneaux LED,
+      « sortie de piste »), « (absente) » pour une manette débranchée, « Ma place par défaut » (intertitre des
+      Réglages), raison « rebond dans son camp », « smash » partout dans l'aide (plus de « remate »), IA en ligne
+      nommée comme ailleurs (« IA normale », avant « IA normal »), plus de « Partie en pause. » sous « PAUSE », serveur
+      introuvable : « vérifie ta connexion, puis réessaie » (avant : « npm run serveur »), « tu te places, puis tu
+      vises ».
+    - **Tailles** (`harden`) : le script des captures couvre 1366×768, 4:3 (1024×768), 4K et ultra-large (2560×1080)
+      en plus de 720p et 1080p (`TAILLES=…` pour n'en prendre que certaines). Ultra-large : les menus tiennent dans
+      un cadre centré de 1728 `--ui-px` (`--ui-frame-x`), le HUD reste dans les coins. 4K : tout suit `--ui-px`, y
+      compris les dessins du retour des entrées et du guide du geste (taille en px à 1080p, plus grands au-delà).
+      Noms longs (20 lettres) en salle : tiennent. « Qui joue avec quoi » : une seule colonne d'encre, le losange
+      reste devant la première ligne d'un nom long.
+    - **Points de l'étape 9** : labo dans la zone de sécurité, sous « qui joue avec quoi », **sensations repliées**
+      (choix de Xavier) : tient sans défiler en 1080p ; retour des entrées et guide du geste dans la zone de sécurité ;
+      verdict et gros indice du tutoriel remontés sur le bandeau LED ; étoiles dessinées (SVG) ; fond presque opaque
+      sous la carte d'une leçon. Barre d'aides manette sur la carte : plus tard (choix de Xavier).
+    - **Audit** : contrastes vérifiés (texte ≥ 4,6 sur toutes les plaques), focus visible sur les listes déroulantes
+      du labo et du test manette (le coin coupé masquait le contour), planchers à 12 px, compteur d'échange libre moins
+      serré. `?perf` (double IA contre IA, 1080p) : 60 i/s, pire image 16,8 ms, ~3 mises en page/s, comme à l'étape 8.
+      `detect` : rien sur les CSS hormis le rebond accepté ; sur l'accueil servi, un « low-contrast » qui lit l'encre
+      sous la plaque jaune (faux positif : 9,5:1).
+    - **Relecture finale** (agent `impeccable-finish-reviewer`, lancé par un agent neuf qui charge sa définition, la
+      session ne l'ayant pas chargé) sur les captures des six tailles. Tour 1 : fin du match (choix de Xavier : la
+      bande garde le score de chaque set), bandeau de coupure à la place des annonces au lieu du milieu du court,
+      encart réseau réduit au ping pour les joueurs (détail avec `?debug`), seed des contrats décrit tel quel. Tour 2 :
+      l'annonce de fin passe en bas de l'écran (elle cachait le joueur du fond), les annonces se taisent pendant la
+      coupure. **Verdict final : `fix`**, avec ces points ouverts : (1) la ligne FORM des contrats n'a pas de seed
+      (monde imposé par Xavier, son accord explicite n'est pas cité) ; (5) textes du labo à ~11-12 px en 720p,
+      « SENSATIONS » coupé au bord du défilement ; (6) 4:3 trop petit (reporté par Xavier) ; (7) la ligne d'un nom long
+      de « qui joue avec quoi » passe à la ligne, le bandeau LED se devine à travers les plaques ; (8) l'ombre violette
+      décalée, sans flou, de « SMASH » (reprise de la maquette choisie, refusée par le plancher d'Impeccable).
+    - **`DESIGN.md`** à la racine et `.impeccable/design.json`, écrits par l'agent `impeccable-documenter` à partir du
+      rendu construit. `embed-prompt --scan` : aucune image livrée par le jeu (seulement trois modèles `.glb`).
+    - Capture `29-annonce-point` en 1080p, 4K et ultra-large : l'annonce du point est déjà remplacée par le service
+      quand la capture tombe (capture lente d'un grand écran pendant que le jeu tourne) ; visible en 720p, 768p et
+      4:3, et vérifiée en direct en 1080p.
+    Restent : les points ouverts ci-dessus (à trancher par Xavier) ; dans le labo détaillé, le guide du geste peut
+    couvrir l'aide en bas à droite ; le bandeau « POR TRES ! » couvre brièvement le bas du tableau (choix de l'étape
+    8) ; la barre d'aides sur la carte d'une leçon ; le jugement depuis le canapé, à la manette, de toute la passe.
 
 Les outils de développement (animations, perf, machine à balles) gardent un style neutre commun, sans passe design.
 
