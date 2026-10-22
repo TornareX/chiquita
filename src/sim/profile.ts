@@ -815,14 +815,17 @@ export const REALISTIC: PhysicsProfile = {
       spin: -0.3,
     },
     feinte: {
-      speed: 9, // ~32 km/h : lente, elle surprend l'adversaire qui recule pour le smash [à calibrer en jouant]
-      speedPerfect: 9,
-      clearance: 0.5,
+      // Profonde et basse, comme la décrit Xavier (22/10) : premier rebond vers 7,5 m, elle arrive dans la vitre à 35-45 cm
+      // du sol et y meurt. À 9 m/s, visée à 5,5 m, elle montait à 2,4 m depuis le fond et retombait avant la vitre : un
+      // lob. ~47 km/h : bien moins qu'un smash, l'adversaire qui recule pour le smash est surpris. [à calibrer en jouant]
+      speed: 13,
+      speedPerfect: 13,
+      clearance: 0.3,
       flightTime: 0,
       flightTimePerfect: 0,
-      depthShort: 4,
-      depthNeutral: 5.5,
-      depthLong: 6.5,
+      depthShort: 6,
+      depthNeutral: 7.5,
+      depthLong: 8.5,
       spin: -0.6,
     },
     vibora: {

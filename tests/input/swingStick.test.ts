@@ -201,12 +201,13 @@ describe('au-dessus de la tête', () => {
     expect(rally(lob, { prepared: true, end: 'letGo' })?.overhead).toBe('feinte');
   });
 
-  it('feinte de smash : lente, elle rebondit chez l’adversaire', () => {
+  it('feinte de smash : bien plus lente que le smash, profonde chez l’adversaire', () => {
     const feinte = rally(lob, { prepared: true, end: 'letGo' })!;
     const smash = rally(lob, { prepared: true, end: 'straight' })!;
-    expect(feinte.speed).toBeLessThan(smash.speed / 3);
-    expect(feinte.target.z).toBeGreaterThan(3);
-    expect(feinte.target.z).toBeLessThan(8);
+    expect(feinte.speed).toBeLessThan(smash.speed / 2.4);
+    // Profonde (Xavier, 22/10) : elle rebondit au fond et meurt dans la vitre.
+    expect(feinte.target.z).toBeGreaterThan(6);
+    expect(feinte.target.z).toBeLessThan(9);
   });
 
   it('smash de trop loin : il reste dans le terrain, l’adversaire peut contrer (pas de por tres)', () => {

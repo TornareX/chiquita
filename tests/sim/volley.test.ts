@@ -67,3 +67,31 @@ describe('volée coupée', () => {
     expect(duel.shot?.style).toBe('cut');
   });
 });
+
+describe('feinte de smash', () => {
+  it('profonde et basse : rebondit au fond, arrive basse dans la vitre (pas un lob)', () => {
+    // Le cas du journal : jouée de loin (6,5 m du filet), à 1,4 m de haut.
+    const contact = vec3(0, 1.4, -6.5);
+    const target = vec3(0, 0.03, ARCADE.rally.feinte.depthNeutral);
+    const solved = solveShot('feinte', contact, target, false, ARCADE);
+    const ball = createBall(contact, solved.vel, solved.spin);
+    const contacts: { surface: string; pos: { y: number; z: number } }[] = [];
+    let apex = ball.pos.y;
+    let bounce: number | null = null;
+    let glass: number | null = null;
+    for (let t = 0; t < 3 && glass === null; t += SIM_DT) {
+      contacts.length = 0;
+      stepBall(ball, SIM_DT, ARCADE, contacts as never);
+      apex = Math.max(apex, ball.pos.y);
+      for (const c of contacts) {
+        if (c.surface === 'ground' && bounce === null) bounce = c.pos.z;
+        if (c.surface === 'glass') glass = c.pos.y;
+      }
+    }
+    // Avant : sommet 2,4 m, rebond à 5,5 m, second rebond avant la vitre.
+    expect(apex).toBeLessThan(2);
+    expect(bounce).toBeGreaterThan(6.5);
+    expect(glass).not.toBeNull();
+    expect(glass!).toBeLessThan(0.6);
+  });
+});
