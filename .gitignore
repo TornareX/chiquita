@@ -25,3 +25,6 @@ research/vt4/private/
 **/.impeccable/live/deferred-svelte-component-accepts.json
 **/.impeccable/live/*.png
 # impeccable-ignore-end
+
+# Journal des frappes (?journal=1)
+journal/

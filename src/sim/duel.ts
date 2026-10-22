@@ -95,6 +95,9 @@ export interface Engagement {
    * point idéal. `timing` : relâcher par rapport à son passage au point idéal (s), négatif = en avance.
    */
   counterWall?: { timing: number | null };
+  /** Raison pour laquelle la balle n'était pas jouable au dernier pas, et le timing à ce pas (journal des frappes). */
+  missReason?: WhiffReason;
+  missTiming?: number;
 }
 
 /**
@@ -147,6 +150,10 @@ export interface DuelPlayer {
   lastWhiffKind: ShotKind | null;
   /** Le dernier coup dans le vide a été relâché après le moment prévu : la balle était passée. */
   lastWhiffLate: boolean;
+  /** Pourquoi la balle n'était pas jouable au dernier pas avant ce coup dans le vide (journal des frappes). */
+  lastWhiffReason: WhiffReason | null;
+  /** Timing (s) à ce dernier pas : négatif = la balle n'était pas encore au point idéal. */
+  lastWhiffTiming: number | null;
   /** Taille du joueur (m) : la bandeja et la víbora se frappent légèrement au-dessus de sa tête. */
   height: number;
   /** Main qui tient la raquette : son côté est celui du coup droit et des coups au-dessus de la tête. */
@@ -190,7 +197,15 @@ export interface DuelShot {
   counterWall?: boolean;
   /** Volée d'une balle lourde mal contrôlée, de 0 à 1 : elle file dans la vitre adverse ou dans le filet. */
   miscue?: number;
+  /** Temps de préparation (s), de l'appui au contact ; 0 sans préparation (journal des frappes). */
+  prepared?: number;
 }
+
+/**
+ * Raison d'un coup dans le vide, lue au dernier pas où la balle n'était pas jouable : pas encore dans son camp,
+ * trop haute ou trop basse, hors de portée, déjà passée, ou une règle (service, balle sortie, laissée passer).
+ */
+export type WhiffReason = 'camp' | 'hauteur' | 'portee' | 'passee' | 'regle' | 'contreVitre';
 
 /**
  * Contre-vitre possible pour un joueur (`Duel.counterWall`) : après son rebond, la balle l'a passé et file vers sa
@@ -479,6 +494,8 @@ function createDuelPlayer(index: number, format: DuelFormat): DuelPlayer {
     lastWhiffTick: -Infinity,
     lastWhiffKind: null,
     lastWhiffLate: false,
+    lastWhiffReason: null,
+    lastWhiffTiming: null,
     height: PLAYER_HEIGHT,
     hand: 'right',
     assist: 'magnet',
@@ -1176,7 +1193,10 @@ export class Duel {
       const timing = engagement.counterWall.timing;
       if (chance?.playable && chance.timing >= 0 && timing !== null) return this.counterWallHit(index, chance, timing);
       const gone = chance ? chance.timing > r.counterWall.late : !this.passesBehind(index);
-      if (gone || elapsed >= r.counterWall.wait) this.whiff(index);
+      if (gone || elapsed >= r.counterWall.wait) {
+        engagement.missReason = 'contreVitre';
+        this.whiff(index);
+      }
       return;
     }
     // Au-dessus de la tête : la balle se prend haute, à la hauteur prévue par la course assistée.
@@ -1209,6 +1229,9 @@ export class Duel {
       flatDistance(ball.pos, player.pos) <= reach &&
       timing <= lateWindow;
     if (!playable) {
+      engagement.missReason =
+        ball.pos.z * player.side <= 0 ? 'camp' : !heightOk ? 'hauteur' : timing > lateWindow ? 'passee' : flatDistance(ball.pos, player.pos) > reach ? 'portee' : 'regle';
+      engagement.missTiming = timing;
       // Volée préparée, raquette partie en avance (la balle arrive) : sur une balle lente, elle l'attend plus longtemps.
       // Pas le coup sec ni le coup au sol : relâchés trop tôt, ils restent dans le vide (on peut réarmer).
       const armed = !(engagement.swing && !engagement.swing.prepared) && (engagement.releaseTick - engagement.pressTick) * SIM_DT >= r.blockPrep;
@@ -1555,6 +1578,8 @@ export class Duel {
     player.lastWhiffKind = player.engagement?.kind ?? null;
     const plan = player.engagement?.plan;
     player.lastWhiffLate = plan !== null && plan !== undefined && (player.engagement?.releaseTick ?? 0) > plan.tick;
+    player.lastWhiffReason = player.engagement?.missReason ?? null;
+    player.lastWhiffTiming = player.engagement?.missTiming ?? null;
     player.engagement = null;
     player.lastWhiffTick = this.tick;
   }
@@ -1628,6 +1653,7 @@ export class Duel {
       wing,
       ...(extra.counterWall ? { counterWall: true } : {}),
       ...(extra.miscue ? { miscue: extra.miscue } : {}),
+      ...(Number.isFinite(prepared) ? { prepared } : {}),
     };
     // Rebond prévu, pour `passesBehind` : calculé ici, une fois par frappe, et jamais à la demande (une question posée
     // hors du pas, par l'entrée ou l'IA, ne doit pas changer le match : jeu en ligne, `src/net`).

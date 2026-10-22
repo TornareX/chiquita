@@ -4,6 +4,7 @@ import { CrowdMood } from '../render/arena';
 import { createSounds } from '../audio/sounds';
 import { applySwing, connectedGamepads, IDLE_PAD, readGamepad, swingEnabled, toCommands, type PadState } from '../input/gamepad';
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
+import { createSwingJournal } from './swingJournal';
 import { createKeyboardPads } from '../input/keyboardArcade';
 import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
@@ -191,6 +192,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   const swings = swingEnabled() ? Array.from({ length: 6 }, () => new SwingStick()) : null;
   const playerSwings: (SwingStick | null)[] = [null, null, null, null];
   const inputs = createInputDisplay(swings && playerSwings);
+  const journal = createSwingJournal();
   let keyboardLayout: ReadonlyMap<string, string> | null = null;
   void loadKeyboardLayout().then((layout) => (keyboardLayout = layout));
   /** État lu au dernier pas pour chaque humain, et ce qu'il tient en main (`null` : IA). */
@@ -288,6 +290,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     const unmute = gate?.muteSeen(duel);
     view.afterStep(replayed);
     if (!replayed) inputs.step(duel, states);
+    if (!replayed) journal?.step(duel, playerSwings);
     for (const contact of duel.contacts) sounds.contact(contact);
     if (!replayed) {
       duel.players.forEach((player, i) => {
