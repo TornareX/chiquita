@@ -188,8 +188,55 @@ export function createSwingJournal(): SwingJournal | null {
       duel.players.forEach((player, index) => {
         const swing = swings[index];
         const watch = watchOf(duel, index, swing);
-        if (!swing) return;
-        // Résultat du geste en attente : une frappe, un coup dans le vide, ou rien.
+        // Les IA (et le partenaire) : leurs frappes, pour savoir qui a joué la balle.
+        if (!swing) {
+          if (player.lastHitTick !== watch.lastHitTick && player.lastHit) {
+            const shot = player.lastHit;
+            queue.push({ type: 'coup', session, tick: duel.tick, joueur: index, coup: shot.overhead ?? shot.kind, toucher: shot.style, volee: shot.volley });
+          }
+          watch.lastHitTick = player.lastHitTick;
+          return;
+        }
+        // Début de préparation : de l'armement au relâcher.
+        if (watch.phase === 'idle' && (swing.phase === 'armed' || swing.phase === 'wallArmed')) watch.armTick = duel.tick;
+        watch.phase = swing.phase;
+        if (swing.count !== watch.count && swing.last) {
+          watch.count = swing.count;
+          watch.lastGestureTick = duel.tick;
+          close(watch, { resultat: 'aucun' });
+          const ball = duel.ball;
+          const trail = swing.trail;
+          // Trace du stick, sans les pas où il n'a pas bougé, au plus 30 points : assez pour revoir la forme du geste.
+          const moved = trail.filter((p, i) => i === 0 || i === trail.length - 1 || p.right !== trail[i - 1]!.right || p.up !== trail[i - 1]!.up);
+          const stride = Math.max(1, Math.ceil(moved.length / 30));
+          const entry: Record<string, unknown> = {
+            type: 'geste',
+            session,
+            tick: duel.tick,
+            joueur: index,
+            prepare: swing.last.prepared,
+            fin: swing.last.end,
+            contreVitre: swing.last.wall ?? false,
+            dureeGeste: swing.last.prepared ? round((duel.tick - watch.armTick) * SIM_DT, 3) : 0,
+            trace: moved.filter((_, i) => i % stride === 0 || i === moved.length - 1).map((p) => [round(p.right), round(p.up)]),
+            phase: duel.phase,
+            joueurFilet: round(Math.abs(player.pos.z)),
+            balle: ball
+              ? {
+                  hauteur: round(ball.pos.y),
+                  distance: round(Math.hypot(ball.pos.x - player.pos.x, ball.pos.z - player.pos.z)),
+                  vitesse: round(Math.hypot(ball.vel.x, ball.vel.y, ball.vel.z), 1),
+                  rebonds: duel.bounces,
+                  sonCamp: ball.pos.z * player.side > 0,
+                }
+              : null,
+          };
+          watch.pending = { tick: duel.tick, entry };
+          watch.lastEntry = entry;
+        }
+
+        // Résultat du geste en attente : une frappe, un coup dans le vide, ou rien. Après le geste fini à ce pas : la
+        // frappe partie au relâcher, balle déjà à portée, est la sienne.
         if (player.lastHitTick !== watch.lastHitTick && player.lastHit) {
           const shot = player.lastHit;
           close(watch, {
@@ -216,43 +263,6 @@ export function createSwingJournal(): SwingJournal | null {
         watch.lastHitTick = player.lastHitTick;
         watch.lastWhiffTick = player.lastWhiffTick;
         if (watch.pending && (duel.tick - watch.pending.tick) * SIM_DT > OUTCOME_WAIT) close(watch, { resultat: 'aucun' });
-
-        // Début de préparation : de l'armement au relâcher.
-        if (watch.phase === 'idle' && (swing.phase === 'armed' || swing.phase === 'wallArmed')) watch.armTick = duel.tick;
-        watch.phase = swing.phase;
-        if (swing.count === watch.count || !swing.last) return;
-        watch.count = swing.count;
-        watch.lastGestureTick = duel.tick;
-        close(watch, { resultat: 'aucun' });
-        const ball = duel.ball;
-        const trail = swing.trail;
-        // Trace du stick, sans les pas où il n'a pas bougé, au plus 30 points : assez pour revoir la forme du geste.
-        const moved = trail.filter((p, i) => i === 0 || i === trail.length - 1 || p.right !== trail[i - 1]!.right || p.up !== trail[i - 1]!.up);
-        const stride = Math.max(1, Math.ceil(moved.length / 30));
-        const entry: Record<string, unknown> = {
-          type: 'geste',
-          session,
-          tick: duel.tick,
-          joueur: index,
-          prepare: swing.last.prepared,
-          fin: swing.last.end,
-          contreVitre: swing.last.wall ?? false,
-          dureeGeste: swing.last.prepared ? round((duel.tick - watch.armTick) * SIM_DT, 3) : 0,
-          trace: moved.filter((_, i) => i % stride === 0 || i === moved.length - 1).map((p) => [round(p.right), round(p.up)]),
-          phase: duel.phase,
-          joueurFilet: round(Math.abs(player.pos.z)),
-          balle: ball
-            ? {
-                hauteur: round(ball.pos.y),
-                distance: round(Math.hypot(ball.pos.x - player.pos.x, ball.pos.z - player.pos.z)),
-                vitesse: round(Math.hypot(ball.vel.x, ball.vel.y, ball.vel.z), 1),
-                rebonds: duel.bounces,
-                sonCamp: ball.pos.z * player.side > 0,
-              }
-            : null,
-        };
-        watch.pending = { tick: duel.tick, entry };
-        watch.lastEntry = entry;
       });
       if (duel.result && duel.result !== lastResult) queue.push({ type: 'point', session, tick: duel.tick, ...duel.result });
       lastResult = duel.result;
