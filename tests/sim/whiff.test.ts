@@ -158,6 +158,40 @@ describe('contre-vitre', () => {
     expect(deep.counterWallReady(0)).toBe(true);
   });
 
+  it('à 6,3 m du filet, elle est proposée (le journal : sa préparation y devenait un coup sec)', () => {
+    const duel = receiving(-6.3, createBall(vec3(0, 0.6, -5.5), vec3(0, -1, -8)), 1);
+    expect(duel.counterWallReady(0)).toBe(true);
+  });
+
+  /** Geste de contre-vitre préparé jusqu'au rebond (`untilBounce`) ou `hold` s, puis ramené vers soi. */
+  function wallGesture(duel: Duel, hold: number, untilBounce = false): void {
+    const wall = { prepared: true, wall: true };
+    for (let i = 0; i < hold / SIM_DT && !(untilBounce && duel.bounces > 0) && !duel.result; i++) {
+      duel.step([{ stick: { forward: 0, right: 0 }, shot: 'overhead', swing: wall }, NEUTRAL_ARCADE]);
+    }
+    for (let i = 0; i < 1.5 / SIM_DT && !duel.result && duel.players[0].lastHitTick === -Infinity && duel.players[0].lastWhiffTick === -Infinity; i++) {
+      duel.step([{ stick: { forward: 0, right: 0 }, shot: null, swing: { ...wall, end: 'straight' } }, NEUTRAL_ARCADE]);
+    }
+  }
+
+  it('engagée, elle s’y tient : la balle encore devant lui, qui file vers sa vitre, n’est pas jouée en coup normal', () => {
+    // Le cas du journal : à 7,8 m du filet, balle rebondie 1,7 m devant lui, lente, vers sa vitre. Avant, le jeu jouait
+    // aussitôt un coup normal raté.
+    const duel = receiving(-7.8, createBall(vec3(0.6, 0.56, -6.1), vec3(0, 0.3, -4.6)), 1);
+    wallGesture(duel, 0.1);
+    expect(duel.shot?.player).toBe(0);
+    expect(duel.shot?.counterWall).toBe(true);
+  });
+
+  it('devenue impossible (balle ressortie de la vitre) : coup normal de secours, pas un raté', () => {
+    // Elle a rebondi devant lui et touche sa vitre avant qu'il frappe : elle revient vers lui.
+    const duel = receiving(-8.2, createBall(vec3(0.6, 0.6, -9.4), vec3(0, 0.5, -6)), 1);
+    wallGesture(duel, 0.25);
+    expect(duel.players[0].lastWhiffTick).toBe(-Infinity);
+    expect(duel.shot?.player).toBe(0);
+    expect(duel.shot?.counterWall).not.toBe(true);
+  });
+
   it('balle basse et lente qui va mourir avant le point idéal : la contre-vitre part quand même', () => {
     const duel = receiving(-8.4, createBall(vec3(0, 0.17, -8.1), vec3(0, -0.5, -5.2)), 1);
     const wall = { prepared: true, wall: true };

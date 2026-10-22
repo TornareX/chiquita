@@ -95,6 +95,8 @@ export interface Engagement {
    * point idéal. `timing` : relâcher par rapport à son passage au point idéal (s), négatif = en avance.
    */
   counterWall?: { timing: number | null };
+  /** Contre-vitre engagée au stick devenue impossible (balle ressortie de la vitre) : coup normal de secours. */
+  wallFallback?: boolean;
   /** Raison pour laquelle la balle n'était pas jouable au dernier pas, et le timing à ce pas (journal des frappes). */
   missReason?: WhiffReason;
   missTiming?: number;
@@ -931,7 +933,9 @@ export class Duel {
     // Contre-vitre préparée au stick droit, sur une balle qui va le passer : il la laisse passer. Seulement ce geste : le
     // stick gauche tiré vers sa vitre veut dire qu'il recule (sous un lob, pour le smash), pas qu'il la laisse passer.
     if (engagement && engagement.releaseTick === null && this.isReceiving(index)) {
-      const letPass = engagement.swing?.wall === true && this.passesBehind(index);
+      // Une fois le geste fait, il s'y tient : la balle qui finit par le frapper avant le rebond n'en fait pas une volée
+      // ou une bajada (journal des frappes, 22/10).
+      const letPass = engagement.swing?.wall === true && (engagement.letPass === true || this.passesBehind(index));
       if (letPass !== (engagement.letPass ?? false)) {
         engagement.letPass = letPass;
         engagement.plan = null;
@@ -1195,7 +1199,15 @@ export class Duel {
     // tiré vers sa vitre, c'est reculer.
     const wantsWall = wallGesture || (!engagement.swing && player.stick.forward <= -r.counterWall.stick);
     const elapsed = (this.tick - engagement.releaseTick) * SIM_DT;
-    if (!engagement.counterWall && wantsWall && (chance?.playable || (wallGesture && this.counterWallReady(index)))) {
+    // Au stick, la contre-vitre reste engagée tant qu'elle est possible : la balle n'a pas encore rebondi, ou elle file
+    // vers sa vitre sans l'avoir touchée. Ressortie de la vitre (ou partie ailleurs), elle ne l'est plus.
+    const wallPossible = wallGesture && !ball.out && !this.touchedGlass && (this.bounces === 0 || ball.vel.z * player.side > 0);
+    if (
+      !engagement.counterWall &&
+      !engagement.wallFallback &&
+      wantsWall &&
+      (chance?.playable || (wallGesture && (wallPossible || this.counterWallReady(index))))
+    ) {
       engagement.counterWall = { timing: null };
     }
     if (engagement.counterWall) {
@@ -1203,11 +1215,18 @@ export class Duel {
       if (engagement.counterWall.timing === null && chance) engagement.counterWall.timing = chance.timing - elapsed;
       const timing = engagement.counterWall.timing;
       if (chance?.playable && (chance.timing >= 0 || chance.dropping) && timing !== null) return this.counterWallHit(index, chance, timing);
-      const gone = chance ? chance.timing > r.counterWall.late : !this.passesBehind(index);
-      if (gone || elapsed >= r.counterWall.wait) {
+      const gone = chance ? chance.timing > r.counterWall.late : wallGesture ? !wallPossible : !this.passesBehind(index);
+      if (!gone && elapsed < r.counterWall.wait) return;
+      if (!wallGesture) {
         engagement.missReason = 'contreVitre';
         this.whiff(index);
+        return;
       }
+      // Devenue impossible : coup normal de secours (choix de Xavier, 22/10). La raquette repart de là, prête, et
+      // attend la balle comme après un relâcher ; le coup n'est jamais parfait.
+      engagement.counterWall = undefined;
+      engagement.wallFallback = true;
+      engagement.releaseTick = this.tick;
       return;
     }
     // Au-dessus de la tête : la balle se prend haute, à la hauteur prévue par la course assistée.
@@ -1281,7 +1300,7 @@ export class Duel {
     // Balle verte, jaune ou rouge : sous pression, la sous-fenêtre parfaite rétrécit (réflexes).
     const pressure = this.pressureOf(index, kind, ball.pos.y, dhypot(ball.vel.x, ball.vel.z), length(player.vel));
     const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure - r.pressure.paceShrink * pace;
-    const perfect = ahead === 0 && judged >= -r.perfectBefore * shrink && judged <= r.perfectAfter * shrink && miss <= r.sweetSpot;
+    const perfect = ahead === 0 && !engagement.wallFallback && judged >= -r.perfectBefore * shrink && judged <= r.perfectAfter * shrink && miss <= r.sweetSpot;
     // Erreur du coup : pression, timing, et balle trop loin du point idéal.
     let error = shotError(pressure, judged, miss, perfect, this.profile);
     if (kind === 'overhead') {

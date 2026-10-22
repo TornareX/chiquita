@@ -228,6 +228,9 @@ export function createSwingJournal(): SwingJournal | null {
                   vitesse: round(Math.hypot(ball.vel.x, ball.vel.y, ball.vel.z), 1),
                   rebonds: duel.bounces,
                   sonCamp: ball.pos.z * player.side > 0,
+                  // Vers la vitre du fond du joueur, et déjà passée par une vitre : pour juger une contre-vitre.
+                  versSaVitre: ball.vel.z * player.side > 0,
+                  vitre: duel.touchedGlass,
                 }
               : null,
           };
