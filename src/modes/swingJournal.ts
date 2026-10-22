@@ -1,5 +1,5 @@
 import type { SwingStick } from '../input/swingStick';
-import { SIM_DT } from '../sim/constants';
+import { HALF_LENGTH, SIM_DT } from '../sim/constants';
 import type { Duel } from '../sim/duel';
 import { createMenu, type MenuItem } from '../ui/menu';
 
@@ -74,6 +74,8 @@ interface Pending {
 }
 
 interface Watch {
+  /** La balle et la contre-vitre au pas précédent : avant la frappe qui part au relâcher (la balle est alors renvoyée). */
+  before: Record<string, unknown> | null;
   /** Pas du dernier geste fini, et sa ligne (avec son résultat une fois connu), pour le bouton « raté ». */
   lastGestureTick: number | null;
   lastEntry: Record<string, unknown> | null;
@@ -84,6 +86,33 @@ interface Watch {
   pending: Pending | null;
   lastHitTick: number;
   lastWhiffTick: number;
+}
+
+/** Le joueur, la balle et la contre-vitre à ce pas, pour la ligne du geste qui finira au pas suivant. */
+function snapshot(duel: Duel, index: number): Record<string, unknown> {
+  const player = duel.players[index]!;
+  const ball = duel.ball;
+  const chance = duel.counterWall(index);
+  return {
+    joueurFilet: round(Math.abs(player.pos.z)),
+    balle: ball
+      ? {
+          hauteur: round(ball.pos.y),
+          distance: round(Math.hypot(ball.pos.x - player.pos.x, ball.pos.z - player.pos.z)),
+          vitesse: round(Math.hypot(ball.vel.x, ball.vel.y, ball.vel.z), 1),
+          rebonds: duel.bounces,
+          sonCamp: ball.pos.z * player.side > 0,
+          // Vers la vitre du fond du joueur, déjà passée par une vitre, et place jusqu'à elle (m) : pour la contre-vitre.
+          versSaVitre: ball.vel.z * player.side > 0,
+          vitre: duel.touchedGlass,
+          placeVitre: round(HALF_LENGTH - Math.abs(ball.pos.z)),
+        }
+      : null,
+    etatContreVitre: {
+      proposee: duel.counterWallReady(index),
+      chance: chance && { timing: round(chance.timing, 3), distance: round(chance.distance), jouable: chance.playable },
+    },
+  };
 }
 
 /** Sans résultat au bout de tant (s) après le geste : il n'a rien donné (pas de balle à jouer). */
@@ -109,6 +138,7 @@ export function createSwingJournal(): SwingJournal | null {
   const watchOf = (duel: Duel, index: number, swing: SwingStick | null | undefined): Watch => {
     const player = duel.players[index]!;
     return (watches[index] ??= {
+      before: null,
       lastGestureTick: null,
       lastEntry: null,
       flagHeld: false,
@@ -204,7 +234,6 @@ export function createSwingJournal(): SwingJournal | null {
           watch.count = swing.count;
           watch.lastGestureTick = duel.tick;
           close(watch, { resultat: 'aucun' });
-          const ball = duel.ball;
           const trail = swing.trail;
           // Trace du stick, sans les pas où il n'a pas bougé, au plus 30 points : assez pour revoir la forme du geste.
           const moved = trail.filter((p, i) => i === 0 || i === trail.length - 1 || p.right !== trail[i - 1]!.right || p.up !== trail[i - 1]!.up);
@@ -220,19 +249,8 @@ export function createSwingJournal(): SwingJournal | null {
             dureeGeste: swing.last.prepared ? round((duel.tick - watch.armTick) * SIM_DT, 3) : 0,
             trace: moved.filter((_, i) => i % stride === 0 || i === moved.length - 1).map((p) => [round(p.right), round(p.up)]),
             phase: duel.phase,
-            joueurFilet: round(Math.abs(player.pos.z)),
-            balle: ball
-              ? {
-                  hauteur: round(ball.pos.y),
-                  distance: round(Math.hypot(ball.pos.x - player.pos.x, ball.pos.z - player.pos.z)),
-                  vitesse: round(Math.hypot(ball.vel.x, ball.vel.y, ball.vel.z), 1),
-                  rebonds: duel.bounces,
-                  sonCamp: ball.pos.z * player.side > 0,
-                  // Vers la vitre du fond du joueur, et déjà passée par une vitre : pour juger une contre-vitre.
-                  versSaVitre: ball.vel.z * player.side > 0,
-                  vitre: duel.touchedGlass,
-                }
-              : null,
+            // Au pas d'avant le relâcher : la frappe partie au relâcher a déjà renvoyé la balle.
+            ...watch.before,
           };
           watch.pending = { tick: duel.tick, entry };
           watch.lastEntry = entry;
@@ -257,6 +275,7 @@ export function createSwingJournal(): SwingJournal | null {
             pression: round(shot.pressure),
             erreur: round(shot.error),
             cote: shot.wing,
+            contreVitreJouee: shot.counterWall ?? false,
           });
         }
         if (player.lastWhiffTick !== watch.lastWhiffTick) {
@@ -266,6 +285,7 @@ export function createSwingJournal(): SwingJournal | null {
         watch.lastHitTick = player.lastHitTick;
         watch.lastWhiffTick = player.lastWhiffTick;
         if (watch.pending && (duel.tick - watch.pending.tick) * SIM_DT > OUTCOME_WAIT) close(watch, { resultat: 'aucun' });
+        watch.before = snapshot(duel, index);
       });
       if (duel.result && duel.result !== lastResult) queue.push({ type: 'point', session, tick: duel.tick, ...duel.result });
       lastResult = duel.result;

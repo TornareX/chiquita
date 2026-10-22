@@ -929,9 +929,10 @@ export const REALISTIC: PhysicsProfile = {
       glassRoom: 0.2,
       maxRoom: 3.5, // au-delà, la balle file dans le grillage au-dessus de la vitre ou retombe dans le filet
       minSpeed: 1,
-      // Un peu devant la ligne de service : le point d'impact, derrière lui, est vers la ligne ou entre elle et la vitre,
-      // là où Xavier la joue (22/10). À 6,5 m, sa préparation à 6,3 m devenait un coup sec. [à calibrer en jouant]
-      readyDepth: 6,
+      // Mi-court : il recule encore vers la ligne de service pendant le geste, et frappe entre elle et la vitre, là où
+      // Xavier la joue (22/10). À 6,5 puis 6 m, ses préparations à 6,3 puis 5,45 m devenaient des coups secs ; au filet
+      // (3,9 m), le coup sec reste une volée bloquée. [à calibrer en jouant]
+      readyDepth: 5,
       depth: 4.5,
       depthPerfect: 6,
       width: 1.8,
