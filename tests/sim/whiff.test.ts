@@ -156,9 +156,28 @@ describe('contre-vitre', () => {
     const deep = receiving(-7.5, createBall(vec3(0, 0.6, -6.5), vec3(0, -1, -8)), 1);
     deep.players[0].vel = vec3(0, 0, -3);
     expect(deep.counterWallReady(0)).toBe(true);
+    // Il recule depuis le filet sous un lob qui l'a passé : proposée, même à 3 m du filet.
+    const lob = receiving(-3, createBall(vec3(0, 2, -5), vec3(0, -2, -7)), 0);
+    lob.players[0].vel = vec3(0, 0, -4);
+    expect(lob.counterWallReady(0)).toBe(true);
+    // Passing qui le déborde au filet, il court en arrière : proposée aussi.
+    const passing = receiving(-3.5, createBall(vec3(1.5, 0.5, -5), vec3(0, -0.5, -14)), 0);
+    passing.players[0].vel = vec3(0, 0, -4);
+    expect(passing.counterWallReady(0)).toBe(true);
+    // Au filet, la balle encore devant lui : coup sec, volée bloquée.
+    const volley = receiving(-3.5, createBall(vec3(0.6, 1, -1), vec3(0, 0, -14)), 0);
+    volley.players[0].vel = vec3(0, 0, -2);
+    expect(volley.counterWallReady(0)).toBe(false);
   });
 
-  it('à 6,3 m du filet, elle est proposée (le journal : sa préparation y devenait un coup sec)', () => {
+  it('balle devant lui (entre le filet et lui) : pas de contre-vitre au relâcher', () => {
+    const duel = receiving(-8.5, createBall(vec3(0.6, 0.7, -7.8), vec3(0, 0.3, -3)), 1);
+    expect(duel.counterWallNow(0)?.playable ?? false).toBe(false);
+    const behind = receiving(-7.8, createBall(vec3(0.6, 0.7, -8.5), vec3(0, 0.3, -3)), 1);
+    expect(behind.counterWallNow(0)?.playable).toBe(true);
+  });
+
+  it('à 1 m devant la ligne de service, elle est proposée', () => {
     const duel = receiving(-6.3, createBall(vec3(0, 0.6, -5.5), vec3(0, -1, -8)), 1);
     expect(duel.counterWallReady(0)).toBe(true);
   });
@@ -183,13 +202,13 @@ describe('contre-vitre', () => {
     expect(duel.shot?.counterWall).toBe(true);
   });
 
-  it('devenue impossible (balle ressortie de la vitre) : coup normal de secours, pas un raté', () => {
-    // Elle a rebondi devant lui et touche sa vitre avant qu'il frappe : elle revient vers lui.
+  it('ramenée juste après que la balle a touché sa vitre : la contre-vitre part quand même', () => {
+    // Le cas du journal (23/10) : préparée quand elle file vers la vitre, ramenée quand elle en ressort, à 0,6 m d'elle.
     const duel = receiving(-8.2, createBall(vec3(0.6, 0.6, -9.4), vec3(0, 0.5, -6)), 1);
     wallGesture(duel, 0.25);
     expect(duel.players[0].lastWhiffTick).toBe(-Infinity);
     expect(duel.shot?.player).toBe(0);
-    expect(duel.shot?.counterWall).not.toBe(true);
+    expect(duel.shot?.counterWall).toBe(true);
   });
 
   it('balle basse et lente qui va mourir avant le point idéal : la contre-vitre part quand même', () => {

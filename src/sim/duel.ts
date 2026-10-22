@@ -1201,7 +1201,8 @@ export class Duel {
     const elapsed = (this.tick - engagement.releaseTick) * SIM_DT;
     // Au stick, la contre-vitre reste engagée tant qu'elle est possible : la balle n'a pas encore rebondi, ou elle file
     // vers sa vitre sans l'avoir touchée. Ressortie de la vitre (ou partie ailleurs), elle ne l'est plus.
-    const wallPossible = wallGesture && !ball.out && !this.touchedGlass && (this.bounces === 0 || ball.vel.z * player.side > 0);
+    const now = wallGesture ? this.counterWallNow(index) : null;
+    const wallPossible = wallGesture && !ball.out && ((!this.touchedGlass && (this.bounces === 0 || ball.vel.z * player.side > 0)) || now !== null);
     if (
       !engagement.counterWall &&
       !engagement.wallFallback &&
@@ -1215,6 +1216,9 @@ export class Duel {
       if (engagement.counterWall.timing === null && chance) engagement.counterWall.timing = chance.timing - elapsed;
       const timing = engagement.counterWall.timing;
       if (chance?.playable && (chance.timing >= 0 || chance.dropping) && timing !== null) return this.counterWallHit(index, chance, timing);
+      // Au stick, la contre-vitre part quand il ramène le stick, sur la balle là où elle est (`counterWallNow`). Ramené
+      // trop tôt, la raquette prête l'attend : comme pour les autres coups, elle n'est alors jamais parfaite.
+      if (now?.playable) return this.counterWallHit(index, now, elapsed > r.swingWindow ? Math.max(now.timing, r.perfectAfter + 0.02) : now.timing);
       const gone = chance ? chance.timing > r.counterWall.late : wallGesture ? !wallPossible : !this.passesBehind(index);
       if (!gone && elapsed < r.counterWall.wait) return;
       if (!wallGesture) {
@@ -1390,8 +1394,11 @@ export class Duel {
   counterWallReady(index: number): boolean {
     if (this.phase !== 'rally' || !this.isReceiving(index)) return false;
     const player = this.players[index]!;
-    // Loin de sa vitre (au filet), pas de contre-vitre : le coup sec reste le coup sec.
-    if (Math.abs(player.pos.z) < this.profile.rally.counterWall.readyDepth) return false;
+    // Loin de sa vitre (au filet), pas de contre-vitre : le coup sec reste le coup sec. Sauf s'il recule depuis le filet
+    // vers une balle qui l'a déjà passé (lob) : c'est là que Xavier la prépare (23/10).
+    const ball = this.ball;
+    const retreating = player.vel.z * player.side > 1 && ball !== null && (ball.pos.z - player.pos.z) * player.side > 0;
+    if (Math.abs(player.pos.z) < this.profile.rally.counterWall.readyDepth && !retreating) return false;
     if (this.counterWall(index)) return true;
     if (!this.passesBehind(index)) return false;
     // Il court vers sa vitre, ou il l'attend entre elle et la balle qui a rebondi.
@@ -1451,6 +1458,31 @@ export class Duel {
     const wait = -timing;
     const dropping = timing < 0 && ball.pos.y + ball.vel.y * wait - (this.profile.gravity * wait * wait) / 2 < t.low;
     return { timing, distance, lateral, glass, playable, dropping };
+  }
+
+  /**
+   * Contre-vitre au stick, comme la décrit Xavier (23/10) : la balle a rebondi une fois dans sa zone de défense, il va
+   * vers elle, prépare, et tire contre sa vitre avant le second rebond, quelle que soit sa direction (vers la vitre ou
+   * ressortie d'elle). Jouable quand il ramène le stick, là où elle est : derrière lui (lui, la balle, la vitre), à moins
+   * de `maxRoom` m de la vitre, à portée, à bonne hauteur. La qualité vient de la hauteur de la balle (`cleanHeight`),
+   * du placement (balle à côté de lui, sur le côté) et de la pression. `null` hors de cette zone, ou balle devant lui : il la joue normalement.
+   */
+  counterWallNow(index: number): CounterWallChance | null {
+    const ball = this.ball;
+    if (!ball || ball.out || this.bounces !== 1 || !this.isReceiving(index)) return null;
+    const player = this.players[index]!;
+    const t = this.profile.rally.counterWall;
+    const room = HALF_LENGTH - Math.abs(ball.pos.z);
+    if (ball.pos.z * player.side <= 0 || room > t.maxRoom) return null;
+    const distance = flatDistance(ball.pos, player.pos);
+    // Dans l'ordre, du filet vers le fond : lui, la balle, sa vitre (Xavier, 23/10). Balle devant lui : pas de
+    // contre-vitre, il la joue normalement.
+    if ((ball.pos.z - player.pos.z) * player.side <= 0) return null;
+    const playable = distance <= t.reach && ball.pos.y >= t.low && ball.pos.y <= t.high;
+    // Prise au-dessus de `cleanHeight`, la frappe peut être propre ; plus bas, vers le second rebond, elle est jugée en
+    // retard, jusqu'à la fin de la fenêtre de retard au ras du sol.
+    const low = Math.min(1, Math.max(0, (t.cleanHeight - ball.pos.y) / (t.cleanHeight - t.low)));
+    return { timing: low * this.profile.rally.lateWindow, distance, lateral: ball.pos.x - player.pos.x, glass: ball.pos, playable, dropping: false };
   }
 
   /**

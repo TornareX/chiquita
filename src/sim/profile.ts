@@ -507,6 +507,9 @@ export interface CounterWallTuning {
    * (journal des frappes, 22/10).
    */
   readyDepth: number;
+  /** Au stick, contre-vitre tirée sur la balle au-dessus de tant (m) : propre ; plus bas, de plus en plus en retard. */
+  cleanHeight: number;
+
   /** Point de chute visé, en distance au filet chez l'adversaire : coup normal, frappe parfaite. */
   depth: number;
   depthPerfect: number;
@@ -929,10 +932,11 @@ export const REALISTIC: PhysicsProfile = {
       glassRoom: 0.2,
       maxRoom: 3.5, // au-delà, la balle file dans le grillage au-dessus de la vitre ou retombe dans le filet
       minSpeed: 1,
-      // Mi-court : il recule encore vers la ligne de service pendant le geste, et frappe entre elle et la vitre, là où
-      // Xavier la joue (22/10). À 6,5 puis 6 m, ses préparations à 6,3 puis 5,45 m devenaient des coups secs ; au filet
-      // (3,9 m), le coup sec reste une volée bloquée. [à calibrer en jouant]
-      readyDepth: 5,
+      // 1 m devant la ligne de service, comme le veut Xavier (23/10) : il frappe ensuite entre elle et la vitre. Plus près
+      // du filet, seulement s'il recule sous un lob qui l'a passé (`counterWallReady`) ; sinon le coup sec reste une
+      // volée bloquée. [à calibrer en jouant]
+      readyDepth: 5.95, // ligne de service (6,95 m) moins 1 m
+      cleanHeight: 0.5, // [à calibrer en jouant]
       depth: 4.5,
       depthPerfect: 6,
       width: 1.8,
