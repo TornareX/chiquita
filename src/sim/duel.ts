@@ -950,7 +950,16 @@ export class Duel {
         engagement.releaseTick === null &&
         (plan.tick - this.tick) * SIM_DT > r.aimWindow &&
         (this.tick - engagement.pressTick) % REPLAN_TICKS === 0;
-      if (!plan || replan) {
+      // Au stick, préparation tenue au-delà du point prévu (balle laissée monter puis redescendre, ou ressortir de la
+      // vitre) : le point est recalculé sur la balle qui vient, et la préparation affichée suit le coup qui partira (la
+      // chiquita, plus la bajada d'une balle déjà redescendue). Coup haut : pas avant `overheadLateWindow`, où la
+      // balle redescendue se joue encore au-dessus de la tête.
+      const stale =
+        plan !== null &&
+        engagement.swing !== undefined &&
+        engagement.releaseTick === null &&
+        (this.tick - plan.tick) * SIM_DT > (plan.contact.y >= this.overheadFloor(engagement, player.height) ? r.overheadLateWindow : r.lateWindow);
+      if (!plan || replan || stale) {
         const plan = (overhead: boolean): Intercept | null =>
           planIntercept(
             this.ball!,
@@ -1224,6 +1233,11 @@ export class Duel {
     const inCamp = ball.pos.z * player.side > 0 || (this.bounces > 0 && outsideCourt(ball.pos));
     // Distance (horizontale) à laquelle la balle passera du joueur : à portée, elle vient à lui.
     const passing = contactTiming(ball, player, 0).miss;
+    // Geste lâché (chiquita, feinte) : on lâche le stick en attendant la balle. La raquette l'attend plus longtemps
+    // (`letGoWait`), jusqu'au point prévu même par la vitre, quand la balle ne vient pas encore vers le joueur.
+    const letGo = engagement.swing?.prepared === true && engagement.swing.end === 'letGo';
+    const earlyWait = letGo ? r.letGoWait : r.earlyWait;
+    const planWait = engagement.plan ? (engagement.plan.tick - engagement.releaseTick) * SIM_DT : -1;
     // Le service doit rebondir avant d'être renvoyé ; la balle laissée passer aussi.
     const mustBounce = this.bounces === 0 && (this.hits === 1 || engagement.letPass === true);
     const playable =
@@ -1242,14 +1256,16 @@ export class Duel {
       // dans le vide, on peut réarmer.
       // Balle qui rebondit dans ses pieds, au ras du sol : elle remonte aussitôt, la raquette l'attend (demi-volée).
       const atFeet = ball.pos.y < r.hitLow && timing <= lateWindow && flatDistance(ball.pos, player.pos) <= r.reach * r.lateReach;
-      const coming = ((timing < 0 && passing <= r.reach) || (mustBounce && !ball.out) || atFeet) && elapsed - Math.min(0, timing) <= r.earlyWait;
-      const wait = coming ? Math.max(r.earlyWait, this.racketWindow(engagement, ball, player)) : this.racketWindow(engagement, ball, player);
+      const coming = ((timing < 0 && passing <= r.reach) || (mustBounce && !ball.out) || atFeet) && elapsed - Math.min(0, timing) <= earlyWait;
+      // Lâché : point prévu au plus `letGoWait` s après le relâcher, la raquette l'attend jusqu'à lui.
+      const planned = letGo && planWait > 0 && planWait <= r.letGoWait ? planWait + lateWindow : 0;
+      const wait = Math.max(coming ? earlyWait : 0, planned, this.racketWindow(engagement, ball, player));
       if (elapsed >= wait) this.whiff(index);
       return;
     }
     // Raquette prête qui attend déjà la balle : elle la frappe à son passage à côté du joueur, pas dès qu'elle entre à
     // portée (`earlyWait` au plus).
-    if (timing < 0 && passing <= r.reach && elapsed > this.racketWindow(engagement, ball, player) && elapsed < r.earlyWait) return;
+    if (timing < 0 && passing <= r.reach && elapsed > this.racketWindow(engagement, ball, player) && elapsed < earlyWait) return;
     const volley = this.bounces === 0;
     const outside = outsideCourt(ball.pos);
     // Dehors, on renvoie la balle en lob par-dessus le mur ; B sur une balle basse : coup défensif, coupé.

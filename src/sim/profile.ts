@@ -161,6 +161,13 @@ export interface RallyTuning {
    */
   earlyWait: number;
   /**
+   * Geste lâché (chiquita, feinte de smash) : on lâche le stick en attendant la balle, souvent bien en avance. La
+   * raquette reste prête jusqu'au point prévu s'il arrive au plus tant (s) après le relâcher, même par la vitre (la
+   * balle ne vient pas encore vers le joueur), et attend aussi la balle qui arrive jusque-là. Journal des frappes
+   * (22/10) : une chiquita au fond, lâchée ~0,7 s avant que la balle ressorte de la vitre, partait dans le vide.
+   */
+  letGoWait: number;
+  /**
    * Pas d'ajustement : en placement manuel, stick gauche bloqué pendant la préparation, le joueur fait seul
    * les derniers pas vers le point d'impact s'il est à moins de tant (m). Comme le split-step suivi d'un pas des pros :
    * préparer tôt au filet ne fige plus le joueur à côté de la chiquita.
@@ -652,6 +659,7 @@ export const REALISTIC: PhysicsProfile = {
     swingSlowSpeed: 11,
     swingFastSpeed: 20,
     earlyWait: 0.5, // [à calibrer en jouant]
+    letGoWait: 1, // [à calibrer en jouant]
     adjustStep: 1.3, // [à calibrer en jouant]
     sweetSpot: 0.45,
     lateDriftLateral: 2.5,
