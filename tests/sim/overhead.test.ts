@@ -417,8 +417,9 @@ describe('IA contre IA : le jeu au-dessus de la tête', () => {
     // rapide que la volée normale : elle prend des points au remate (20 %) et raccourcit les échanges (6,9 → 6,4
     // coups/point ; pros 8-11). Coups hauts 30 %, lobs qui passent 35 % (pros ~35 %). Coups hauts réservés au lob
     // et à la balle flottante par défaut (18/10) : 6,0 coups/point, coups hauts 24 %, lobs qui passent 42 %, plus
-    // de sorties (balles flottantes claquées por cuatro). [à recaler en jouant]
-    expect(perPoint).toBeGreaterThan(5.8);
+    // de sorties (balles flottantes claquées por cuatro). Plus de service lobé (23/10, l'IA servait en lob une fois sur
+    // cinq) : 6,0 → 5,7 coups/point, gagnants 33 → 37 %. [à recaler en jouant]
+    expect(perPoint).toBeGreaterThan(5.5);
     expect(perPoint).toBeLessThan(11);
     expect(t.smashWinners / t.winners).toBeGreaterThan(0.17);
     expect(t.overheadWinners / t.winners).toBeGreaterThan(0.22);

@@ -1159,8 +1159,9 @@ export class Duel {
     this.phase = 'rally';
     this.phaseTick = this.tick;
     this.toss = null;
-    // Pas de service au-dessus de la tête : B sert comme A.
-    const kind = toss.kind === 'overhead' ? 'normal' : toss.kind;
+    // Pas de service au-dessus de la tête : B sert comme A. Ni de service lobé (Xavier, 23/10 : « ça n'existe pas en
+    // pro ») : l'IA, qui tire son coup au hasard, servait en lob une fois sur cinq.
+    const kind = toss.kind === 'overhead' || toss.kind === 'lob' ? 'normal' : toss.kind;
     this.hit(this.server, kind, ball.pos, target, perfect, timing, false, true, false);
   }
 

@@ -5,7 +5,7 @@ import { NEUTRAL_ARCADE } from '../../src/sim/commands';
 import { SIM_DT } from '../../src/sim/constants';
 import { Duel, shotStyle } from '../../src/sim/duel';
 import { ARCADE } from '../../src/sim/profile';
-import { solveShot } from '../../src/sim/shots';
+import { overheadTarget, solveShot } from '../../src/sim/shots';
 import { vec3 } from '../../src/sim/vec3';
 
 /** Volée coupée et volée basse (journal des frappes, 22/10) : courtes à préparer, basses même ratées. */
@@ -93,5 +93,28 @@ describe('feinte de smash', () => {
     expect(bounce).toBeGreaterThan(6.5);
     expect(glass).not.toBeNull();
     expect(glass!).toBeLessThan(0.6);
+  });
+});
+
+describe('service et víbora (Xavier, 23/10)', () => {
+  it('pas de service lobé : un service demandé en lob part comme un service normal', () => {
+    const duel = new Duel();
+    for (let i = 0; i < 0.7 / SIM_DT; i++) duel.step();
+    const server = duel.server;
+    const lob = { stick: { forward: 0, right: 0 }, shot: 'lob' as const };
+    const commands = (shot: typeof lob | typeof NEUTRAL_ARCADE): typeof NEUTRAL_ARCADE[] => duel.players.map((_, i) => (i === server ? shot : NEUTRAL_ARCADE));
+    duel.step(commands(lob));
+    for (let i = 0; i < 3 / SIM_DT && duel.phase !== 'rally'; i++) duel.step(commands(duel.toss && duel.tick >= duel.toss.idealTick ? NEUTRAL_ARCADE : lob));
+    expect(duel.shot?.serve).toBe(true);
+    expect(duel.shot?.kind).toBe('normal');
+  });
+
+  it('víbora sans direction latérale : vers le centre, plus le long de la ligne', () => {
+    for (const x of [-2, 0, 2]) {
+      const target = overheadTarget('vibora', -1, { forward: 0, right: 0 }, false, ARCADE, x, 4);
+      expect(Math.abs(target.x)).toBeLessThan(1);
+    }
+    // Visée vers un côté : contre la vitre latérale de ce côté.
+    expect(Math.abs(overheadTarget('vibora', -1, { forward: 0, right: 1 }, false, ARCADE, 0, 4).x)).toBeGreaterThan(3.5);
   });
 });

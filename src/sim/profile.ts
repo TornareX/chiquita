@@ -287,8 +287,9 @@ export interface RallyTuning {
   /** Bandeja sans direction : écart au centre de la cible, vers le coin, le long de la ligne (m). */
   bandejaLateral: number;
   /**
-   * Bandeja et víbora au stick (« facile à jouer, dur à maîtriser ») : sans direction, le coup sûr ; stick vers l'avant
-   * ou l'arrière seulement (au-delà de `overheadCentreStick`), au centre (víbora à `viboraCentre` m de l'axe).
+   * Bandeja et víbora au stick (« facile à jouer, dur à maîtriser ») : bandeja sans direction, le coup sûr, et stick
+   * vers l'avant ou l'arrière seulement (au-delà de `overheadCentreStick`), au centre ; víbora sans direction latérale,
+   * au centre (à `viboraCentre` m de l'axe, du côté de la frappe).
    * Le stick vers l'avant frappe plus fort, vers l'arrière plus doux : vitesse × (1 ± `overheadPower`).
    * Frappe pas propre (hors de la bande des yeux, ou décentrée) sur une cible ambitieuse : la balle file au-delà, de
    * `overheadSlop` m sur le côté (víbora près de la ligne) et `overheadSlopDepth` m en longueur (au fond) au plus,
@@ -716,7 +717,7 @@ export const REALISTIC: PhysicsProfile = {
     viboraLateral: 4.3,
     bandejaLateral: 3,
     overheadCentreStick: 0.3,
-    viboraCentre: 1.5,
+    viboraCentre: 0.6, // 1,5 m avant : sans viser, elle paraissait partir sur le côté (Xavier, 23/10)
     overheadPower: 0.25, // [à calibrer en jouant]
     overheadSlop: 2,
     overheadSlopDepth: 2.5,

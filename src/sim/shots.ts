@@ -134,13 +134,15 @@ export function overheadTarget(
   }
   if (kind === 'bandeja' || kind === 'bajada' || kind === 'feinte') return aimTarget(kind, side, aim, perfect, profile);
   if (kind === 'vibora') {
-    // Contre la vitre latérale, du côté du stick (sans direction, le long de la ligne) : elle y meurt basse. Le stick
+    // Stick vers un côté : contre la vitre latérale de ce côté, elle y meurt basse. Sans direction latérale : au centre,
+    // où l'effet latéral l'écarte du défenseur (Xavier, 23/10 : sans viser, elle partait le long de la ligne). Le stick
     // vers l'arrière la raccourcit (angle fermé, elle ressort de la vitre vers le filet), vers l'avant l'allonge
-    // jusqu'au coin des deux vitres ; tout droit, au centre, où l'effet latéral l'écarte du défenseur.
+    // jusqu'au coin des deux vitres.
     const forward = clamp(aim.forward, -1, 1);
     const depth = forward >= 0 ? mix(t.depthNeutral, t.depthLong, forward) : mix(t.depthNeutral, t.depthShort, -forward);
-    const lateral = centre ? r.viboraCentre : Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0));
-    const x = Math.abs(aim.right) >= 0.2 ? Math.sign(aim.right) * toRight : contactSide;
+    const aimed = Math.abs(aim.right) >= 0.2;
+    const lateral = aimed ? Math.min(HALF_WIDTH - 0.35, r.viboraLateral + (perfect ? 0.2 : 0)) : r.viboraCentre;
+    const x = aimed ? Math.sign(aim.right) * toRight : contactSide;
     return vec3(x * lateral, BALL_RADIUS, -side * depth);
   }
   const depth = !perfect ? t.depthNeutral : contactDepth <= r.remateNearZone ? r.remateKillNear : r.remateKillDepth;
