@@ -22,7 +22,7 @@ export interface PadState {
    * clavier et de la souris (`virtualStick.ts`). Repère de l'écran.
    */
   aim?: { right: number; up: number };
-  /** Bouton de contre-vitre tenu (RB / R1) : à la manette, il la prépare (`swingStick.ts`). */
+  /** Bouton de contre-vitre tenu (LB / L1, ou RB / R1) : à la manette, il la prépare (`swingStick.ts`). */
   wallButton?: boolean;
 }
 
@@ -66,7 +66,7 @@ export function readGamepad(pad: Gamepad, swing?: SwingStick, dt = 0): PadState 
   const face = SHOT_BUTTONS.find(([i]) => button(i))?.[1] ?? null;
   const shot = buttonsEnabled() ? face : null;
   const aim = rightStickAxes(pad.axes[2] ?? 0, -(pad.axes[3] ?? 0));
-  return applySwing({ stick: { up: y, right: x }, shot, assistButton: button(8), face, aim, wallButton: button(5) }, swing, dt);
+  return applySwing({ stick: { up: y, right: x }, shot, assistButton: button(8), face, aim, wallButton: button(4) || button(5) }, swing, dt);
 }
 
 /**

@@ -12,8 +12,8 @@ export type { SwingEnd };
  *   - **lâché** (le stick revient au centre et y reste) : chiquita ; au-dessus de la tête, feinte de smash ;
  * - **sans préparation** : un coup sec vers l'avant depuis le centre, quand on n'a pas le temps : coup moins
  *   fort et moins précis ; de volée, volée bloquée ; au-dessus de la tête, bandeja ;
- * - **contre-vitre**, à la manette (`wallByButton`) : RB / R1 tenu prépare (le joueur se tourne vers sa vitre), le stick
- *   droit poussé vers l'avant frappe, et RB / R1 lâché sans frapper annule. Proposée à Xavier (23/10) pour ne plus la
+ * - **contre-vitre**, à la manette (`wallByButton`) : L1 / LB (ou R1 / RB) tenu prépare (le joueur se tourne vers sa
+ *   vitre), le stick droit poussé vers l'avant frappe, et le bouton lâché sans frapper annule. Xavier a pris L1 d'instinct. Proposée à Xavier (23/10) pour ne plus la
  *   confondre avec le coup sec. Au clavier, quand le jeu la propose (`wallReady`) : tourné vers sa vitre, le geste est inversé. Stick
  *   poussé vers l'avant : préparation ; ramené vers soi (vers sa vitre), ou lâché : frappe contre la vitre.
  *

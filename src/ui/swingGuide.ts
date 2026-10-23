@@ -136,8 +136,8 @@ export function createSwingGuide(): SwingGuide {
         if (parts) parts.root.style.display = 'none';
         return;
       }
-      // Bouton de contre-vitre : RB sur Xbox, R1 sur PlayStation.
-      const rb = source?.kind === 'pad' && source.family === 'playstation' ? 'R1' : 'RB';
+      // Bouton de contre-vitre : LB ou RB sur Xbox, L1 ou R1 sur PlayStation.
+      const rb = source?.kind === 'pad' && source.family === 'playstation' ? 'L1/R1' : 'LB/RB';
       const now = performance.now();
       if (swing.count !== seen) {
         seen = swing.count;

@@ -388,8 +388,8 @@ export function createInputDisplay(swings?: readonly (SwingStick | null)[] | nul
           note = last && since < NOTE_TIME ? toned(last.quality, last.text) : '';
           w.note.style.display = note ? '' : 'none';
         } else if (state.shot && state.gesture?.wall && state.wallButton) {
-          // Contre-vitre au bouton : RB sur Xbox, R1 sur PlayStation.
-          const rb = source.kind === 'pad' && source.family === 'playstation' ? 'R1' : 'RB';
+          // Contre-vitre au bouton : LB ou RB sur Xbox, L1 ou R1 sur PlayStation.
+          const rb = source.kind === 'pad' && source.family === 'playstation' ? 'L1/R1' : 'LB/RB';
           note = `<span class="tone-soft">contre-vitre préparée (${rb}) : stick droit vers l’avant pour frapper</span>`;
         } else if (state.shot && swingHeld(state)) {
           note = `${SWING_BADGE} <span class="tone-soft">armé ${source.kind === 'keyboard' ? 'au clavier' : 'au stick droit'} : choisis la fin du geste</span>`;

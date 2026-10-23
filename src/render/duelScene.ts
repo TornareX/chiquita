@@ -715,7 +715,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
       view.bubble.scale.set(scale * 2.67, scale, 1);
       view.bubble.position.set(pos.x, 2.15 + scale * 0.5, pos.z);
     }
-    // Contre-vitre : il se tourne vers sa vitre quand il la prépare (RB / R1 tenu, ou stick tiré vers elle) et pendant
+    // Contre-vitre : il se tourne vers sa vitre quand il la prépare (L1 ou R1 tenu, ou stick tiré vers elle) et pendant
     // qu'il la joue.
     const chance = duel.counterWall(index);
     const wallStrike = player.lastHit?.counterWall === true && (duel.tick - player.lastHitTick) * SIM_DT < WALL_STRIKE;

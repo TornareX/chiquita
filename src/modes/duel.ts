@@ -253,6 +253,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     assistHeld[index] = state.assistButton;
     // Bouton Y, sans effet en jeu : « raté » pour le journal des frappes.
     if (pad) journal?.flag(duel, index, state.face === 'lob');
+    if (pad) journal?.wallButton(duel, index, state.wallButton ?? false);
     // Joueur du camp où est la caméra (dans son dos) : haut de l'écran = vers le filet.
     return toCommands(state, duel.players[index]!.side === viewpoint.side, settings.farOwnView);
   };

@@ -15,6 +15,8 @@ export interface SwingJournal {
   step(duel: Duel, swings: readonly (SwingStick | null)[]): void;
   /** Bouton « raté » du joueur `index` à ce pas (maintenu ou non) : un appui ouvre le panneau sur son dernier geste. */
   flag(duel: Duel, index: number, held: boolean): void;
+  /** Bouton de contre-vitre (L1 / R1) du joueur `index` à ce pas : chaque appui est noté, avec la balle à ce moment. */
+  wallButton(duel: Duel, index: number, held: boolean): void;
   /** Panneau « raté » ouvert : le match est en pause. */
   readonly isOpen: boolean;
 }
@@ -80,6 +82,7 @@ interface Watch {
   lastGestureTick: number | null;
   lastEntry: Record<string, unknown> | null;
   flagHeld: boolean;
+  wallHeld: boolean;
   count: number;
   phase: string;
   armTick: number;
@@ -142,6 +145,7 @@ export function createSwingJournal(): SwingJournal | null {
       lastGestureTick: null,
       lastEntry: null,
       flagHeld: false,
+      wallHeld: false,
       count: swing?.count ?? 0,
       phase: 'idle',
       armTick: duel.tick,
@@ -296,6 +300,11 @@ export function createSwingJournal(): SwingJournal | null {
       watch.flagHeld = held;
       // Le geste visé est le dernier fini, qu'il ait déjà son résultat ou pas encore.
       if (pressed && !asking) ask(duel, index, watch);
+    },
+    wallButton(duel, index, held) {
+      const watch = watchOf(duel, index, null);
+      if (held && !watch.wallHeld) queue.push({ type: 'boutonVitre', session, tick: duel.tick, joueur: index, ...snapshot(duel, index) });
+      watch.wallHeld = held;
     },
     get isOpen() {
       return asking !== null;

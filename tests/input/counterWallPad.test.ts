@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applySwing, toCommands, type PadState } from '../../src/input/gamepad';
+import { applySwing, readGamepad, toCommands, type PadState } from '../../src/input/gamepad';
 import { SwingStick } from '../../src/input/swingStick';
 import { quantizeCommands } from '../../src/net/codec';
 import { NEUTRAL_ARCADE } from '../../src/sim/commands';
@@ -100,5 +100,19 @@ describe('contre-vitre au bouton (RB / R1), impact au stick droit vers l’avant
     swing.wallReady = true;
     const state = applySwing({ stick: { up: 0, right: 0 }, shot: null, assistButton: false, aim: { right: 0, up: 1 }, wallButton: false }, swing, SIM_DT);
     expect(state.gesture).toEqual({ prepared: false, end: 'straight' });
+  });
+});
+
+describe('bouton de contre-vitre', () => {
+  const pad = (pressed: number[]): Gamepad =>
+    ({
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: pressed.includes(i), touched: false, value: 0 })),
+    }) as unknown as Gamepad;
+
+  it('L1 / LB (pris d’instinct par Xavier) comme R1 / RB préparent la contre-vitre', () => {
+    expect(readGamepad(pad([4])).wallButton).toBe(true);
+    expect(readGamepad(pad([5])).wallButton).toBe(true);
+    expect(readGamepad(pad([])).wallButton).toBe(false);
   });
 });
