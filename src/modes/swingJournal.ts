@@ -122,8 +122,9 @@ function snapshot(duel: Duel, index: number): Record<string, unknown> {
 const OUTCOME_WAIT = 3;
 const round = (x: number, digits = 2): number => Math.round(x * 10 ** digits) / 10 ** digits;
 
-export function createSwingJournal(): SwingJournal | null {
-  if (!import.meta.env.DEV || new URLSearchParams(location.search).get('journal') !== '1') return null;
+/** Journal des frappes, avec `?journal=1` ou `force` (atelier du labo), au serveur de développement seulement. */
+export function createSwingJournal(force = false): SwingJournal | null {
+  if (!import.meta.env.DEV || (!force && new URLSearchParams(location.search).get('journal') !== '1')) return null;
   const session = new Date().toISOString();
   let queue: Record<string, unknown>[] = [{ type: 'session', session, url: location.search }];
   const flush = (): void => {

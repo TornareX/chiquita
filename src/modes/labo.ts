@@ -20,6 +20,7 @@ import { loadFeel, saveFeel } from '../ui/feelStorage';
 import { createLaboPanel } from '../ui/laboPanel';
 import { createPadTest } from '../ui/padTest';
 import { createPauseMenu } from '../ui/pauseMenu';
+import { createSwingJournal, type SwingJournal } from './swingJournal';
 
 /** Bouton Start (Menu) : ouvre ou ferme la pause. */
 const START_BUTTON = 9;
@@ -27,6 +28,12 @@ const START_BUTTON = 9;
 const REPLAY_DELAY = 1;
 /** Décompte avant que la situation parte : les joueurs sont en place, le jeu attend (s). */
 const COUNTDOWN = 2;
+/**
+ * Atelier (`Situation.workshop`) : pas de décompte, et la balle suivante part vite. Après sa frappe, le temps de voir où
+ * va la balle ; après un coup dans le vide ou la fin du point, presque tout de suite (s).
+ */
+const WORKSHOP_AFTER_HIT = 1.2;
+const WORKSHOP_AFTER_MISS = 0.4;
 
 /** Grand chiffre du décompte, au centre de l'écran. */
 function createCountdown(): HTMLDivElement {
@@ -83,11 +90,16 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     if (!situation) return;
     bot = new Bot(1, 2, AI_LEVELS[level]);
     situation.start(duel);
-    countdownUntil = performance.now() + COUNTDOWN * 1000;
+    countdownUntil = situation.workshop ? 0 : performance.now() + COUNTDOWN * 1000;
   };
+  /** Atelier : pas où la balle est ressortie de sa vitre sans qu'il l'ait jouée. */
+  let goneSince: number | null = null;
+  /** Journal des frappes et bouton Y « raté » : ouverts avec le premier atelier. */
+  let journal: SwingJournal | null = null;
   const panel = createLaboPanel(stored, level, {
     chooseSituation(next) {
       situation = next;
+      if (next.workshop) journal ??= createSwingJournal(true);
       won = played = 0;
       replay();
     },
@@ -120,7 +132,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     onQuit: () => (location.search = ''),
     blocked: () => padTest.isOpen,
   });
-  const paused = (): boolean => pause.isOpen || padTest.isOpen;
+  const paused = (): boolean => pause.isOpen || padTest.isOpen || (journal?.isOpen ?? false);
   window.addEventListener('keydown', (event) => {
     if (event.code === 'KeyR' && !event.repeat && !paused()) replay();
   });
@@ -141,6 +153,9 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     // Manette, clavier et souris : un seul stick droit, le plus poussé, et un seul geste reconnu.
     const state = applySwing(mergePads(pad ? readGamepad(pad) : IDLE_PAD, keyboard.read(0, SIM_DT)), swings?.[0], SIM_DT);
     states[0] = state;
+    // Atelier : Y signale un coup raté ; L1 / R1 (contre-vitre) est noté.
+    if (pad) journal?.flag(duel, 0, state.face === 'lob');
+    if (pad) journal?.wallButton(duel, 0, state.wallButton ?? false);
     buttons[0] = pad ? { kind: 'pad', family: resolvePadFamily(settings.padStyle, pad) } : { kind: 'keyboard', player: 0, layout: keyboardLayout };
     return [toCommands(state, true), bot.commands(duel)];
   };
@@ -150,6 +165,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     duel.step(sample());
     view.afterStep();
     inputs.step(duel, states);
+    journal?.step(duel, [swings?.[0] ?? null, null]);
     if (settings.sound) {
       for (const contact of duel.contacts) sounds.contact(contact);
       if (duel.shot) sounds.shot({ ...duel.shot, quality: duel.shot.perfect ? 1 : 0.7 });
@@ -162,8 +178,24 @@ export function startLabo(canvas: HTMLCanvasElement): void {
       played++;
       if (duel.result.winner === 0) won++;
     }
-    // Point terminé : la même situation repart.
-    if (duel.phase === 'dead' && (duel.tick - duel.phaseTick) * SIM_DT >= REPLAY_DELAY) replay();
+    // Point terminé : la même situation repart. Atelier : la balle suivante, dès que celle-ci est jouée.
+    const me = duel.players[0];
+    const since = (tick: number): number => (duel.tick - tick) * SIM_DT;
+    if (situation?.workshop) {
+      const hit = me.lastHitTick > duel.phaseTick && since(me.lastHitTick) >= WORKSHOP_AFTER_HIT;
+      const missed = me.lastWhiffTick > duel.phaseTick && since(me.lastWhiffTick) >= WORKSHOP_AFTER_MISS;
+      const over = duel.phase === 'dead' && since(duel.phaseTick) >= WORKSHOP_AFTER_MISS;
+      // Ressortie de sa vitre du fond sans qu'il l'ait jouée : plus de contre-vitre possible, la suivante.
+      const ball = duel.ball;
+      const gone = ball !== null && me.lastHitTick <= duel.phaseTick && duel.touchedGlass && ball.vel.z * me.side < 0 && ball.pos.z * me.side > 0;
+      if (gone) goneSince ??= duel.tick;
+      else goneSince = null;
+      const passed = goneSince !== null && since(goneSince) >= WORKSHOP_AFTER_MISS;
+      if (hit || missed || over || passed) {
+        goneSince = null;
+        replay();
+      }
+    } else if (duel.phase === 'dead' && since(duel.phaseTick) >= REPLAY_DELAY) replay();
   });
 
   if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__duel = { duel, Bot };

@@ -35,7 +35,8 @@ describe('réglages de sensation', () => {
 });
 
 describe('situations de match du labo', () => {
-  for (const situation of SITUATIONS) {
+  // L'atelier, lui, change de balle à chaque départ : testé plus bas.
+  for (const situation of SITUATIONS.filter((s) => !s.workshop)) {
     it(`${situation.name} : le point se joue, puis repart à l’identique`, () => {
       const play = (): { first: string; result: string } => {
         const duel = new Duel(null);
@@ -58,4 +59,25 @@ describe('situations de match du labo', () => {
       expect(play()).toEqual(a);
     });
   }
+});
+
+describe('atelier contre-vitre', () => {
+  it('des balles variées vers la vitre de Bleu : lobs, passings et balles basses, toutes dans son camp', () => {
+    const workshop = SITUATIONS.find((s) => s.workshop)!;
+    const landings: { lob: boolean; x: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const duel = new Duel(null);
+      workshop.start(duel);
+      const lob = duel.shot?.kind === 'lob';
+      // Premier rebond chez Bleu (z < 0), au fond.
+      for (let t = 0; t < 4 / SIM_DT && duel.bounces === 0 && !duel.result; t++) duel.step();
+      expect(duel.ball!.pos.z).toBeLessThan(-5.5);
+      landings.push({ lob, x: duel.ball!.pos.x });
+    }
+    const lobs = landings.filter((l) => l.lob).length;
+    expect(lobs).toBeGreaterThan(4);
+    expect(lobs).toBeLessThan(25);
+    // Des balles des deux côtés.
+    expect(landings.some((l) => l.x < -1.5) && landings.some((l) => l.x > 1.5)).toBe(true);
+  });
 });

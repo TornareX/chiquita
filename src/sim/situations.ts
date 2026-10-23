@@ -16,6 +16,59 @@ export interface Situation {
   /** Ce qu'on y sent : à lire avant de jouer. */
   hint: string;
   start(duel: Duel): void;
+  /**
+   * Atelier : chaque départ est une balle différente, enchaînée sans décompte dès que la précédente est jouée, avec le
+   * journal des frappes et le bouton Y « raté » (`src/modes/labo.ts`).
+   */
+  workshop?: boolean;
+}
+
+/** Tirage de l'atelier : pseudo-aléatoire, mais la même suite à chaque séance (graine fixe). */
+function workshopDraw(seed: number): (min: number, max: number) => number {
+  let state = seed >>> 0;
+  return (min, max) => {
+    state = (Math.imul(state, 1103515245) + 12345) >>> 0;
+    return min + (max - min) * (state / 4294967296);
+  };
+}
+const draw = workshopDraw(2310);
+/** Un côté au hasard : -1 ou 1. */
+const side = (): number => (draw(0, 1) < 0.5 ? -1 : 1);
+
+/**
+ * Atelier contre-vitre (Xavier, 23/10) : beaucoup de balles vers sa vitre, enchaînées, pour la travailler et la
+ * signaler. Trois cas, positions et vitesses variées : le lob qui le passe au filet (35 %), le passing qui le déborde
+ * au filet et qu'il poursuit en reculant (40 %), la balle forte et basse qui meurt dans sa vitre (25 %).
+ */
+function workshopBall(duel: Duel): void {
+  const roll = draw(0, 1);
+  if (roll < 0.35) {
+    const x = draw(-1, 1);
+    duel.playSituation(1, [at(x, -draw(3, 4)), at(0.3, 3)], {
+      kind: 'lob',
+      contact: vec3(draw(-1, 1), 1, 3),
+      target: vec3(x + draw(-1.5, 1.5), 0.03, -draw(7.2, 8.6)),
+      flightTime: draw(1.5, 1.9),
+    });
+  } else if (roll < 0.75) {
+    // Passing du fond, le long du joueur au filet : il se retourne et court derrière.
+    const x = draw(-1, 1);
+    const pass = side();
+    duel.playSituation(1, [at(x, -draw(3, 4)), at(-pass * 1.5, 8.5)], {
+      kind: 'normal',
+      contact: vec3(-pass * draw(0.5, 2), 0.9, 8.5),
+      target: vec3(x + pass * draw(1.6, 2.6), 0.03, -draw(7.6, 8.8)),
+      error: draw(0, 0.4),
+    });
+  } else {
+    const x = draw(-2, 2);
+    duel.playSituation(1, [at(x, -draw(7.2, 8.2)), at(0.3, 3)], {
+      kind: 'normal',
+      contact: vec3(draw(-1, 1), 1, 3),
+      target: vec3(x + draw(-1, 1), 0.03, -draw(8.4, 9)),
+      error: draw(0.4, 0.8),
+    });
+  }
 }
 
 const at = (x: number, z: number): Vec3 => vec3(x, 0, z);
@@ -84,6 +137,13 @@ export const SITUATIONS: readonly Situation[] = [
     name: 'Balle qui meurt dans ta vitre',
     hint: 'Rouge frappe fort et bas au fond : la balle va mourir dans ta vitre. Contre-vitre (à la manette : L1 ou R1 tenu, puis vers l’avant) avant son second rebond. Ou attends qu’elle ressorte, basse.',
     start: opening(at(0.6, -8), at(0.3, 3), { kind: 'normal', contact: vec3(0.3, 1, 3), target: vec3(0.6, 0.03, -8.8), error: 0.6 }),
+  },
+  {
+    id: 'atelier-contre-vitre',
+    name: 'Atelier contre-vitre (enchaîné)',
+    hint: 'Des balles vers ta vitre, l’une après l’autre : lob qui te passe, passing qui te déborde, balle qui meurt. Quand elle est entre toi et ta vitre, contre-vitre (à la manette : L1 ou R1 tenu, puis vers l’avant) avant son second rebond. Y : signaler un coup raté.',
+    workshop: true,
+    start: workshopBall,
   },
   {
     id: 'smash-a-defendre',
