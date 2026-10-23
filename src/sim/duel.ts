@@ -1466,8 +1466,8 @@ export class Duel {
    * Contre-vitre au stick, comme la décrit Xavier (23/10) : la balle a rebondi une fois dans sa zone de défense, il va
    * vers elle, prépare, et tire contre sa vitre avant le second rebond, quelle que soit sa direction (vers la vitre ou
    * ressortie d'elle). Jouable quand il ramène le stick, là où elle est : derrière lui (lui, la balle, la vitre), à moins
-   * de `maxRoom` m de la vitre, à portée, à bonne hauteur. La qualité vient de la hauteur de la balle (`cleanHeight`),
-   * du placement (balle à côté de lui, sur le côté) et de la pression. `null` hors de cette zone, ou balle devant lui : il la joue normalement.
+   * de `maxRoom` m de la vitre, à portée, à bonne hauteur. La qualité vient du placement (balle à côté de lui, sur le
+   * côté), du moment où il ramène le stick, et de la pression. `null` hors de cette zone, ou balle devant lui : il la joue normalement.
    */
   counterWallNow(index: number): CounterWallChance | null {
     const ball = this.ball;
@@ -1481,10 +1481,8 @@ export class Duel {
     // contre-vitre, il la joue normalement.
     if ((ball.pos.z - player.pos.z) * player.side <= 0) return null;
     const playable = distance <= t.reach && ball.pos.y >= t.low && ball.pos.y <= t.high;
-    // Prise au-dessus de `cleanHeight`, la frappe peut être propre ; plus bas, vers le second rebond, elle est jugée en
-    // retard, jusqu'à la fin de la fenêtre de retard au ras du sol.
-    const low = Math.min(1, Math.max(0, (t.cleanHeight - ball.pos.y) / (t.cleanHeight - t.low)));
-    return { timing: low * this.profile.rally.lateWindow, distance, lateral: ball.pos.x - player.pos.x, glass: ball.pos, playable, dropping: false };
+    // Basse, juste avant le second rebond : c'est la contre-vitre la plus courante (Xavier, 23/10), pas une erreur.
+    return { timing: 0, distance, lateral: ball.pos.x - player.pos.x, glass: ball.pos, playable, dropping: false };
   }
 
   /**
@@ -1498,8 +1496,10 @@ export class Duel {
     const ball = this.ball!;
     const r = this.profile.rally;
     const t = r.counterWall;
-    // Coup poussé, comme le coupé : la balle basse gêne moins qu'un coup frappé.
-    const pressure = this.pressureOf(index, 'slice', ball.pos.y, dhypot(ball.vel.x, ball.vel.z), length(player.vel));
+    // Coup poussé vers le haut, contre la vitre : la balle basse ne gêne pas (c'est elle qu'on sauve), seuls le temps,
+    // la vitesse de la balle et la course comptent.
+    const comfortable = Math.max(ball.pos.y, r.pressure.comfortLow);
+    const pressure = this.pressureOf(index, 'slice', comfortable, dhypot(ball.vel.x, ball.vel.z), length(player.vel));
     const shrink = 1 - r.pressure.windowShrink * r.pressure.scale * pressure;
     // Comme les autres coups, la balle se frappe sur le côté, à `standLateral`.
     const miss = Math.abs(Math.abs(chance.lateral) - r.standLateral);
@@ -1513,9 +1513,10 @@ export class Duel {
     const width = perfect ? t.widthPerfect : t.width;
     const limit = HALF_WIDTH - 0.6;
     const x = Math.max(-limit, Math.min(limit, Math.max(-1, Math.min(1, player.stick.right)) * width * rightFor(player.side).x));
-    const target = vec3(x, BALL_RADIUS, -player.side * (perfect ? t.depthPerfect : t.depth));
+    // Ratée, elle vise plus court (la trajectoire est recalculée : elle passe encore le filet), puis perd un peu de
+    // vitesse dans toutes les directions : très ratée, elle peut finir au filet.
+    const target = vec3(x, BALL_RADIUS, -player.side * ((perfect ? t.depthPerfect : t.depth) - error * t.errorShort));
     const solved = solveCounterWall(ball.pos, target, player.side, this.profile);
-    // Moins de vitesse, dans toutes les directions : plus courte et plus basse, pas plus haute sur la vitre.
     solved.vel = scale(solved.vel, 1 - error * t.speedLoss);
     // Tourné vers sa vitre, le coup droit est de l'autre côté.
     const fore = forehandFor(player.side, player.hand).x;

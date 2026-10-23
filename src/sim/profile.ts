@@ -508,8 +508,6 @@ export interface CounterWallTuning {
    * (journal des frappes, 22/10).
    */
   readyDepth: number;
-  /** Au stick, contre-vitre tirée sur la balle au-dessus de tant (m) : propre ; plus bas, de plus en plus en retard. */
-  cleanHeight: number;
 
   /** Point de chute visé, en distance au filet chez l'adversaire : coup normal, frappe parfaite. */
   depth: number;
@@ -521,7 +519,11 @@ export interface CounterWallTuning {
   flightTime: number;
   /** Passage minimal au-dessus du filet. */
   clearance: number;
-  /** Erreur maximale : vitesse horizontale réduite de cette fraction (la balle retombe chez soi ou dans le filet). */
+  /**
+   * Erreur maximale : cible plus courte de `errorShort` m (la trajectoire est recalculée, elle passe encore le filet),
+   * puis vitesse réduite de `speedLoss` (fraction) : une contre-vitre très ratée peut encore finir au filet.
+   */
+  errorShort: number;
   speedLoss: number;
 }
 
@@ -937,14 +939,16 @@ export const REALISTIC: PhysicsProfile = {
       // du filet, seulement s'il recule sous un lob qui l'a passé (`counterWallReady`) ; sinon le coup sec reste une
       // volée bloquée. [à calibrer en jouant]
       readyDepth: 5.95, // ligne de service (6,95 m) moins 1 m
-      cleanHeight: 0.5, // [à calibrer en jouant]
-      depth: 4.5,
-      depthPerfect: 6,
+      // Plus profonde : à 4,5 et 6 m, propre elle ne passait le filet que de 3 m (Xavier, 23/10 : « d'habitude ça part
+      // plus loin »). [à calibrer en jouant]
+      depth: 6,
+      depthPerfect: 7.5,
+      errorShort: 3,
       width: 1.8,
       widthPerfect: 2.8,
       flightTime: 2.2,
       clearance: 0.6,
-      speedLoss: 0.35,
+      speedLoss: 0.08, // 0,35 avant : ratée, elle retombait chez soi ou au filet presque à coup sûr
     },
     blockPrep: 0.3,
     volleyPrep: 0.12, // [à calibrer en jouant]

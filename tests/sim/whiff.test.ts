@@ -211,6 +211,25 @@ describe('contre-vitre', () => {
     expect(duel.shot?.counterWall).toBe(true);
   });
 
+  it('balle qui meurt au bas de la vitre, frappée juste avant : elle repasse le filet et part au fond', () => {
+    // Le cas de l'atelier (23/10) : prise à 15-30 cm du sol avant la vitre, elle finissait au filet (erreur maximale).
+    for (const height of [0.15, 0.3]) {
+      // Sur son côté, à 60 cm de lui : là où il la frappe proprement.
+      const duel = receiving(-8.3, createBall(vec3(1.2, height, -8.9), vec3(0, -0.3, -3)), 1);
+      // Frappée par Rouge 1,2 s plus tôt : le temps qu'elle traverse et rebondisse.
+      duel.players[1].lastHitTick = duel.tick - Math.round(1.2 / SIM_DT);
+      wallGesture(duel, 0.05);
+      expect(duel.shot?.counterWall).toBe(true);
+      let landing: number | null = null;
+      for (let i = 0; i < 4 / SIM_DT && landing === null && !duel.result; i++) {
+        duel.step();
+        if (duel.bounces > 0 && duel.ball!.pos.z > 0) landing = duel.ball!.pos.z;
+      }
+      expect(landing).not.toBeNull();
+      expect(landing!).toBeGreaterThan(3);
+    }
+  });
+
   it('balle basse et lente qui va mourir avant le point idéal : la contre-vitre part quand même', () => {
     const duel = receiving(-8.4, createBall(vec3(0, 0.17, -8.1), vec3(0, -0.5, -5.2)), 1);
     const wall = { prepared: true, wall: true };
