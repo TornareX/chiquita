@@ -204,7 +204,7 @@ export function createLaboPanel(stored: StoredFeel, level: AiLevel, actions: Lab
         hintKey = key;
         hint.innerHTML = formatButtons(current.hint, buttons);
       }
-      score.textContent = played > 0 ? `Points gagnés : ${won} sur ${played}` : 'Joue le point ; il recommence tout seul.';
+      score.textContent = played > 0 ? `Points gagnés : ${won} sur ${played}` : 'Joue le point ; il recommence tout seul. H : aide aux coups.';
     },
   };
 }

@@ -12,9 +12,10 @@ export interface DuelHud {
    * `buttons` : manette ou clavier de chaque joueur humain (`null` pour une IA), pour afficher ses symboles
    * dans l'aide (celle du premier humain) et les consignes (celle du joueur concerné).
    * `detailed` : pour le labo et les tests, l'aide aux coups en bas à droite et le nom de chaque frappe. Sinon,
-   * le match reste épuré : seuls les coups marquants (frappe parfaite, sortie de piste) sont annoncés.
+   * le match reste épuré : seuls les coups marquants (frappe parfaite, sortie de piste) sont annoncés. `help` : l'aide
+   * aux coups, comme `detailed` par défaut ; le labo la cache (elle masquait le terrain, Xavier 23/10), H la montre.
    */
-  update(duel: Duel, sources: readonly string[], buttons?: readonly (InputSource | null)[], detailed?: boolean): void;
+  update(duel: Duel, sources: readonly string[], buttons?: readonly (InputSource | null)[], detailed?: boolean, help?: boolean): void;
 }
 
 /** Nom d'une équipe : le joueur en simple, la paire en double. */
@@ -179,7 +180,7 @@ export function createDuelHud(): DuelHud {
   let helpKey = '';
 
   return {
-    update(duel: Duel, sources: readonly string[], buttons: readonly (InputSource | null)[] = [], detailed = false): void {
+    update(duel: Duel, sources: readonly string[], buttons: readonly (InputSource | null)[] = [], detailed = false, showHelp = detailed): void {
       const doubles = duel.doubles;
       const name = (index: number): string => playerName(index, doubles);
       const main: InputSource = buttons.find((b) => b !== null && b !== undefined) ?? { kind: 'keyboard', player: 0 };
@@ -189,7 +190,7 @@ export function createDuelHud(): DuelHud {
         const lines = buttonsEnabled() ? HELP : main.kind === 'keyboard' ? keyboardHelp(main.player) : STICK_HELP;
         help.innerHTML = lines.map((line) => formatButtons(line, main)).join('<br>');
       }
-      help.style.display = detailed ? '' : 'none';
+      help.style.display = showHelp ? '' : 'none';
       const match = duel.match;
       // Match terminé : seuls restent les sets.
       const over = duel.phase === 'over';

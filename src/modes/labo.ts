@@ -133,8 +133,11 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     blocked: () => padTest.isOpen,
   });
   const paused = (): boolean => pause.isOpen || padTest.isOpen || (journal?.isOpen ?? false);
+  /** Aide aux coups en bas à droite : cachée, elle masquait le terrain ; H la montre ou la cache. */
+  let showHelp = false;
   window.addEventListener('keydown', (event) => {
     if (event.code === 'KeyR' && !event.repeat && !paused()) replay();
+    if (event.code === 'KeyH' && !event.repeat) showHelp = !showHelp;
   });
 
   /** Frappe au geste du stick droit, une par manette. */
@@ -217,7 +220,7 @@ export function startLabo(canvas: HTMLCanvasElement): void {
     if (waiting) countdown.textContent = String(Math.ceil((countdownUntil - now) / 1000));
     if (now >= hitstopUntil && !waiting && !paused()) alpha = loop.advance(frameTime);
     view.render(alpha, frameTime, now < hitstopUntil || paused());
-    hud.update(duel, sources, buttons, true);
+    hud.update(duel, sources, buttons, true, showHelp);
     panel.update(won, played, buttons[0]);
     inputs.render(duel, states, buttons, paused() || settings.inputDisplay === 'off' ? 'off' : 'full');
     requestAnimationFrame(frame);
