@@ -29,6 +29,7 @@ import {
 import { predictBall } from './predict';
 import { ballColor, ballPressure, shotError } from './pressure';
 import { add, addScaled, length, scale, vec3, type Vec3 } from './vec3';
+import { PRESSURE_FORCED, shotQuality, type ShotQuality } from './verdict';
 import { DOOR_MID, inCourt, moveWithin, outsideCourt, pathDistance, waypoint } from './walkable';
 import { dhypot } from './dmath';
 
@@ -378,12 +379,48 @@ export interface BallExit {
   pos: Vec3;
 }
 
+/**
+ * Comment le point s'est fini, vu du coup décisif : coup gagnant, faute directe, faute provoquée (coup fautif joué
+ * sur une balle rouge, sous pression), ou double faute.
+ */
+export type PointHow = 'gagnant' | 'faute' | 'provoquee' | 'doubleFaute';
+
 export interface PointResult {
   /** Équipe gagnante (en simple, c'est aussi le numéro du joueur). */
   winner: Team;
   reason: PointReason;
   /** Nombre de coups de l'échange, service compris. */
   hits: number;
+  how: PointHow;
+  /** Joueur du coup décisif : l'auteur du coup gagnant, ou celui de la faute ; `null` si personne n'a frappé. */
+  by: number | null;
+  /** Le coup décisif, ou `null` (double faute, balle jamais frappée). */
+  shot: DuelShot | null;
+  /** Coup dans le vide d'un joueur de l'équipe qui perd, après le coup décisif : pourquoi la balle n'est pas revenue. */
+  whiff: { player: number; reason: WhiffReason | null } | null;
+}
+
+/** Ce qui a coûté des points à un joueur : la qualité du coup fautif, un coup dans le vide, ou la double faute. */
+export type FaultCause = ShotQuality | 'vide' | 'service';
+
+/** Bilan d'un joueur sur le match en cours (carnet de fin de match), remis à zéro à chaque partie. */
+export interface PlayerStats {
+  /** Frappes, service compris, dont parfaites. */
+  shots: number;
+  perfects: number;
+  /** Qualité de chaque frappe (`verdict.ts`). */
+  quality: Record<ShotQuality, number>;
+  /** Points gagnés sur un coup gagnant, perdus sur une faute directe, sur une faute provoquée. */
+  winners: number;
+  errors: number;
+  forced: number;
+  /** Points perdus, par cause : fautes directes et provoquées (qualité du coup), coups dans le vide, doubles fautes. */
+  faults: Partial<Record<FaultCause, number>>;
+}
+
+export function emptyStats(): PlayerStats {
+  const quality = { parfait: 0, haute: 0, basse: 0, pasPrepare: 0, retard: 0, avance: 0, malPlace: 0, pression: 0, propre: 0 };
+  return { shots: 0, perfects: 0, quality, winners: 0, errors: 0, forced: 0, faults: {} };
 }
 
 /**
@@ -548,6 +585,8 @@ export class Duel {
   lastExit: BallExit | null = null;
   /** Coups dans l'échange en cours, service compris. */
   hits = 0;
+  /** Bilan de chaque joueur sur le match en cours. */
+  stats: PlayerStats[] = [];
   /** Plus long échange depuis le début. */
   bestRally = 0;
   rallies = 0;
@@ -620,6 +659,7 @@ export class Duel {
       }) as [DuelPlayer, DuelPlayer, ...DuelPlayer[]];
     }
     this.match = this.rules ? new Match(this.rules) : null;
+    this.stats = this.players.map(emptyStats);
     this.bestRally = 0;
     this.rallies = 0;
     this.lastResult = null;
@@ -862,7 +902,7 @@ export class Duel {
   }
 
   private endPoint(winner: Team, reason: PointReason): void {
-    const result: PointResult = { winner, reason, hits: this.hits };
+    const result = this.decide(winner, reason);
     this.result = this.lastResult = result;
     if (this.match) this.lastOutcome = this.match.awardPoint(winner);
     this.lastServeCall = null;
@@ -872,6 +912,36 @@ export class Duel {
     this.phase = 'dead';
     this.phaseTick = this.tick;
     for (const player of this.players) player.engagement = null;
+  }
+
+  /** Coup décisif du point qui se termine, porté au bilan des joueurs. */
+  private decide(winner: Team, reason: PointReason): PointResult {
+    const base = { winner, reason, hits: this.hits, whiff: null };
+    if (reason === 'double-fault') {
+      const stats = this.stats[this.server]!;
+      stats.errors++;
+      stats.faults.service = (stats.faults.service ?? 0) + 1;
+      return { ...base, how: 'doubleFaute', by: this.server, shot: null };
+    }
+    const by = this.lastHitter;
+    const shot = by === null ? null : this.players[by]!.lastHit;
+    if (by === null || !shot) return { ...base, how: 'gagnant', by: null, shot: null };
+    if (teamOf(by) === winner) {
+      this.stats[by]!.winners++;
+      // Un joueur qui perd le point a frappé dans le vide après le coup gagnant : la balle était jouable pour lui.
+      const loser = this.teamPlayers(otherTeam(winner)).find((i) => this.players[i]!.lastWhiffTick > this.players[by]!.lastHitTick);
+      if (loser === undefined) return { ...base, how: 'gagnant', by, shot };
+      const faults = this.stats[loser]!.faults;
+      faults.vide = (faults.vide ?? 0) + 1;
+      return { ...base, how: 'gagnant', by, shot, whiff: { player: loser, reason: this.players[loser]!.lastWhiffReason } };
+    }
+    const stats = this.stats[by]!;
+    const forced = shot.pressure >= PRESSURE_FORCED;
+    if (forced) stats.forced++;
+    else stats.errors++;
+    const cause = shotQuality(shot, this.profile);
+    stats.faults[cause] = (stats.faults[cause] ?? 0) + 1;
+    return { ...base, how: forced ? 'provoquee' : 'faute', by, shot };
   }
 
   private updatePlayer(index: number, cmd: ArcadeCommands): void {
@@ -1770,6 +1840,10 @@ export class Duel {
       ...(Number.isFinite(prepared) ? { prepared } : {}),
       ...(extra.miss !== undefined ? { miss: extra.miss } : {}),
     };
+    const stats = this.stats[index]!;
+    stats.shots++;
+    if (perfect) stats.perfects++;
+    stats.quality[shotQuality(player.lastHit, this.profile)]++;
     // Rebond prévu, pour `passesBehind` : calculé ici, une fois par frappe, et jamais à la demande (une question posée
     // hors du pas, par l'entrée ou l'IA, ne doit pas changer le match : jeu en ligne, `src/net`).
     this.bounceCache = { hits: this.hits, bounce: predictBall(ball, this.profile, 4, 64).bounce };

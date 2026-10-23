@@ -57,7 +57,7 @@ describe('préférences de joueur et configuration de match', () => {
       assists: ['magnet', 'partial', 'full', 'off'],
       hands: ['right', 'left', 'right', 'right'],
       pressure: 1.5,
-      match: { free: false, doubles: true, setsToWin: 2, gamesPerSet: 4, goldenPoint: true },
+      match: { free: false, doubles: true, setsToWin: 2, gamesPerSet: 4, goldenPoint: true, fast: false },
     });
   });
 
@@ -120,6 +120,19 @@ describe('préférences de joueur et configuration de match', () => {
     expect(loadSetup()).toEqual(DEFAULT_SETUP);
   });
 
+  it('par défaut, un set court ; un set classique de 6 jeux resté au défaut d’avant y passe aussi', () => {
+    expect(DEFAULT_SETUP.match).toMatchObject({ setsToWin: 1, gamesPerSet: 4, goldenPoint: true, fast: true });
+    const old = { ...DEFAULT_SETUP, match: { free: false, doubles: false, setsToWin: 1, gamesPerSet: 6, goldenPoint: false } };
+    items.set('padel-smash.match', JSON.stringify({ ...old, version: 1 }));
+    expect(loadSetup().match).toMatchObject({ gamesPerSet: 4, goldenPoint: true, fast: true });
+    // Un format choisi exprès reste le sien.
+    items.set('padel-smash.match', JSON.stringify({ ...old, match: { ...old.match, gamesPerSet: 2 }, version: 1 }));
+    expect(loadSetup().match).toMatchObject({ gamesPerSet: 2, goldenPoint: false, fast: false });
+    // Enregistré depuis : plus de conversion.
+    items.set('padel-smash.match', JSON.stringify({ ...old, match: { ...old.match, fast: false }, version: 2 }));
+    expect(loadSetup().match).toMatchObject({ gamesPerSet: 6, fast: false });
+  });
+
   it('l’adresse d’un match (écran « Jouer ») redonne exactement sa configuration', () => {
     // Des réglages enregistrés différents ne doivent pas s'y glisser.
     saveSetup({ ...DEFAULT_SETUP, pressure: 0, match: { ...DEFAULT_SETUP.match, free: true, goldenPoint: true } });
@@ -128,7 +141,7 @@ describe('préférences de joueur et configuration de match', () => {
       assists: ['partial', 'magnet', 'off', 'full'],
       hands: ['left', 'right', 'right', 'left'],
       pressure: 0.5,
-      match: { free: false, doubles: true, setsToWin: 1, gamesPerSet: 4, goldenPoint: false },
+      match: { free: false, doubles: true, setsToWin: 1, gamesPerSet: 4, goldenPoint: false, fast: false },
     };
     const query = setupQuery(setup);
     expect(query).toContain('places=clavier2,fort,manette3,facile');

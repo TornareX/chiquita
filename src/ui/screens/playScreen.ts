@@ -141,7 +141,9 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
         },
       ];
       if (!match.free) {
-        const games = [...new Set([2, 4, 6, match.gamesPerSet])].sort((a, b) => a - b);
+        // Jeux par set, et set court (Fast4) ou classique, en un seul choix : `4c` = 4 jeux en set court.
+        const key = (n: number, fast: boolean): string => `${n}${fast ? 'c' : ''}`;
+        const games = [...new Set(['4c', '2', '4', '6', key(match.gamesPerSet, match.fast)])];
         items.push(
           {
             kind: 'choice',
@@ -160,9 +162,15 @@ export function playScreen(menu: Menu, setup: MatchSetup, prefs: Preferences, la
             id: 'jeux',
             label: 'Jeux par set',
             group: 'regles',
-            value: match.gamesPerSet,
-            options: games.map((n) => ({ value: n, label: String(n) })),
-            set: (n: number) => (match.gamesPerSet = n),
+            value: key(match.gamesPerSet, match.fast),
+            options: games.map((k) => {
+              const n = parseInt(k, 10);
+              return { value: k, label: k.endsWith('c') ? `${n} · décisif à ${n - 1}-${n - 1}` : `${n} · deux d’écart` };
+            }),
+            set: (k: string) => {
+              match.gamesPerSet = parseInt(k, 10);
+              match.fast = k.endsWith('c');
+            },
           },
           {
             kind: 'toggle',

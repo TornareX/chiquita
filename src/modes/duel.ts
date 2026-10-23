@@ -16,6 +16,7 @@ import { FixedStepLoop } from '../sim/loop';
 import type { MatchRules } from '../sim/score';
 import { loadKeyboardLayout, type InputSource } from '../ui/buttonIcons';
 import { createDuelHud } from '../ui/duelHud';
+import { createMatchReport } from '../ui/matchReport';
 import { createPerfMeter } from '../ui/perfMeter';
 import { createInputDisplay } from '../ui/inputDisplay';
 import { createPadTest } from '../ui/padTest';
@@ -99,7 +100,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   const params = new URLSearchParams(location.search);
   const settings = loadSettings(params);
   const rulesOf = (s: DuelSettings): MatchRules | null =>
-    s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint };
+    s.match.free ? null : { setsToWin: s.match.setsToWin, gamesPerSet: s.match.gamesPerSet, goldenPoint: s.match.goldenPoint, fast: s.match.fast };
   const duel = online ? (online.state ?? createMatchDuel(online.config)) : new Duel(rulesOf(settings), settings.match.doubles ? 'double' : 'simple');
   const juice = juiceFlags();
   if (!online) {
@@ -116,6 +117,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
   const onlineController = online?.device ?? 'manette1';
   const view = createDuelView(canvas, duel);
   const hud = createDuelHud();
+  const report = createMatchReport();
   const keyboard = createKeyboardPads(canvas);
   const audio = createSounds();
   const sounds = muteable(audio, () => settings.sound);
@@ -502,6 +504,9 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     // Hors du proxy muet : couper le son doit aussi couper le fond sonore.
     audio.ambience(settings.sound && !menu.isOpen ? mood.stir : -1);
     hud.update(duel, sources, buttons, settings.inputDisplay === 'full');
+    // Humains de cet écran, reconnus d'un match à l'autre par leur manette ou leur clavier (moyennes du carnet).
+    const humans = online ? online.seats : duel.players.map((_, i) => i).filter((i) => isHuman(settings.players[i]!));
+    report.update(duel, humans.map((index) => ({ index, controller: online ? onlineController : settings.players[index]! })));
     inputs.render(duel, states, buttons, menu.isOpen || overlayOpen() ? 'off' : settings.inputDisplay);
     requestAnimationFrame(frame);
   };

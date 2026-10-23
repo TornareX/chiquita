@@ -1,7 +1,7 @@
 import { PAD_STYLES, type PadStyle } from '../input/padStyle';
 import { AI_LEVEL_NAMES, type AiLevel } from '../sim/bot';
 import { ASSIST_LEVELS, PREP_MOVES, type AssistLevel, type PrepMove } from '../sim/duel';
-import { DEFAULT_RULES } from '../sim/score';
+import { SHORT_RULES } from '../sim/score';
 import { HANDS, type Hand } from '../sim/shots';
 
 /**
@@ -62,6 +62,8 @@ export interface MatchSettings {
   setsToWin: number;
   gamesPerSet: number;
   goldenPoint: boolean;
+  /** Set court (Fast4, `MatchRules.fast`). */
+  fast: boolean;
 }
 
 /** Préférences de joueur : à soi, pour toutes les parties. */
@@ -128,7 +130,7 @@ export const DEFAULT_SETUP: MatchSetup = {
   assists: ['off', 'off', 'off', 'off'],
   hands: ['right', 'right', 'right', 'right'],
   pressure: 1,
-  match: { free: false, doubles: false, ...DEFAULT_RULES },
+  match: { free: false, doubles: false, ...SHORT_RULES, fast: true },
 };
 
 export const DEFAULT_SETTINGS: DuelSettings = merge(DEFAULT_PREFERENCES, DEFAULT_SETUP);
@@ -148,8 +150,11 @@ const LEGACY_KEY = 'padel-smash.reglages';
  * l'aide à la course et la préparation reprennent le défaut au lieu de le masquer.
  */
 const LEGACY_DEFAULTS_VERSION = 2;
-/** Version des réglages séparés. On l'augmente quand un défaut change (voir `LEGACY_DEFAULTS_VERSION`). */
-const VERSION = 1;
+/**
+ * Version des réglages séparés. On l'augmente quand un défaut change (voir `LEGACY_DEFAULTS_VERSION`). Avant la 2, le
+ * match par défaut était un set classique de 6 jeux sans punto de oro : resté tel quel, il passe au set court.
+ */
+const VERSION = 2;
 
 type Raw = Record<string, unknown> & { version?: unknown };
 
@@ -189,6 +194,9 @@ export function sanitizeSetup(raw: unknown, legacy = false): MatchSetup {
     if (m.setsToWin === 1 || m.setsToWin === 2) s.match.setsToWin = m.setsToWin;
     if (Number.isInteger(m.gamesPerSet) && m.gamesPerSet! >= 1 && m.gamesPerSet! <= 6) s.match.gamesPerSet = m.gamesPerSet!;
     if (typeof m.goldenPoint === 'boolean') s.match.goldenPoint = m.goldenPoint;
+    s.match.fast = typeof m.fast === 'boolean' ? m.fast : false;
+    const oldDefault = !legacy && r.version === 1 && s.match.setsToWin === 1 && s.match.gamesPerSet === 6 && !s.match.goldenPoint;
+    if (oldDefault) Object.assign(s.match, SHORT_RULES);
   }
   return s;
 }
@@ -333,6 +341,9 @@ export function loadSettings(params: URLSearchParams): DuelSettings {
   s.match.setsToWin = positive('sets') ?? s.match.setsToWin;
   s.match.gamesPerSet = positive('games') ?? s.match.gamesPerSet;
   if (params.has('gold')) s.match.goldenPoint = params.get('gold') === '1';
+  // `?fast=1` : set court ; `?games=N` seul garde le set classique, comme avant le set court.
+  if (params.has('fast')) s.match.fast = params.get('fast') === '1';
+  else if (params.has('games')) s.match.fast = false;
   return s;
 }
 
@@ -375,6 +386,7 @@ export function setupQuery(setup: MatchSetup): string {
     sets: String(match.setsToWin),
     games: String(match.gamesPerSet),
     gold: match.goldenPoint ? '1' : '0',
+    fast: match.fast ? '1' : '0',
   });
   return params.toString().replaceAll('%2C', ',');
 }

@@ -291,6 +291,18 @@ body:has(#online-banner:not([hidden])) #point {
   margin-top: calc(4 * var(--hud-u));
   color: var(--ball);
 }
+/* Le coup qui a fait le point, et son verdict à sa couleur : la ligne qui dit pourquoi. */
+.call-why {
+  margin-top: calc(4 * var(--hud-u));
+  padding: calc(4 * var(--hud-u)) calc(26 * var(--hud-u)) calc(5 * var(--hud-u));
+  background: var(--hud-plate);
+  clip-path: polygon(calc(12 * var(--hud-u)) 0, 100% 0, calc(100% - 12 * var(--hud-u)) 100%, 0 100%);
+  font-size: calc(28 * var(--hud-u));
+  font-style: italic;
+  font-weight: 800;
+  font-stretch: 85%;
+  white-space: nowrap;
+}
 
 /* Retour sur les frappes marquantes : une ligne sous la bande, pendant l'échange. */
 #feedback {
@@ -744,4 +756,100 @@ body:has(#online-banner:not([hidden])) #point {
 }
 #net-hud .net-detail {
   display: none;
+}
+
+/*
+ * Carnet de fin de match (`matchReport.ts`) : sous les sets, une plaque par humain, trois chiffres et leur tendance,
+ * la faute à travailler et un conseil ; la série de revanches dessous. L'annonce de la fin reste en bas.
+ */
+#carnet {
+  position: fixed;
+  top: calc(var(--ui-safe-y) + var(--hud-board-height) + 56 * var(--hud-u) + 24 * var(--hud-u));
+  left: 50%;
+  translate: -50% 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(12 * var(--hud-u));
+  max-width: calc(100% - 2 * var(--ui-safe-x));
+  color: var(--ink-fg);
+  font: 500 calc(22 * var(--hud-u)) / 1.3 var(--ui-font-text);
+  pointer-events: none;
+}
+#carnet[hidden] {
+  display: none;
+}
+.carnet-players {
+  display: flex;
+  gap: calc(18 * var(--hud-u));
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.carnet-player {
+  width: calc(440 * var(--hud-u));
+  padding: calc(14 * var(--hud-u)) calc(30 * var(--hud-u)) calc(16 * var(--hud-u));
+  background: var(--hud-plate);
+  clip-path: polygon(var(--hud-bevel) 0, 100% 0, calc(100% - var(--hud-bevel)) 100%, 0 100%);
+}
+.carnet-title {
+  margin-bottom: calc(6 * var(--hud-u));
+  color: var(--player);
+  font-family: var(--ui-font-brand);
+  font-size: calc(34 * var(--hud-u));
+  font-style: italic;
+  font-weight: 900;
+  font-stretch: 75%;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.carnet-stat {
+  display: grid;
+  grid-template-columns: 1fr auto calc(150 * var(--hud-u));
+  align-items: baseline;
+  gap: calc(14 * var(--hud-u));
+  padding: calc(3 * var(--hud-u)) 0;
+  border-bottom: 1px solid var(--ink-line);
+}
+.carnet-label {
+  color: var(--ink-soft);
+}
+.carnet-stat b {
+  color: var(--white);
+  font-family: var(--ui-font-brand);
+  font-size: calc(30 * var(--hud-u));
+  font-style: italic;
+  font-weight: 900;
+  font-stretch: 75%;
+}
+.carnet-trend {
+  color: var(--ink-muted);
+  font-size: calc(18 * var(--hud-u));
+  font-weight: 700;
+  text-align: right;
+}
+.carnet-work {
+  margin-top: calc(10 * var(--hud-u));
+  color: var(--ink-soft);
+}
+.carnet-work b {
+  color: var(--ball);
+}
+.carnet-tip {
+  margin-top: calc(4 * var(--hud-u));
+  color: var(--ink-fg);
+  font-style: italic;
+  font-weight: 700;
+}
+.carnet-series {
+  padding: calc(4 * var(--hud-u)) calc(30 * var(--hud-u)) calc(6 * var(--hud-u));
+  background: var(--ink);
+  clip-path: polygon(calc(16 * var(--hud-u)) 0, 100% 0, calc(100% - 16 * var(--hud-u)) 100%, 0 100%);
+  font-size: calc(26 * var(--hud-u));
+  font-stretch: 75%;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.carnet-series b {
+  color: var(--ball);
 }

@@ -10,7 +10,15 @@ export interface MatchRules {
   gamesPerSet: number;
   /** Punto de oro : à 40-40, le point suivant gagne le jeu. */
   goldenPoint: boolean;
+  /**
+   * Set court, comme le Fast4 du tennis : le premier à `gamesPerSet` jeux gagne le set, sans deux d'écart, et à un jeu
+   * de la fin à égalité (3-3 en 4 jeux) se joue un jeu décisif en 5 points, mort subite à 4-4.
+   */
+  fast?: boolean;
 }
+
+/** Set court par défaut : un set de 4 jeux en Fast4, avec punto de oro (5 à 10 min entre IA). */
+export const SHORT_RULES: MatchRules = { setsToWin: 1, gamesPerSet: 4, goldenPoint: true, fast: true };
 
 export const DEFAULT_RULES: MatchRules = { setsToWin: 1, gamesPerSet: 6, goldenPoint: false };
 
@@ -96,8 +104,9 @@ export class Match {
     this.gameServer = other(this.gameServer);
 
     const n = this.rules.gamesPerSet;
+    const fast = this.rules.fast === true;
     const [mine, theirs] = [this.games[winner], this.games[other(winner)]];
-    if (wasTiebreak || (mine >= n && mine - theirs >= 2)) {
+    if (wasTiebreak || (mine >= n && (fast || mine - theirs >= 2))) {
       outcome.set = true;
       this.sets.push(this.games);
       this.games = [0, 0];
@@ -105,7 +114,7 @@ export class Match {
         outcome.match = true;
         this.winner = winner;
       }
-    } else if (mine === n && theirs === n) {
+    } else if (fast ? mine === n - 1 && theirs === n - 1 : mine === n && theirs === n) {
       this.tiebreak = true;
     }
     return outcome;
@@ -114,7 +123,7 @@ export class Match {
   private gameWonBy(player: 0 | 1): boolean {
     const mine = this.points[player];
     const theirs = this.points[other(player)];
-    if (this.tiebreak) return mine >= 7 && mine - theirs >= 2;
+    if (this.tiebreak) return this.rules.fast ? mine >= 5 : mine >= 7 && mine - theirs >= 2;
     if (this.rules.goldenPoint && mine === 4 && theirs === 3) return true;
     return mine >= 4 && mine - theirs >= 2;
   }

@@ -909,3 +909,22 @@ De temps en temps, une image entièrement blanche : un pixel invalide (NaN ou in
 isolé en IA contre IA (le bloom seul en cause), corrigé par une passe de nettoyage avant le bloom. 0 flash sur 95 s
 (même partie) et 150 s de double. Test `renduFlash.spec.ts` à la demande (`RENDU_FLASH=1`). 537 tests unitaires
 OK, e2e 30/30. **Pas encore rejoué à la manette.**
+
+## Point expliqué, carnet de fin de match, set court (23/10/2026)
+
+Pour que « j'ai mieux joué donc j'ai gagné » se voie, et qu'on enchaîne les matchs :
+- **Point expliqué** : la fin de point dit qui l'a fait et comment (coup gagnant, faute directe, faute provoquée par
+  une balle rouge, double faute), puis le coup décisif et son verdict (« Bleu bandeja · prise trop basse »), et le coup
+  dans le vide de celui qui n'a pas renvoyé. Calculé dans la simulation (`PointResult.how/by/shot/whiff`).
+- **Carnet de fin de match** (`src/ui/matchReport.ts`) : par humain, frappes parfaites, coups gagnants, fautes
+  directes, comparés à sa moyenne des 10 derniers matchs (par manette ou clavier, `padel-smash.carnet`), la faute la
+  plus fréquente et un seul conseil ; la série de revanches dessous. Bilan dans `Duel.stats`, remis à zéro par partie.
+- **Set court par défaut** (Fast4) : 4 jeux, sans deux d'écart, jeu décisif à 3-3 en 5 points, punto de oro. Entre IA
+  normales : 5 à 10 min (contre 12 à 19 en 6 jeux). Un réglage resté à l'ancien défaut (6 jeux, sans punto) passe au
+  set court une fois ; un format choisi exprès reste. Dans « Jouer », le choix « Jeux par set » propose
+  « 4 · décisif à 3-3 » ou les sets classiques ; `?fast=1` dans l'adresse.
+- Revanche : « Revanche : tire le stick droit vers toi » (déjà en un geste).
+
+Vérifié : 636 tests unitaires + les nouveaux, typecheck, e2e parcours / places / duel / doubles / smoke. Bandeau et
+carnet vus dans le navigateur (match joué par des IA). **Pas encore joué à la manette** ; le temps mort entre deux
+points (≈ 3 s) n'a pas été réduit.

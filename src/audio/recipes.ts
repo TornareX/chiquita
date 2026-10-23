@@ -288,7 +288,7 @@ export function shotRecipe(shot: ShotSound): SoundRecipe {
  * `winnerShot` est le dernier coup du gagnant dans l'échange, s'il en a joué un.
  */
 export function crowdReaction(
-  result: PointResult,
+  result: Pick<PointResult, 'winner' | 'reason' | 'hits'>,
   winnerShot: Pick<ShotSound, 'overhead' | 'perfect' | 'volley'> | null,
 ): CrowdReaction | null {
   if (result.reason === 'por-tres' || result.reason === 'por-cuatro') return { kind: 'cheer', intensity: 1 };

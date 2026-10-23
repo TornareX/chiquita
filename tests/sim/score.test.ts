@@ -110,3 +110,28 @@ describe('sets et match', () => {
     ]);
   });
 });
+
+describe('set court (Fast4)', () => {
+  const rules = { setsToWin: 1, gamesPerSet: 4, goldenPoint: true, fast: true };
+
+  it('le premier à 4 jeux gagne le set, sans deux d’écart', () => {
+    const match = new Match(rules);
+    play(match, game(0) + game(1) + game(0) + game(1) + game(0) + game(1));
+    expect(match.games).toEqual([3, 3]);
+    expect(match.call()).toBe('Jeu décisif');
+    play(match, '1111');
+    expect(match.winner).toBeNull();
+    // Jeu décisif en 5 points, mort subite à 4-4.
+    play(match, '0000');
+    expect(match.pointLabels()).toEqual(['4', '4']);
+    expect(match.awardPoint(0)).toEqual({ game: true, set: true, match: true });
+    expect(match.sets).toEqual([[4, 3]]);
+  });
+
+  it('4-2 termine le set', () => {
+    const match = new Match(rules);
+    play(match, game(0) + game(1) + game(0) + game(1) + game(0) + game(0));
+    expect(match.sets).toEqual([[4, 2]]);
+    expect(match.winner).toBe(0);
+  });
+});

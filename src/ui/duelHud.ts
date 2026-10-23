@@ -2,7 +2,7 @@ import './hud.css';
 import { buttonsEnabled } from '../input/gamepad';
 import type { OverheadKind } from '../sim/commands';
 import { SIM_DT } from '../sim/constants';
-import type { AssistLevel, Duel, DuelShot, PointReason, ServeFault } from '../sim/duel';
+import type { AssistLevel, Duel, DuelShot, PointReason, PointResult, ServeFault, WhiffReason } from '../sim/duel';
 import { buttonIcon, formatButtons, sourceKey, type InputSource } from './buttonIcons';
 import { playerName } from './duelSettings';
 import { shotVerdict } from './shotVerdict';
@@ -42,6 +42,16 @@ const REASONS: Record<PointReason, string> = {
   'double-fault': 'double faute',
   'por-tres': 'por tres, sortie par le côté',
   'por-cuatro': 'por cuatro, sortie par le fond',
+};
+
+/** Pourquoi la balle n'est pas revenue, après un coup dans le vide qui a coûté le point. */
+const WHIFF_TEXT: Record<WhiffReason, string> = {
+  camp: 'trop tôt',
+  hauteur: 'trop haute ou trop basse',
+  portee: 'hors de portée',
+  passee: 'trop tard',
+  regle: 'pas jouable',
+  contreVitre: 'contre-vitre ratée',
 };
 
 const SERVE_FAULTS: Record<ServeFault, string> = {
@@ -162,11 +172,34 @@ function setHtml(target: HTMLElement, html: string): boolean {
 /** Losange du service et des repères (`hud.css`). */
 const DIAMOND = '<span class="hud-diamond"></span>';
 
-/** Annonce : trois mots au plus, puis la raison, plus petite, et une consigne éventuelle. */
-const callout = (main: string, sub = '', again = ''): string =>
+/** Annonce : trois mots au plus, puis la raison, plus petite, le coup qui a fait le point, et une consigne éventuelle. */
+const callout = (main: string, sub = '', again = '', why = ''): string =>
   `<div class="call-main">${main}</div>` +
   (sub ? `<div class="call-sub">${sub}</div>` : '') +
+  (why ? `<div class="call-why">${why}</div>` : '') +
   (again ? `<div class="call-again">${again}</div>` : '');
+
+/**
+ * Fin d'un point, expliquée par son coup décisif (chantier « j'ai mieux joué donc j'ai gagné ») : la raison dit qui a
+ * fait le point et comment (coup gagnant, faute directe, faute provoquée), la ligne dessous dit le coup et son verdict,
+ * et le coup dans le vide de celui qui n'a pas renvoyé.
+ */
+export function pointWhy(result: PointResult, duel: Duel): { sub: string; why: string } {
+  const doubles = duel.doubles;
+  const name = (index: number): string => playerName(index, doubles);
+  const { reason, hits, how, by, shot, whiff } = result;
+  const count = `${hits} coup${hits > 1 ? 's' : ''}`;
+  if (how === 'doubleFaute' && by !== null) return { sub: `Double faute de ${name(by)}`, why: '' };
+  if (by === null || !shot) return { sub: `${REASONS[reason]} · ${count}`, why: '' };
+  const head =
+    how === 'gagnant' ? `Coup gagnant de ${name(by)}` : how === 'provoquee' ? `Faute provoquée par ${teamName(result.winner, doubles)}` : `Faute de ${name(by)}`;
+  const verdict = shotVerdict(shot, duel.profile);
+  const missed = whiff ? ` · ${playerColor(whiff.player, name(whiff.player))} dans le vide${whiff.reason ? `, ${WHIFF_TEXT[whiff.reason]}` : ''}` : '';
+  return {
+    sub: `${head} · ${REASONS[reason]} · ${count}`,
+    why: `${playerColor(by, name(by))} ${shotName(shot)} · <span class="tone-${verdict.tone}">${verdict.text}</span>${missed}`,
+  };
+}
 
 /** Arrivée d'une annonce : elle claque sur sa plaque en ~120 ms, avec un léger dépassement (sauf mouvement réduit). */
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -275,11 +308,12 @@ export function createDuelHud(): DuelHud {
         tone = 'call';
         html = call.call === 'let' ? callout('Let', 'Service à rejouer') : callout('Faute', SERVE_FAULTS[call.reason!]);
       } else if (duel.phase === 'dead' && duel.lastResult) {
-        const { winner, reason, hits } = duel.lastResult;
+        const { winner } = duel.lastResult;
         const outcome = duel.lastOutcome;
         const won = outcome?.set ? 'Set' : outcome?.game ? 'Jeu' : 'Point';
         tone = TEAM_CLASSES[winner];
-        html = callout(`${won} ${teamName(winner, doubles)}`, `${REASONS[reason]} · ${hits} coup${hits > 1 ? 's' : ''}`);
+        const { sub, why } = pointWhy(duel.lastResult, duel);
+        html = callout(`${won} ${teamName(winner, doubles)}`, sub, '', why);
       } else if (duel.phase === 'rally' && duel.exit) {
         // Balle sortie après son rebond : encore jouable dehors, jusqu'à ce qu'elle touche le sol.
         const side = duel.exit.wall === 'sidePosX' || duel.exit.wall === 'sideNegX';
@@ -289,7 +323,8 @@ export function createDuelHud(): DuelHud {
         const winner = duel.match.winner;
         const sets = duel.match.sets.map((set) => `${set[winner]}-${set[winner === 0 ? 1 : 0]}`).join(' ');
         tone = TEAM_CLASSES[winner];
-        html = callout(`${teamName(winner, doubles)} ${doubles ? 'gagnent' : 'gagne'}`, `Match ${sets}`, 'Appuie sur un bouton de coup pour rejouer');
+        const again = buttonsEnabled() ? 'appuie sur un bouton de coup' : formatButtons('tire le stick droit vers toi', main);
+        html = callout(`${teamName(winner, doubles)} ${doubles ? 'gagnent' : 'gagne'}`, `Match ${sets}`, `Revanche : ${again}`);
       }
       message.dataset.tone = tone;
       if (setHtml(message, html) && html) slam(message);
