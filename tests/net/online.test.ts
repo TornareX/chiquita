@@ -114,7 +114,9 @@ describe('jeu en ligne : serveur de référence et navigateurs', () => {
     expect(server.late[1]!).toBeGreaterThan(0);
     expect(players[1]!.client.stats.overridden).toBeGreaterThan(0);
     for (const { client } of players) {
-      expect(client.stats.checked).toBeGreaterThanOrEqual(12);
+      // Seules les secondes déjà confirmées se comparent : avec 70 ms de gigue, leur nombre dépend du déroulé du match
+      // (11 depuis que l'IA ne sert plus en lob, 23/10). Ce qui compte : aucune désynchronisation.
+      expect(client.stats.checked).toBeGreaterThanOrEqual(10);
       expect(client.stats.desyncs).toBe(0);
     }
   });

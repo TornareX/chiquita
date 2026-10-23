@@ -5,6 +5,7 @@ import { SIM_DT } from '../sim/constants';
 import type { AssistLevel, Duel, DuelShot, PointReason, ServeFault } from '../sim/duel';
 import { buttonIcon, formatButtons, sourceKey, type InputSource } from './buttonIcons';
 import { playerName } from './duelSettings';
+import { shotVerdict } from './shotVerdict';
 
 export interface DuelHud {
   /**
@@ -127,6 +128,19 @@ function shotLabel(shot: DuelShot, detailed: boolean): string | null {
   return shot.perfect ? 'parfait !' : null;
 }
 
+/** Nom court d'une frappe, pour le verdict. */
+function shotName(shot: DuelShot): string {
+  if (shot.counterWall) return 'contre-vitre';
+  if (shot.serve) return 'service';
+  if (shot.overhead) return OVERHEADS[shot.overhead];
+  if (shot.style === 'cut' || shot.style === 'punch') return 'volée coupée';
+  if (shot.style === 'low') return 'volée basse';
+  if (shot.style === 'chiquita') return 'chiquita';
+  if (shot.style === 'block') return shot.volley ? 'volée bloquée' : 'coup bloqué';
+  if (shot.kind === 'lob') return 'lob';
+  return shot.volley ? 'volée' : 'coup';
+}
+
 /** Un texte du HUD : son apparence est dans `hud.css`, sous son `id` et ses classes. */
 function element(id: string, classes = ''): HTMLDivElement {
   const div = document.createElement('div');
@@ -232,7 +246,13 @@ export function createDuelHud(): DuelHud {
       // la frappe marquante la plus récente, qui s'efface en fondu.
       const recent = (tick: number): boolean => (duel.tick - tick) * SIM_DT < FEEDBACK_TIME;
       const notes = duel.players.map((player, i) => {
-        if (detailed && recent(player.lastWhiffTick)) return { tick: player.lastWhiffTick, html: `<span class="tone-off">${name(i)} : dans le vide !</span>` };
+        // Un humain : chaque frappe a son verdict (et ses coups dans le vide), pour voir ce qui fait un bon coup.
+        const human = buttons[i] !== null && buttons[i] !== undefined;
+        if ((detailed || human) && recent(player.lastWhiffTick)) return { tick: player.lastWhiffTick, html: `<span class="tone-off">${name(i)} : dans le vide !</span>` };
+        if (human && player.lastHit && recent(player.lastHitTick)) {
+          const verdict = shotVerdict(player.lastHit, duel.profile);
+          return { tick: player.lastHitTick, html: `${playerColor(i, name(i))} ${shotName(player.lastHit)} · <span class="tone-${verdict.tone}">${verdict.text}</span>` };
+        }
         const label = player.lastHit && recent(player.lastHitTick) ? shotLabel(player.lastHit, detailed) : null;
         if (label) return { tick: player.lastHitTick, html: `${playerColor(i, name(i))} ${label}` };
         return null;

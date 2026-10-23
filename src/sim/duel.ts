@@ -201,6 +201,8 @@ export interface DuelShot {
   miscue?: number;
   /** Temps de préparation (s), de l'appui au contact ; 0 sans préparation (journal des frappes). */
   prepared?: number;
+  /** Écart de la balle au point idéal, sur le côté du joueur (m) : placement (retour sur le coup, journal). */
+  miss?: number;
 }
 
 /**
@@ -249,6 +251,8 @@ interface HitExtra {
   dip?: number;
   /** Bandeja et víbora : vitesse dosée au stick (multiplicateur). */
   power?: number;
+  /** Écart de la balle au point idéal (m), noté dans la frappe. */
+  miss?: number;
   /** Contre-vitre. */
   counterWall?: boolean;
 }
@@ -1343,6 +1347,7 @@ export class Duel {
         heightOff,
         wing,
         power,
+        miss,
       });
       return;
     }
@@ -1384,7 +1389,7 @@ export class Duel {
     if (early) aimed = vec3(aimed.x, aimed.y, aimed.z - player.side * miscue * r.pressure.miscueLong);
     const dip = miscue > 0 && !early ? miscue * r.pressure.miscueDip : 0;
     const target = lateDrift(aimed, player.side, timing, this.profile);
-    this.hit(index, kind, ball.pos, target, perfect, judged, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing, miscue, dip, power: blockPower });
+    this.hit(index, kind, ball.pos, target, perfect, judged, volley, false, engagement.manual, { outside, pressure, error, style, prepared, wing, miscue, dip, power: blockPower, miss });
   }
 
   /**
@@ -1527,6 +1532,7 @@ export class Duel {
       wing,
       solved,
       counterWall: true,
+      miss,
     });
   }
 
@@ -1762,6 +1768,7 @@ export class Duel {
       ...(extra.counterWall ? { counterWall: true } : {}),
       ...(extra.miscue ? { miscue: extra.miscue } : {}),
       ...(Number.isFinite(prepared) ? { prepared } : {}),
+      ...(extra.miss !== undefined ? { miss: extra.miss } : {}),
     };
     // Rebond prévu, pour `passesBehind` : calculé ici, une fois par frappe, et jamais à la demande (une question posée
     // hors du pas, par l'entrée ou l'IA, ne doit pas changer le match : jeu en ligne, `src/net`).
