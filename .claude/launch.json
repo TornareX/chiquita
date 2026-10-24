@@ -88,6 +88,20 @@
         "C:/Users/xavie/Documents/Dev/padel-smash/.claude/worktrees/epic-davinci-74c02a/server/main.ts"
       ],
       "port": 2567
+    },
+    {
+      "name": "padel-pages",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "5181",
+        "--strictPort",
+        "--base",
+        "/chiquita/"
+      ],
+      "port": 5181
     }
   ]
 }

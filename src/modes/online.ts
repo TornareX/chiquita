@@ -124,7 +124,7 @@ export function startOnline(canvas: HTMLCanvasElement): void {
     },
     retry: () => whenOpen(() => lobby.show(null)),
     home: () => {
-      void (connection?.leave() ?? Promise.resolve()).then(() => (location.href = '/'));
+      void (connection?.leave() ?? Promise.resolve()).then(() => (location.href = import.meta.env.BASE_URL));
     },
   });
   lobby.show(null);

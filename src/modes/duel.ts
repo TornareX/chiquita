@@ -184,7 +184,7 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
     onTestPad: () => padTest.open(),
     // En ligne : on quitte la salle exprès, l'IA garde la place (pas de reprise au retour).
     onQuit: () => {
-      void (online?.connection.leave() ?? Promise.resolve()).then(() => (location.href = '/'));
+      void (online?.connection.leave() ?? Promise.resolve()).then(() => (location.href = import.meta.env.BASE_URL));
     },
     blocked: () => overlayOpen(),
   });

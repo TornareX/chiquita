@@ -22,6 +22,8 @@ const swingJournal = (): Plugin => ({
 });
 
 export default defineConfig({
+  // Site en ligne (GitHub Pages, `.github/workflows/pages.yml`) : servi sous https://tornarex.github.io/chiquita/.
+  base: process.env.BASE_PATH ?? '/',
   plugins: [swingJournal()],
   test: {
     // Les tests du jeu en ligne (`tests/net`) jouent des matchs entiers : en parallèle, les plus longs dépassent 5 s.

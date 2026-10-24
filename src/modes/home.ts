@@ -17,7 +17,7 @@ export function startHome(canvas: HTMLCanvasElement): void {
   /** `?debug` suit d'un écran à l'autre (outils de développement). */
   const debug = params.has('debug');
   const go = (query: string): void => {
-    location.href = `/?${query}${debug ? '&debug' : ''}`;
+    location.href = `${import.meta.env.BASE_URL}?${query}${debug ? '&debug' : ''}`;
   };
 
   const prefs = loadPreferences();
