@@ -2,7 +2,6 @@ node_modules/
 dist/
 test-results/
 playwright-report/
-research/vt4/private/
 
 # Impeccable : le moteur se télécharge tout seul au premier lancement ; sorties éphémères (bloc du README d'Impeccable)
 .claude/skills/impeccable/scripts/bin/

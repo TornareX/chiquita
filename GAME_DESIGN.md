@@ -3,7 +3,7 @@
 > Vision du jeu complet, au-delà du MVP « Padel Trainer » (`PADEL_MVP.md`).
 > Quand les deux documents divergent, celui-ci l'emporte pour la direction du jeu ;
 > `PADEL_MVP.md` reste la référence pour la physique, les règles FIP et l'architecture.
-> Les valeurs **[VT4]** seront mesurées sur Virtua Tennis 4 (voir `research/vt4/PLAN.md`).
+> Les valeurs **[VT4]** sont à caler en jouant à Virtua Tennis 4, la référence de ressenti.
 
 ---
 
@@ -181,9 +181,8 @@ Chaque palier doit être **découvrable sans tutoriel** et **enseigné** dans le
 
 ## 11. Ce que Virtua Tennis 4 doit nous apprendre
 
-Par ordre de priorité (détail dans `research/vt4/PLAN.md`, constats dans
-`research/vt4/MECANIQUES.md`) :
-1. ~~Fenêtres de timing, charge~~ **Tranché** (voir §13 et `MECANIQUES.md` §5) : VT4 n'a pas de
+Par ordre de priorité :
+1. ~~Fenêtres de timing, charge~~ **Tranché** (voir §13) : VT4 n'a pas de
    charge progressive ; nous gardons un bonus de préparation plafonné, en plus de la fenêtre de
    timing. Lecture de la direction au moment de l'impact : pas encore mesurée.
 2. Course assistée : comment le joueur est amené au point d'impact (vitesse, freinage,
@@ -216,7 +215,7 @@ Les mesures de VT4 alimentent surtout l'étape A (feeling de frappe et de course
 - **Bonus de préparation plafonné, plus une fenêtre de timing** (détail au §4 ; le code fait foi :
   `preparation()` dans `src/sim/duel.ts`, réglages `blockPrep`, `fullPrep`, `blockSpeed`,
   `perfectBefore`, `perfectAfter`, `lateWindow` dans `src/sim/profile.ts`). VT4 n'a pas de charge
-  progressive (`research/vt4/MECANIQUES.md` §5 : tenir plus longtemps ne change quasiment pas la
+  progressive (tenir plus longtemps ne change quasiment pas la
   vitesse, trop tard fait rater). Nous nous en écartons volontairement : préparer tôt rend le coup
   plus fort, ce qui récompense la lecture du jeu et donne au coup sec sans préparation un rôle
   défensif clair (bloquer). Ce n'est pas une jauge : le bonus plafonne à 0,6 s, ce qui reste

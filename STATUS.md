@@ -1,6 +1,7 @@
 # État du projet — padel-smash
 
 **En une phrase :** Padel Smash, padel arcade en 2 contre 2. L'avancement est détaillé passe par passe ci-dessous.
+
 ## Passe « jouer par les vitres » (17/10/2026, non commitée)
 
 220 tests OK, typecheck OK, joueur automatique de jouabilité inchangé. **Validé par Xavier en jeu (comparaison avec `?rendu=simple`).**
