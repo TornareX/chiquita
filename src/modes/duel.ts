@@ -6,6 +6,7 @@ import { applySwing, connectedGamepads, IDLE_PAD, readGamepad, swingEnabled, toC
 import { highFloorFromUrl, SwingStick } from '../input/swingStick';
 import { createSwingJournal } from './swingJournal';
 import { createKeyboardPads } from '../input/keyboardArcade';
+import { TOUCH_SCREEN } from '../input/virtualStick';
 import { resolvePadFamily } from '../input/padStyle';
 import { createDuelView } from '../render/duelScene';
 import { AI_LEVELS, Bot } from '../sim/bot';
@@ -231,10 +232,13 @@ export function startDuel(canvas: HTMLCanvasElement, online: OnlineStart | null 
       return bot.commands(duel);
     }
     const padIndex = padOf(controller);
-    const keys = keyboardOf(controller);
     const pad = padIndex === null ? undefined : pads[padIndex];
-    if (padIndex !== null && !pad) sources[index] += ' (absente)';
-    const slot = padIndex ?? (keys === null ? null : 4 + keys);
+    // Téléphone sans manette : la place de la manette 1 se joue aux sticks tactiles (côté bleu du clavier).
+    const touchFallback = padIndex === 0 && !pad && TOUCH_SCREEN;
+    const keys = touchFallback ? 0 : keyboardOf(controller);
+    if (touchFallback) sources[index] = 'Tactile';
+    else if (padIndex !== null && !pad) sources[index] += ' (absente)';
+    const slot = touchFallback ? 4 : (padIndex ?? (keys === null ? null : 4 + keys));
     const swing = slot === null ? null : (swings?.[slot] ?? null);
     playerSwings[index] = swing;
     // Contre-vitre proposée : le geste du stick droit s'inverse (vers l'avant pour préparer).

@@ -10,7 +10,7 @@ import { createEffectsView, effectsEnabled } from './effectsView';
 import { arenaEnabled, createArena } from './arena';
 import { stepCrowdReactions } from '../audio/recipes';
 import { CHARACTERS, createCharacter, type CharacterRig, type Reach } from './character';
-import { applyLook, enableShadows, exactColor, renderLook, setShadows, softwareRendering } from './look';
+import { applyLook, enableShadows, exactColor, pixelRatio, renderLook, setShadows, softwareRendering } from './look';
 import { loadModel, modelsEnabled } from './models';
 import { dressCharacter, toonLookEnabled, updateOutline } from './toonLook';
 import { dressCourt, turfEnabled } from './turf';
@@ -399,7 +399,7 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
   renderer.info.autoReset = false;
   /** Post-traitement actif (`postfx.ts`) : rendu en lumière linéaire, bloom ; jamais en rendu logiciel. */
   const hdr = postfxWanted(look) && !softwareRendering(renderer);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(pixelRatio());
   renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();

@@ -14,6 +14,7 @@ import {
   VignetteEffect,
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
+import { TOUCH_SCREEN } from '../input/virtualStick';
 import { softwareRendering, type RenderLook } from './look';
 
 /**
@@ -99,7 +100,9 @@ export function linearGlass(object: THREE.Object3D): void {
 
 /** Voulu d'après l'adresse ; à savoir avant de créer le moteur (son MSAA doit alors être coupé). */
 export function postfxWanted(look: RenderLook): boolean {
-  return look === 'soigne' && new URLSearchParams(location.search).get('postfx') !== '0';
+  const postfx = new URLSearchParams(location.search).get('postfx');
+  // Téléphone : trop cher (occlusion, bloom), sauf `?postfx=1`.
+  return look === 'soigne' && postfx !== '0' && (!TOUCH_SCREEN || postfx === '1');
 }
 
 export interface Postfx {

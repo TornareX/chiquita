@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { TOUCH_SCREEN } from '../input/virtualStick';
 
 /**
  * Rendu soigné (`research/rendu/POLISH_VISUEL.md`, étape V1) : courbe de tons, exposition et lumière douce
@@ -49,11 +50,14 @@ const SHADOW_RADIUS = 3;
 /**
  * Ombres portées (étape V2) : une seule lumière les porte (chaque lumière qui porte une ombre redessine la scène),
  * le projecteur au-dessus du terrain, à la verticale comme dans une vraie salle. Son cône ne couvre que le terrain
- * (20 × 10 m), ce qui garde la carte d'ombre nette. Rien en `?rendu=simple`, ni en rendu logiciel (trop cher).
+ * (20 × 10 m), ce qui garde la carte d'ombre nette. Rien en `?rendu=simple`, ni en rendu logiciel (trop cher), ni sur
+ * téléphone.
  * Retourne `true` si les ombres sont actives.
  */
 export function enableShadows(renderer: THREE.WebGLRenderer, light: THREE.SpotLight | THREE.DirectionalLight, look: RenderLook): boolean {
-  if (look === 'simple' || softwareRendering(renderer) || new URLSearchParams(location.search).get('ombres') === '0') return false;
+  const shadows = new URLSearchParams(location.search).get('ombres');
+  // Téléphone : pas d'ombres portées, sauf `?ombres=1`.
+  if (look === 'simple' || softwareRendering(renderer) || shadows === '0' || (TOUCH_SCREEN && shadows !== '1')) return false;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   light.castShadow = true;
@@ -107,4 +111,9 @@ export function softwareRendering(renderer: THREE.WebGLRenderer): boolean {
 export function exactColor<M extends THREE.Material>(material: M): M {
   material.toneMapped = false;
   return material;
+}
+
+/** Densité de pixels : 2 au plus ; 1,25 sur téléphone, où l'écran très dense coûte cher pour peu de différence. [à calibrer] */
+export function pixelRatio(): number {
+  return Math.min(window.devicePixelRatio, TOUCH_SCREEN ? 1.25 : 2);
 }

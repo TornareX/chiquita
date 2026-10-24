@@ -1,5 +1,6 @@
 // Variables communes de l'interface, avant toute autre feuille de style.
 import './ui/theme.css';
+import { fullscreenOnTouch } from './input/virtualStick';
 import { startAnimations } from './modes/animations';
 import { startDuel } from './modes/duel';
 import { startHome } from './modes/home';
@@ -10,6 +11,7 @@ import { startTrainer } from './modes/trainer';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('Canvas #scene introuvable');
+fullscreenOnTouch();
 
 // `?mode=trainer` : la machine à balles, gardée comme outil de réglage et de test.
 // `?mode=labo` : labo de sensations, une situation de match rejouée en boucle pour régler la physique.

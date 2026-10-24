@@ -99,3 +99,115 @@ export class MouseStick {
     return this.pos;
   }
 }
+
+/** Écran tactile comme pointeur principal (téléphone, tablette) : sticks tactiles, plein écran, rendu allégé. */
+export const TOUCH_SCREEN = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+
+/**
+ * Téléphone : plein écran et paysage au premier doigt levé (le navigateur ne l'accepte qu'après un geste), puis à
+ * chaque fois qu'on en est sorti. Sans effet là où le navigateur ne le permet pas (iPhone : ajouter à l'écran d'accueil).
+ */
+export function fullscreenOnTouch(): void {
+  if (!TOUCH_SCREEN) return;
+  window.addEventListener(
+    'pointerup',
+    (event) => {
+      if (event.pointerType !== 'touch' || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+      document.documentElement
+        .requestFullscreen({ navigationUI: 'hide' })
+        .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
+        .catch(() => {});
+    },
+    true,
+  );
+}
+
+/** Pixels de doigt pour pousser un stick tactile jusqu'au bord. [à calibrer en jouant] */
+export const TOUCH_RANGE = 60;
+
+/** Un stick tactile : posé là où le doigt touche l'écran, poussé par le glissé, recentré au lever. */
+class TouchStick {
+  pointer: number | null = null;
+  private origin = { x: 0, y: 0 };
+  private pos: StickAxes = CENTER;
+  private readonly base = document.createElement('div');
+  private readonly knob = document.createElement('div');
+
+  constructor() {
+    this.base.className = 'touch-stick';
+    this.knob.className = 'touch-stick-knob';
+    this.base.append(this.knob);
+    this.base.hidden = true;
+    document.body.append(this.base);
+  }
+
+  start(event: PointerEvent): void {
+    this.pointer = event.pointerId;
+    this.origin = { x: event.clientX, y: event.clientY };
+    this.pos = CENTER;
+    this.base.style.left = `${event.clientX}px`;
+    this.base.style.top = `${event.clientY}px`;
+    this.base.hidden = false;
+    this.draw();
+  }
+
+  move(event: PointerEvent): void {
+    this.pos = clampDisk((event.clientX - this.origin.x) / TOUCH_RANGE, -(event.clientY - this.origin.y) / TOUCH_RANGE);
+    this.draw();
+  }
+
+  end(): void {
+    this.pointer = null;
+    this.pos = CENTER;
+    this.base.hidden = true;
+  }
+
+  read(): StickAxes {
+    return this.pos;
+  }
+
+  private draw(): void {
+    this.knob.style.transform = `translate(${this.pos.right * TOUCH_RANGE}px, ${-this.pos.up * TOUCH_RANGE}px)`;
+  }
+}
+
+/**
+ * Deux sticks au doigt, pour jouer sur téléphone : moitié gauche de l'écran, le stick de déplacement ; moitié
+ * droite, le stick droit (les mêmes gestes qu'à la manette, `swingStick.ts`). Chaque stick naît où le pouce se pose.
+ */
+export class TouchSticks {
+  private readonly left = new TouchStick();
+  private readonly right = new TouchStick();
+
+  constructor(target: HTMLElement) {
+    target.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch') return;
+      const stick = event.clientX < window.innerWidth / 2 ? this.left : this.right;
+      if (stick.pointer !== null) return;
+      stick.start(event);
+      target.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    const find = (event: PointerEvent): TouchStick | null =>
+      [this.left, this.right].find((stick) => stick.pointer === event.pointerId) ?? null;
+    target.addEventListener('pointermove', (event) => find(event)?.move(event));
+    const release = (event: PointerEvent): void => find(event)?.end();
+    target.addEventListener('pointerup', release);
+    target.addEventListener('pointercancel', release);
+    target.addEventListener('lostpointercapture', release);
+    window.addEventListener('blur', () => {
+      this.left.end();
+      this.right.end();
+    });
+  }
+
+  /** Stick de déplacement. */
+  move(): StickAxes {
+    return this.left.read();
+  }
+
+  /** Stick droit. */
+  aim(): StickAxes {
+    return this.right.read();
+  }
+}

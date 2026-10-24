@@ -1,6 +1,6 @@
 import type { ShotKind } from '../sim/commands';
 import { buttonsEnabled, IDLE_PAD, type PadState } from './gamepad';
-import { KeyStick, MouseStick, strongest } from './virtualStick';
+import { KeyStick, MouseStick, strongest, TouchSticks } from './virtualStick';
 
 /**
  * Deux joueurs sur un clavier, touches lues par position physique (`event.code`) :
@@ -76,11 +76,15 @@ export interface KeyboardPads {
   read(player: 0 | 1, dt?: number): PadState;
 }
 
-/** `target` : élément où un clic de souris commence un geste (le canevas du jeu) ; sans lui, pas de souris. */
+/**
+ * `target` : élément où un clic de souris commence un geste (le canevas du jeu), et où les pouces posent les sticks
+ * tactiles (côté bleu) ; sans lui, ni souris ni tactile.
+ */
 export function createKeyboardPads(target?: HTMLElement): KeyboardPads {
   const held = new Set<string>();
   const sticks = KEY_LAYOUTS.map(() => new KeyStick());
   const mouse = target ? new MouseStick(target) : null;
+  const touch = target ? new TouchSticks(target) : null;
   window.addEventListener('keydown', (event) => {
     if (event.code.startsWith('Arrow')) event.preventDefault();
     if (!event.repeat) sticks.forEach((stick) => stick.press(event.code));
@@ -97,10 +101,12 @@ export function createKeyboardPads(target?: HTMLElement): KeyboardPads {
       // Touche de coup pressée : elle frappe seulement aux boutons, mais valide toujours dans les menus (comme `face`).
       const face = layout.shots.find(([code]) => held.has(code))?.[1] ?? null;
       const shot = buttonsEnabled() ? face : null;
-      const stick = { up: axis(layout.up, layout.down), right: axis(layout.right, layout.left) };
+      const keyMove = { up: axis(layout.up, layout.down), right: axis(layout.right, layout.left) };
+      const stick = player === 0 && touch ? strongest(keyMove, touch.move()) : keyMove;
       const assistButton = held.has(layout.assist);
       const keys = sticks[player]!.update(layout.swing, held, dt);
-      const aim = player === 0 && mouse ? strongest(keys, mouse.read()) : keys;
+      const pointer = player === 0 && mouse ? strongest(keys, mouse.read()) : keys;
+      const aim = player === 0 && touch ? strongest(pointer, touch.aim()) : pointer;
       const idle = stick.up === 0 && stick.right === 0 && !face && !assistButton && aim.up === 0 && aim.right === 0;
       return idle ? IDLE_PAD : { stick, shot, assistButton, face, aim };
     },
