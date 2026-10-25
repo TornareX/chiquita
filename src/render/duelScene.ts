@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALL_RADIUS, HALF_LENGTH, PLAYER_HEIGHT, SIM_DT } from '../sim/constants';
 import type { CallKind, Duel, DuelPlayer } from '../sim/duel';
+import { DEAD_TIME } from '../sim/duel';
 import { predictBall } from '../sim/predict';
 import { ballColor, type BallColor } from '../sim/pressure';
 import { lerp, type Vec3 } from '../sim/vec3';
@@ -17,7 +18,7 @@ import { dressCourt, turfEnabled } from './turf';
 import { dressHall, hallEnabled } from './hall';
 import { createPostfx, linearGlass, postfxWanted } from './postfx';
 import type { RenderInfo } from '../ui/perfMeter';
-import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, STRIDE, strikeReach, SWING_IN, swingSide, waitReach, type PoseInput, type PrepState, type SwingFamily } from './pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, lowFamily, overheadFamily, plansHighShot, STRIDE, strikeReach, SWING_IN, swingSide, waitReach, pointReaction, type PoseInput, type PrepState, type ReactionState, type SwingFamily } from './pose';
 import { SlideDetector } from './effects';
 import { juiceFlags } from './juice';
 import { createSwingTrail, swingLook, type SwingTrail } from './swingTrail';
@@ -679,8 +680,18 @@ export function createDuelView(canvas: HTMLCanvasElement, source: Duel): DuelVie
     // Vitesse lissée pour la pose : un démarrage ou un arrêt brusque ne fait pas sauter les jambes.
     view.anim.speed += (speed - view.anim.speed) * (1 - Math.exp(-GAIT_FOLLOW * frameTime));
 
+    // Fin de point (pas une faute de service à rejouer) : chacun réagit, jusqu'au point suivant ; tenue en fin de match.
+    const ended = duel.lastResult !== null && ((duel.phase === 'dead' && duel.lastServeCall === null) || duel.phase === 'over');
+    const reaction: ReactionState | null = ended
+      ? {
+          kind: pointReaction(duel.lastResult!, duel.players.indexOf(player), player.team, duel.match?.winner != null),
+          seconds: (now - duel.phaseTick) * SIM_DT + (duel.phase === 'over' ? DEAD_TIME : 0),
+          left: duel.phase === 'over' ? Infinity : DEAD_TIME - (now - duel.phaseTick) * SIM_DT,
+        }
+      : null;
     const pose = computePose({
         inPlay: duel.phase !== 'dead' && duel.phase !== 'over',
+        reaction,
         prep,
         strike,
         speed: view.anim.speed,

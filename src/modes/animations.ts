@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CHARACTERS, createCharacter, SWEET_SPOT, type CharacterRig } from '../render/character';
 import { createCourt } from '../render/court';
 import { PARTNER_COLORS, TEAM_COLORS } from '../render/duelScene';
-import { bodyYawTarget, computePose, FOLLOW_TIME, RECOVER_TIME, strikeReach, STRIDE, SWING_FAMILIES, SWING_IN, type SwingFamily } from '../render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, REACTIONS, RECOVER_TIME, strikeReach, STRIDE, SWING_FAMILIES, SWING_IN, type Reaction, type SwingFamily } from '../render/pose';
 import { createPadTest } from '../ui/padTest';
 import { createPauseMenu } from '../ui/pauseMenu';
 import { loadSettings, saveSettings } from '../ui/settingsStore';
@@ -10,7 +10,7 @@ import { loadSettings, saveSettings } from '../ui/settingsStore';
 /**
  * Visionneur d'animations (`?mode=animations`) : un personnage seul, qui joue en boucle le geste choisi, sans
  * simulation. Pour juger et régler les poses de `src/render/pose.ts` sans avoir à jouer.
- * Paramètres d'URL (pour garder un lien) : `&coup=voleeFore`, `&vue=cote`, `&vitesse=0.25`, `&prep=0.3`, `&perso=2`,
+ * Paramètres d'URL (pour garder un lien) : `&coup=voleeFore`, `&reaction=vamos`, `&vue=cote`, `&vitesse=0.25`, `&prep=0.3`, `&perso=2`,
  * `&contact=basse` (balle à frapper ailleurs que là où la pose met le tamis : l'IK du bras la rejoint).
  */
 
@@ -24,6 +24,17 @@ const FAMILY_NAMES: Partial<Record<SwingFamily, string>> = {
   overhead: 'Smash',
   serve: 'Service',
 };
+
+const REACTION_NAMES: Record<Reaction, string> = {
+  vamos: 'Vamos (son coup gagnant)',
+  content: 'Content (point gagné)',
+  rage: 'Rage (sa faute)',
+  abattu: 'Abattu (point perdu)',
+  victoire: 'Victoire (fin du match)',
+};
+/** Durée d'une réaction en boucle, et moment où elle s'efface comme avant le point suivant (s). */
+const REACTION_LOOP = 2.2;
+const REACTION_END = 1.4;
 
 type Motion = 'attente' | 'repos' | 'course' | 'chasse' | 'recul';
 const MOTIONS: Record<Motion, { name: string; speed: number; heading: number }> = {
@@ -105,11 +116,15 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
   // État du visionneur.
   const familyParam = params.get('coup');
   const motionParam = params.get('mouvement') as Motion | null;
+  const reactionParam = params.get('reaction') as Reaction | null;
   const state = {
     clip: (familyParam && (SWING_FAMILIES as string[]).includes(familyParam)
       ? { kind: 'swing', family: familyParam as SwingFamily }
-      : { kind: 'motion', motion: motionParam && motionParam in MOTIONS ? motionParam : 'attente' }) as
+      : reactionParam && REACTIONS.includes(reactionParam)
+        ? { kind: 'reaction', reaction: reactionParam }
+        : { kind: 'motion', motion: motionParam && motionParam in MOTIONS ? motionParam : 'attente' }) as
       | { kind: 'swing'; family: SwingFamily }
+      | { kind: 'reaction'; reaction: Reaction }
       | { kind: 'motion'; motion: Motion },
     angle: VIEWS[(params.get('vue') as View) ?? 'troisQuarts'] ?? VIEWS.troisQuarts,
     speed: Number(params.get('vitesse') ?? 1) || 1,
@@ -131,7 +146,7 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
   setCharacter(state.character);
 
   const clipLength = (): number =>
-    state.clip.kind === 'swing' ? state.prep + SWING_IN + FOLLOW_TIME + RECOVER_TIME + HOLD : 2;
+    state.clip.kind === 'swing' ? state.prep + SWING_IN + FOLLOW_TIME + RECOVER_TIME + HOLD : state.clip.kind === 'reaction' ? REACTION_LOOP : 2;
   /** Phase affichée à l'instant `t` d'un coup. */
   const phaseAt = (t: number): string => {
     if (t < state.prep) return 'Préparation';
@@ -190,6 +205,20 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
       },
       () => state.clip.kind === 'swing' && state.clip.family === family,
       family,
+    );
+    b.style.display = 'block';
+    panel.append(b);
+  }
+  panel.append(heading('Fin de point'));
+  for (const reaction of REACTIONS) {
+    const b = button(
+      REACTION_NAMES[reaction],
+      () => {
+        state.clip = { kind: 'reaction', reaction };
+        state.time = 0;
+      },
+      () => state.clip.kind === 'reaction' && state.clip.reaction === reaction,
+      reaction,
     );
     b.style.display = 'block';
     panel.append(b);
@@ -319,6 +348,10 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
         time: t,
       });
     }
+    if (clip.kind === 'reaction') {
+      const left = clip.reaction === 'victoire' ? Infinity : REACTION_END - t;
+      return computePose({ ...STILL, inPlay: false, reaction: { kind: clip.reaction, seconds: t, left } });
+    }
     const m = MOTIONS[clip.motion];
     state.stride += ((m.speed * dt) / STRIDE) * Math.PI * 2;
     state.yaw += (bodyYawTarget(m.speed, m.heading, false) - state.yaw) * (1 - Math.exp(-10 * dt));
@@ -372,7 +405,9 @@ export function startAnimations(canvas: HTMLCanvasElement): void {
     phaseLabel.textContent =
       state.clip.kind === 'swing'
         ? `${FAMILY_NAMES[state.clip.family] ?? state.clip.family} · ${phaseAt(t)} · ${t.toFixed(2)} s`
-        : MOTIONS[state.clip.motion].name;
+        : state.clip.kind === 'reaction'
+          ? `${REACTION_NAMES[state.clip.reaction]} · ${t.toFixed(2)} s`
+          : MOTIONS[state.clip.motion].name;
 
     // Assez près pour rester dans le terrain en vue de côté (le grillage masquerait le joueur).
     const distance = 4.4;

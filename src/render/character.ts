@@ -330,7 +330,7 @@ export function createCharacter(look: CharacterLook, jersey: number, height = PL
       pointLimb(armR.root, pose.armR);
       armR.joint.rotation.x = -pose.elbowR;
       pointLimb(armL.root, pose.armL);
-      armL.joint.rotation.x = -0.4;
+      armL.joint.rotation.x = -pose.elbowL;
 
       racketDir.set(pose.racket[0], pose.racket[1], pose.racket[2]).normalize();
       if (reach && reach.weight > 0) {

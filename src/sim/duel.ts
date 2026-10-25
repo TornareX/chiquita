@@ -455,7 +455,7 @@ export interface Toss {
 
 /** Délai minimal avant de pouvoir servir, et pause après un point (s). */
 const SERVE_DELAY = 0.4;
-const DEAD_TIME = 1.4;
+export const DEAD_TIME = 1.4;
 /** Pause après une faute de service ou un let (s). */
 const FAULT_TIME = 1;
 /** Un échange sans frappe pendant ce temps est arrêté (balle coincée). */

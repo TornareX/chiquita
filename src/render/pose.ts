@@ -7,7 +7,7 @@
  * Les directions des bras et de la raquette sont données dans le repère du buste, après sa torsion.
  */
 
-import type { Duel, DuelPlayer, Engagement } from '../sim/duel';
+import type { Duel, DuelPlayer, Engagement, PointResult, Team } from '../sim/duel';
 import type { OverheadKind } from '../sim/commands';
 import { bandejaHeight } from '../sim/shots';
 
@@ -35,8 +35,9 @@ export interface Pose {
   /** Direction épaule → coude, bras droit (raquette) et bras gauche. */
   armR: V3;
   armL: V3;
-  /** Flexion du coude droit (rad). */
+  /** Flexion du coude droit et du coude gauche (rad). */
   elbowR: number;
+  elbowL: number;
   /** Direction de la raquette (de la main vers le tamis), et vers quoi regarde son tamis. */
   racket: V3;
   face: V3;
@@ -60,6 +61,7 @@ interface Key {
   armR: V3;
   armL: V3;
   elbowR: number;
+  elbowL: number;
   racket: V3;
   face: V3;
   /** Pas en avant de la jambe gauche ou droite (rad de balancier) : la jambe opposée au coup, à la volée. */
@@ -77,9 +79,9 @@ const FORWARD: V3 = [0, 0, 1];
 /** Part de la rotation des épaules prise par les hanches. */
 const HIP_SHARE = 0.45;
 
-type Optional = 'face' | 'elbowR' | 'stepL' | 'stepR' | 'jump' | 'kick' | 'stance' | 'hipTwist';
+type Optional = 'face' | 'elbowR' | 'elbowL' | 'stepL' | 'stepR' | 'jump' | 'kick' | 'stance' | 'hipTwist';
 function key(k: Omit<Key, Optional> & Partial<Pick<Key, Optional>>): Key {
-  return { face: FORWARD, elbowR: 0.15, stepL: 0, stepR: 0, jump: 0, kick: 0, stance: 0, hipTwist: k.twist * HIP_SHARE, ...k };
+  return { face: FORWARD, elbowR: 0.15, elbowL: 0.4, stepL: 0, stepR: 0, jump: 0, kick: 0, stance: 0, hipTwist: k.twist * HIP_SHARE, ...k };
 }
 
 /**
@@ -91,61 +93,129 @@ const READY = key({ twist: 0, lean: 0.12, crouch: 0.15, armR: [0.05, -0.6, 0.8],
 /** Hors de l'échange (pause entre les points, service adverse pas encore lâché). */
 const REST = key({ twist: 0, lean: 0.03, crouch: 0, armR: [-0.2, -0.95, 0.15], armL: [0.2, -0.97, 0.05], elbowR: 0.2, racket: [-0.1, -0.5, 0.85], face: [-1, 0, 0] });
 
-/** Pour chaque famille : armé (préparation pleine), image d'impact, fin du geste. */
+/**
+ * Pour chaque famille : armé (préparation pleine), image d'impact, fin du geste. Les appuis restent larges (`stance`)
+ * pendant tout le geste, comme au padel : c'est l'écart des pieds, plus que la flexion, qui se voit de la caméra TV.
+ */
 const SWINGS: Record<SwingFamily, { prep: Key; impact: Key; follow: Key }> = {
   // Coup droit et revers d'après la décomposition d'un entraîneur (images de Xavier) : jambes fléchies,
   // préparation courte tête de raquette en haut, épaules et hanches tournées, main libre qui vise (contrôle),
   // contact bas devant soi, fin du geste par-dessus l'épaule opposée.
   fore: {
-    prep: key({ twist: -1.2, lean: 0.2, crouch: 0.14, armR: [-0.75, -0.1, -0.65], armL: [0.55, 0.1, 0.85], elbowR: 1.0, racket: [-0.15, 0.85, -0.5], face: [-1, 0, 0] }),
-    impact: key({ twist: -0.15, lean: 0.35, crouch: 0.17, armR: [-0.6, -0.65, 0.45], armL: [0.75, -0.2, 0], elbowR: 0.2, racket: [-0.75, -0.15, 0.65] }),
-    follow: key({ twist: 0.95, lean: 0.15, crouch: 0.12, armR: [0.4, 0.55, 0.75], armL: [0.5, -0.6, 0.4], elbowR: 1.3, racket: [0.35, 0.35, -0.85], face: [1, 0, 0] }),
+    prep: key({ twist: -1.2, lean: 0.2, crouch: 0.14, armR: [-0.75, -0.1, -0.65], armL: [0.55, 0.1, 0.85], elbowR: 1.0, racket: [-0.15, 0.85, -0.5], face: [-1, 0, 0], stance: 0.45 }),
+    impact: key({ twist: -0.15, lean: 0.35, crouch: 0.17, armR: [-0.6, -0.65, 0.45], armL: [0.75, -0.2, 0], elbowR: 0.2, racket: [-0.75, -0.15, 0.65], stance: 0.5 }),
+    follow: key({ twist: 0.95, lean: 0.15, crouch: 0.12, armR: [0.4, 0.55, 0.75], armL: [0.5, -0.6, 0.4], elbowR: 1.3, racket: [0.35, 0.35, -0.85], face: [1, 0, 0], stance: 0.4 }),
   },
   back: {
-    prep: key({ twist: 1.2, lean: 0.2, crouch: 0.14, armR: [0.65, -0.35, -0.25], armL: [0.45, -0.25, 0.3], elbowR: 0.6, racket: [0.25, 0.8, -0.55], face: [1, 0, 0] }),
-    impact: key({ twist: 0.2, lean: 0.35, crouch: 0.17, armR: [0.55, -0.6, 0.55], armL: [0.55, -0.45, -0.7], elbowR: 0.05, racket: [0.8, -0.15, 0.55] }),
-    follow: key({ twist: -0.6, lean: 0.15, crouch: 0.1, armR: [-0.6, 0.15, 0.75], armL: [0.6, -0.5, -0.6], elbowR: 0.3, racket: [-0.55, 0.75, 0.1], face: [-1, 0, 0] }),
+    prep: key({ twist: 1.2, lean: 0.2, crouch: 0.14, armR: [0.65, -0.35, -0.25], armL: [0.45, -0.25, 0.3], elbowR: 0.6, racket: [0.25, 0.8, -0.55], face: [1, 0, 0], stance: 0.45 }),
+    impact: key({ twist: 0.2, lean: 0.35, crouch: 0.17, armR: [0.55, -0.6, 0.55], armL: [0.55, -0.45, -0.7], elbowR: 0.05, racket: [0.8, -0.15, 0.55], stance: 0.5 }),
+    follow: key({ twist: -0.6, lean: 0.15, crouch: 0.1, armR: [-0.6, 0.15, 0.75], armL: [0.6, -0.5, -0.6], elbowR: 0.3, racket: [-0.55, 0.75, 0.1], face: [-1, 0, 0], stance: 0.4 }),
   },
   // Volées d'après les images de Xavier : tête de raquette toujours au-dessus du poignet ; préparation courte
   // (la main, la hanche et les épaules s'ouvrent, tête de raquette en haut) ; à l'impact, devant soi, pas en avant
   // avec la jambe opposée ; geste court, la raquette accompagne vers l'avant et un peu vers le bas (coupé).
   voleeFore: {
-    prep: key({ twist: -0.7, lean: 0.12, crouch: 0.12, armR: [-0.7, -0.05, -0.15], armL: [0.5, 0.1, 0.85], elbowR: 1.1, racket: [-0.2, 0.9, -0.3], face: [-1, 0, 0.3] }),
-    impact: key({ twist: -0.25, lean: 0.2, crouch: 0.15, armR: [-0.45, -0.2, 0.85], armL: [0.8, -0.1, 0.3], elbowR: 0.35, racket: [-0.35, 0.75, 0.55], face: [0, 0.1, 1], stepL: 0.45 }),
-    follow: key({ twist: 0, lean: 0.22, crouch: 0.14, armR: [-0.25, -0.35, 0.9], armL: [0.75, -0.3, 0.2], elbowR: 0.3, racket: [-0.2, 0.55, 0.8], face: [0, -0.3, 1], stepL: 0.5 }),
+    prep: key({ twist: -0.7, lean: 0.12, crouch: 0.12, armR: [-0.7, -0.05, -0.15], armL: [0.5, 0.1, 0.85], elbowR: 1.1, racket: [-0.2, 0.9, -0.3], face: [-1, 0, 0.3], stance: 0.4 }),
+    impact: key({ twist: -0.25, lean: 0.2, crouch: 0.15, armR: [-0.45, -0.2, 0.85], armL: [0.8, -0.1, 0.3], elbowR: 0.35, racket: [-0.35, 0.75, 0.55], face: [0, 0.1, 1], stepL: 0.45, stance: 0.4 }),
+    follow: key({ twist: 0, lean: 0.22, crouch: 0.14, armR: [-0.25, -0.35, 0.9], armL: [0.75, -0.3, 0.2], elbowR: 0.3, racket: [-0.2, 0.55, 0.8], face: [0, -0.3, 1], stepL: 0.5, stance: 0.4 }),
   },
   voleeBack: {
-    prep: key({ twist: 0.8, lean: 0.12, crouch: 0.12, armR: [0.55, -0.25, 0.2], armL: [0.45, -0.1, 0.4], elbowR: 1.2, racket: [0.35, 0.85, -0.3], face: [1, 0, 0.2] }),
-    impact: key({ twist: 0.25, lean: 0.2, crouch: 0.15, armR: [0.5, -0.2, 0.85], armL: [0.6, -0.3, -0.75], elbowR: 0.3, racket: [0.45, 0.7, 0.55], face: [0, 0.1, 1], stepR: 0.45 }),
-    follow: key({ twist: 0.05, lean: 0.22, crouch: 0.14, armR: [0.3, -0.35, 0.9], armL: [0.6, -0.35, -0.7], elbowR: 0.3, racket: [0.3, 0.5, 0.8], face: [0, -0.3, 1], stepR: 0.5 }),
+    prep: key({ twist: 0.8, lean: 0.12, crouch: 0.12, armR: [0.55, -0.25, 0.2], armL: [0.45, -0.1, 0.4], elbowR: 1.2, racket: [0.35, 0.85, -0.3], face: [1, 0, 0.2], stance: 0.4 }),
+    impact: key({ twist: 0.25, lean: 0.2, crouch: 0.15, armR: [0.5, -0.2, 0.85], armL: [0.6, -0.3, -0.75], elbowR: 0.3, racket: [0.45, 0.7, 0.55], face: [0, 0.1, 1], stepR: 0.45, stance: 0.4 }),
+    follow: key({ twist: 0.05, lean: 0.22, crouch: 0.14, armR: [0.3, -0.35, 0.9], armL: [0.6, -0.35, -0.7], elbowR: 0.3, racket: [0.3, 0.5, 0.8], face: [0, -0.3, 1], stepR: 0.5, stance: 0.4 }),
   },
   // Bandeja et víbora d'après les images de Xavier (víbora) : préparation de profil, raquette montée à deux mains
   // puis derrière la tête, coude haut, bras gauche tendu vers la balle, pied droit en arrière ; impact sur le côté,
   // devant, entre l'épaule et la tête ; le geste traverse le corps vers le bas et finit à gauche, à hauteur de hanche,
   // le corps tourné et la jambe droite qui passe devant.
   bandeja: {
-    prep: key({ twist: -1.1, lean: -0.15, crouch: 0.1, armR: [-0.75, 0.55, -0.2], armL: [0.25, 0.95, 0.2], elbowR: 1.0, racket: [-0.2, 0.9, -0.4], face: [-1, 0, 0], stepL: 0.3 }),
-    impact: key({ twist: -0.2, lean: 0.1, crouch: 0.08, armR: [-0.75, 0.35, 0.55], armL: [0.85, 0.2, 0.2], elbowR: 0.1, racket: [-0.75, 0.25, 0.6], face: [0, 0.1, 1], stepL: 0.3 }),
-    follow: key({ twist: 1.0, lean: 0.3, crouch: 0.12, armR: [0.8, -0.5, 0.3], armL: [0.4, -0.6, -0.6], elbowR: 0.3, racket: [0.6, -0.3, -0.7], face: [1, 0, 0], stepR: 0.35 }),
+    prep: key({ twist: -1.1, lean: -0.15, crouch: 0.1, armR: [-0.75, 0.55, -0.2], armL: [0.25, 0.95, 0.2], elbowR: 1.0, racket: [-0.2, 0.9, -0.4], face: [-1, 0, 0], stepL: 0.3, stance: 0.35 }),
+    impact: key({ twist: -0.2, lean: 0.1, crouch: 0.08, armR: [-0.75, 0.35, 0.55], armL: [0.85, 0.2, 0.2], elbowR: 0.1, racket: [-0.75, 0.25, 0.6], face: [0, 0.1, 1], stepL: 0.3, stance: 0.35 }),
+    follow: key({ twist: 1.0, lean: 0.3, crouch: 0.12, armR: [0.8, -0.5, 0.3], armL: [0.4, -0.6, -0.6], elbowR: 0.3, racket: [0.6, -0.3, -0.7], face: [1, 0, 0], stepR: 0.35, stance: 0.3 }),
   },
   // Smash (remate) d'après les images de Xavier : la raquette monte à deux mains, puis tombe derrière le dos, dos
   // cambré, genoux fléchis, bras gauche vers la balle ; impact en l'air, bras tendu au plus haut ; puis le corps se
   // plie vers l'avant, la raquette descend à gauche et la jambe droite part devant en ciseau.
   overhead: {
-    prep: key({ twist: -1.0, lean: -0.3, crouch: 0.14, armR: [-0.55, 0.75, -0.35], armL: [0.2, 0.97, 0.15], elbowR: 1.6, racket: [0.15, -0.6, -0.75], face: [-1, 0, 0], stepL: 0.25 }),
-    impact: key({ twist: -0.1, lean: -0.05, crouch: 0, armR: [-0.15, 0.98, 0.15], armL: [0.5, -0.3, 0.5], elbowR: 0, racket: [-0.05, 0.9, 0.4], face: [0, 0.2, 1], jump: 0.3 }),
-    follow: key({ twist: 0.8, lean: 0.55, crouch: 0.05, armR: [0.45, -0.7, 0.5], armL: [0.3, -0.7, -0.5], elbowR: 0.2, racket: [0.45, -0.75, 0.35], face: [1, 0, 0], kick: 1.3 }),
+    prep: key({ twist: -1.0, lean: -0.3, crouch: 0.14, armR: [-0.55, 0.75, -0.35], armL: [0.2, 0.97, 0.15], elbowR: 1.6, racket: [0.15, -0.6, -0.75], face: [-1, 0, 0], stepL: 0.25, stance: 0.4 }),
+    impact: key({ twist: -0.1, lean: -0.05, crouch: 0, armR: [-0.15, 0.98, 0.15], armL: [0.5, -0.3, 0.5], elbowR: 0, racket: [-0.05, 0.9, 0.4], face: [0, 0.2, 1], jump: 0.3, stance: 0.15 }),
+    follow: key({ twist: 0.8, lean: 0.55, crouch: 0.05, armR: [0.45, -0.7, 0.5], armL: [0.3, -0.7, -0.5], elbowR: 0.2, racket: [0.45, -0.75, 0.35], face: [1, 0, 0], kick: 1.3, stance: 0.3 }),
   },
   // Service à la cuillère d'après les images de Xavier : la main gauche lâche la balle devant soi pendant que la
   // raquette monte derrière, tête en haut, coude haut, de profil, genoux fléchis ; impact bas, sous la taille,
   // devant soi ; la raquette continue vers l'avant et vers le haut et finit par-dessus l'épaule gauche, pied droit
   // qui avance.
   serve: {
-    prep: key({ twist: -1.0, lean: 0.3, crouch: 0.14, armR: [-0.7, 0.25, -0.55], armL: [0.3, -0.45, 0.85], elbowR: 1.1, racket: [-0.1, 0.95, -0.2], face: [-1, 0, 0] }),
-    impact: key({ twist: -0.2, lean: 0.35, crouch: 0.17, armR: [-0.45, -0.8, 0.4], armL: [0.6, -0.4, 0.3], elbowR: 0.05, racket: [-0.75, -0.2, 0.6] }),
-    follow: key({ twist: 0.85, lean: 0.15, crouch: 0.08, armR: [0.35, 0.6, 0.7], armL: [0.5, -0.6, -0.3], elbowR: 1.2, racket: [0.3, 0.5, -0.8], face: [1, 0, 0], stepR: 0.4 }),
+    prep: key({ twist: -1.0, lean: 0.3, crouch: 0.14, armR: [-0.7, 0.25, -0.55], armL: [0.3, -0.45, 0.85], elbowR: 1.1, racket: [-0.1, 0.95, -0.2], face: [-1, 0, 0], stance: 0.35 }),
+    impact: key({ twist: -0.2, lean: 0.35, crouch: 0.17, armR: [-0.45, -0.8, 0.4], armL: [0.6, -0.4, 0.3], elbowR: 0.05, racket: [-0.75, -0.2, 0.6], stance: 0.4 }),
+    follow: key({ twist: 0.85, lean: 0.15, crouch: 0.08, armR: [0.35, 0.6, 0.7], armL: [0.5, -0.6, -0.3], elbowR: 1.2, racket: [0.3, 0.5, -0.8], face: [1, 0, 0], stepR: 0.4, stance: 0.3 }),
   },
 };
+
+/**
+ * Réaction de fin de point, rendu seulement. Gestes amples, lisibles de la caméra TV : la raquette et les bras en
+ * l'air, ou le corps plié ; les genoux fléchissent franchement, comme au padel.
+ * - `vamos` : son coup gagnant ; accroupi, raquette levée, poing gauche qui tire vers le bas ;
+ * - `content` : point gagné autrement (faute adverse, coup du partenaire) ; raquette basse, un poing serré ;
+ * - `rage` : sa propre faute ; les deux mains sur la tête ;
+ * - `abattu` : point perdu autrement ; plié en avant, les mains sur les genoux ;
+ * - `victoire` : balle de match gagnée ; les deux bras en V, rebonds sur les genoux.
+ */
+export type Reaction = 'vamos' | 'content' | 'rage' | 'abattu' | 'victoire';
+export const REACTIONS: readonly Reaction[] = ['vamos', 'content', 'rage', 'abattu', 'victoire'];
+/** Réaction en cours : temps depuis la fin du point (s), et temps restant avant le point suivant (s, `Infinity` à la fin du match). */
+export interface ReactionState {
+  kind: Reaction;
+  seconds: number;
+  left: number;
+}
+const VAMOS = key({ twist: -0.35, lean: 0.4, crouch: 0.3, armR: [-0.6, 0.75, 0.25], armL: [0.3, -0.55, 0.65], elbowR: 0.35, elbowL: 1.6, racket: [-0.35, 0.9, 0.25], face: [-1, 0, 0], stance: 0.5 });
+/** Poing gauche en haut du mouvement de « vamos ». */
+const PUMP_UP: V3 = [0.35, 0.35, 0.85];
+const REACTION_KEYS: Record<Reaction, Key> = {
+  vamos: VAMOS,
+  content: key({ twist: -0.1, lean: 0.15, crouch: 0.18, armR: [-0.35, -0.85, 0.35], armL: [0.6, 0.3, 0.5], elbowR: 0.4, elbowL: 1.9, racket: [-0.3, -0.45, 0.85], face: [-1, 0, 0], stance: 0.4 }),
+  rage: key({ twist: 0, lean: -0.25, crouch: 0.06, armR: [-0.5, 0.85, 0.15], armL: [0.5, 0.85, 0.15], elbowR: 2.5, elbowL: 2.5, racket: [-0.15, 0.55, -0.8], face: [-1, 0, 0], stance: 0.2 }),
+  abattu: key({ twist: 0, lean: 0.8, crouch: 0.3, armR: [-0.25, -0.5, 0.85], armL: [0.25, -0.5, 0.85], elbowR: 0.1, elbowL: 0.1, racket: [-0.25, -0.75, 0.6], face: [-1, 0, 0], stance: 0.4 }),
+  victoire: key({ twist: 0, lean: -0.15, crouch: 0.08, armR: [-0.6, 0.8, 0.1], armL: [0.6, 0.8, 0.1], elbowR: 0.1, elbowL: 0.1, racket: [-0.35, 0.93, 0.1], face: [0, 0, 1], stance: 0.35 }),
+};
+/** Le temps de réagir, puis montée vers la pose ; fondu de sortie avant le point suivant (s). */
+const REACT_DELAY = 0.12;
+const REACT_RISE = 0.3;
+const REACT_FADE = 0.3;
+/** « Vamos » : poings par seconde. */
+const PUMP_RATE = 2.6;
+
+/** Réaction d'un joueur au point qui vient de finir (`matchOver` : c'était la balle de match). */
+export function pointReaction(result: PointResult, player: number, team: Team, matchOver: boolean): Reaction {
+  if (matchOver) return team === result.winner ? 'victoire' : 'abattu';
+  if (team === result.winner) return result.by === player && result.how === 'gagnant' ? 'vamos' : 'content';
+  return result.by === player && (result.how === 'faute' || result.how === 'doubleFaute') ? 'rage' : 'abattu';
+}
+
+/** Pose de la réaction à cet instant, et son poids (0 à 1) par-dessus la pose d'attente. */
+function reactionPose(r: ReactionState): { key: Key; weight: number } {
+  const t = r.seconds - REACT_DELAY;
+  const weight = smooth(clamp(t / REACT_RISE, 0, 1)) * smooth(clamp(r.left / REACT_FADE, 0, 1));
+  const base = REACTION_KEYS[r.kind];
+  if (r.kind === 'vamos' || r.kind === 'content') {
+    // Poing qui monte et tire vers le bas, les genoux qui plient avec : deux fois (une seule quand on est content).
+    const pumps = r.kind === 'vamos' ? 2 : 1;
+    const phase = clamp(t * PUMP_RATE, 0, pumps);
+    const up = phase >= pumps ? 0 : Math.sin(phase * Math.PI);
+    const k: Key = { ...base, armL: mixDir(base.armL, PUMP_UP, up), crouch: base.crouch - 0.12 * up };
+    return { key: k, weight };
+  }
+  if (r.kind === 'victoire') {
+    // Rebonds sur les genoux, bras en l'air.
+    return { key: { ...base, crouch: base.crouch + 0.12 * Math.abs(Math.sin(Math.max(0, t) * 6)) }, weight };
+  }
+  if (r.kind === 'abattu') {
+    // Souffle court, le dos qui se soulève.
+    return { key: { ...base, lean: base.lean - 0.04 * Math.sin(Math.max(0, t) * 5) }, weight };
+  }
+  return { key: base, weight };
+}
 
 /** Après l'impact : durée de la fin du geste, puis du retour en attente (s). */
 /** Toutes les familles de geste, dans l'ordre du tableau (visionneur d'animations). */
@@ -203,6 +273,7 @@ function chainMix(a: Key, b: Key, t: (part: Part) => number): Key {
     // Le bras libre accompagne le buste.
     armL: mixDir(a.armL, b.armL, torso),
     elbowR: mix(a.elbowR, b.elbowR, arm),
+    elbowL: mix(a.elbowL, b.elbowL, torso),
     racket: mixDir(a.racket, b.racket, racket),
     face: mixDir(a.face, b.face, racket),
     stepL: mix(a.stepL, b.stepL, legs),
@@ -298,6 +369,8 @@ export interface PoseInput {
   stride: number;
   /** Temps (s), pour la respiration et les petits rebonds d'attente. */
   time: number;
+  /** Fin de point : réaction du joueur (voir `Reaction`) ; absente ou `null` : aucune. */
+  reaction?: ReactionState | null;
 }
 
 /**
@@ -330,6 +403,10 @@ export function computePose(input: PoseInput): Pose {
     }
   }
 
+  if (input.reaction) {
+    const r = reactionPose(input.reaction);
+    if (r.weight > 0) upper = mixKey(upper, r.key, r.weight);
+  }
   // Course : amplitude selon la vitesse, foulée dans la direction du déplacement vue du corps.
   const run = clamp(input.speed / RUN_SPEED, 0, 1);
   // Foulée qui apparaît progressivement avec la vitesse : pas de bascule d'un coup entre l'attente et la course.
@@ -361,6 +438,7 @@ export function computePose(input: PoseInput): Pose {
     armR: upper.armR,
     armL: moving && !input.prep && !s ? mixDir(upper.armL, [0.3, -0.75, -Math.sin(input.stride) * 0.6], run * gait) : upper.armL,
     elbowR: upper.elbowR,
+    elbowL: upper.elbowL,
     racket: upper.racket,
     face: upper.face,
     legR: spread(kickLeg(step(leg(1), upper.stepR, upper.stepL), upper.kick), -upper.stance * (1 - run)),

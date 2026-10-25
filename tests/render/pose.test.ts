@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyYawTarget, computePose, FOLLOW_TIME, hammerFace, SWING_IN, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
+import { bodyYawTarget, computePose, FOLLOW_TIME, hammerFace, pointReaction, REACTIONS, SWING_IN, lowFamily, overheadFamily, plansHighShot, prepAmount, RECOVER_TIME, swingSide, type PoseInput, type V3 } from '../../src/render/pose';
 import { NEUTRAL_ARCADE } from '../../src/sim/commands';
 import { Duel, type HighFloor } from '../../src/sim/duel';
 import { vec3 } from '../../src/sim/vec3';
@@ -265,5 +265,61 @@ describe('prise marteau', () => {
     expect(hammerFace([0, 0, 1], [0, 1, 0], [1, 0, 0])[0]).toBeCloseTo(1, 6);
     // Avant-bras dans l'axe du manche : on garde la face voulue.
     expect(hammerFace([0, 1, 0], [0, 1, 0], [0, 0, 1])).toEqual([0, 0, 1]);
+  });
+});
+
+describe('réactions de fin de point', () => {
+  const result = (winner: 0 | 1, by: number | null, how: 'gagnant' | 'faute' | 'provoquee' | 'doubleFaute') =>
+    ({ winner, by, how, reason: 'out', hits: 4, shot: null, whiff: null }) as const;
+
+  it('choisit la réaction selon qui a gagné le point et comment', () => {
+    expect(pointReaction(result(0, 0, 'gagnant'), 0, 0, false)).toBe('vamos');
+    expect(pointReaction(result(0, 2, 'gagnant'), 0, 0, false)).toBe('content');
+    expect(pointReaction(result(0, 1, 'faute'), 0, 0, false)).toBe('content');
+    expect(pointReaction(result(0, 1, 'faute'), 1, 1, false)).toBe('rage');
+    expect(pointReaction(result(0, 1, 'doubleFaute'), 1, 1, false)).toBe('rage');
+    expect(pointReaction(result(0, 1, 'provoquee'), 1, 1, false)).toBe('abattu');
+    expect(pointReaction(result(0, 0, 'gagnant'), 1, 1, false)).toBe('abattu');
+    expect(pointReaction(result(0, 0, 'gagnant'), 2, 0, true)).toBe('victoire');
+    expect(pointReaction(result(0, 0, 'gagnant'), 1, 1, true)).toBe('abattu');
+  });
+
+  it("laisse le temps de réagir, tient la pose, puis s'efface avant le point suivant", () => {
+    const rest = computePose({ ...still, inPlay: false });
+    for (const kind of REACTIONS) {
+      const at = (seconds: number, left: number) => computePose({ ...still, inPlay: false, reaction: { kind, seconds, left } });
+      expect(at(0, 1.4)).toEqual(rest);
+      expect(at(0.8, 0)).toEqual(rest);
+      const held = at(0.8, 0.6);
+      expect(held).not.toEqual(rest);
+      for (const v of [held.armR, held.armL, held.racket, held.face]) expect(length(v)).toBeCloseTo(1, 6);
+    }
+  });
+
+  it('plie franchement les genoux pour le vamos et les mains sur les genoux, lève les bras en victoire', () => {
+    const at = (kind: (typeof REACTIONS)[number]) => computePose({ ...still, inPlay: false, reaction: { kind, seconds: 0.8, left: Infinity } });
+    const rest = computePose({ ...still, inPlay: false });
+    expect(at('vamos').crouch).toBeGreaterThan(rest.crouch + 0.2);
+    expect(at('abattu').crouch).toBeGreaterThan(rest.crouch + 0.2);
+    expect(at('abattu').lean).toBeGreaterThan(0.6);
+    expect(at('victoire').armR[1]).toBeGreaterThan(0.7);
+    expect(at('victoire').armL[1]).toBeGreaterThan(0.7);
+  });
+});
+
+describe('appuis pendant les coups', () => {
+  it("garde les pieds écartés de l'armé à la fin du geste, sans les resserrer par rapport à l'attente", () => {
+    const ready = computePose(still);
+    for (const family of ['fore', 'back', 'voleeFore', 'voleeBack', 'bandeja', 'serve'] as const) {
+      const poses = [
+        computePose({ ...still, prep: { family, seconds: 1 } }),
+        computePose({ ...still, strike: { family, seconds: SWING_IN } }),
+        computePose({ ...still, strike: { family, seconds: SWING_IN + FOLLOW_TIME } }),
+      ];
+      for (const pose of poses) {
+        expect(pose.legL.spread - pose.legR.spread).toBeGreaterThan(0.55);
+        expect(pose.legL.spread - pose.legR.spread).toBeLessThanOrEqual(ready.legL.spread - ready.legR.spread + 0.01);
+      }
+    }
   });
 });
