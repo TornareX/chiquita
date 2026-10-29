@@ -1,4 +1,4 @@
-import { Connection, serverUrl } from '../net/connection';
+import { Connection, serverUrl, wakeServer } from '../net/connection';
 import { TICKS_PER_FRAME } from '../net/fakeNet';
 import { SIM_DT } from '../sim/constants';
 import { DEVICES, loadPreferences, type Device } from '../ui/settingsStore';
@@ -83,17 +83,32 @@ export function startOnline(canvas: HTMLCanvasElement): void {
     connection = c;
     return c;
   };
+  /** Le serveur répond en HTTP (réveillé s'il dormait) ; refait à « Réessayer » s'il n'a pas répondu. */
+  let awake: Promise<boolean> | null = null;
+  const wake = (): Promise<boolean> => {
+    awake ??= wakeServer(url, () => lobby.status('Réveil du serveur en ligne… (jusqu’à une minute s’il dormait)')).then((ok) => {
+      if (!ok) {
+        awake = null;
+        lobby.unreachable(`Serveur introuvable (${url}) : vérifie ta connexion, puis réessaie.`);
+      }
+      return ok;
+    });
+    return awake;
+  };
   /** Exécute `then` dès que la liaison est ouverte. */
   const whenOpen = (then: (c: Connection) => void): void => {
-    const c = connect();
-    if (c.open) return then(c);
+    if (connection?.open) return then(connection);
     lobby.status('Connexion au serveur…');
-    const wait = window.setInterval(() => {
-      if (connection !== c) return window.clearInterval(wait);
-      if (!c.open) return;
-      window.clearInterval(wait);
-      then(c);
-    }, 20);
+    void wake().then((ok) => {
+      if (!ok) return;
+      const c = connect();
+      const wait = window.setInterval(() => {
+        if (connection !== c) return window.clearInterval(wait);
+        if (!c.open) return;
+        window.clearInterval(wait);
+        then(c);
+      }, 20);
+    });
   };
 
   const lobby = createOnlineLobby(device, {
@@ -128,8 +143,12 @@ export function startOnline(canvas: HTMLCanvasElement): void {
     },
   });
   lobby.show(null);
-  // Tout de suite : si cette fenêtre jouait un match (rechargée, coupée), le serveur lui rend sa place.
-  connect();
+  // Tout de suite (réveil compris) : si cette fenêtre jouait un match (rechargée, coupée), le serveur lui rend sa place.
+  void wake().then((ok) => {
+    if (!ok) return;
+    lobby.status('');
+    connect();
+  });
 }
 
 /** Bandeau au milieu de l'écran (liaison perdue pendant le match) ; apparence dans `menu.css` (`#online-banner`). */

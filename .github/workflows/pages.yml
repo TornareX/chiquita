@@ -28,6 +28,9 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: /chiquita/
+          # Serveur de jeu en ligne (`render.yaml`), réglé dans GitHub : Settings → Secrets and variables → Actions →
+          # Variables → SERVEUR_EN_LIGNE (ex. wss://padel-smash.onrender.com). Vide : le jeu cherche le port 2567 de la page.
+          VITE_SERVEUR: ${{ vars.SERVEUR_EN_LIGNE }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -1,0 +1,19 @@
+# Serveur de jeu en ligne sur Render, offre gratuite (research/en-ligne/HEBERGEMENT_GRATUIT.md).
+# Render → New → Blueprint → ce dépôt : il crée le service et le redéploie à chaque push sur main, comme GitHub Pages
+# (le jeu et le serveur doivent avoir la même version de la simulation).
+services:
+  - type: web
+    name: padel-smash
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm run serveur
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Pages autorisées à se connecter : le jeu publié, et le jeu lancé en local.
+      - key: ORIGINES
+        value: https://tornarex.github.io,http://localhost:5173

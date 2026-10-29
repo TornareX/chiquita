@@ -11,12 +11,49 @@ const RETRY_EVERY = 1000;
 /** Identifiant de cette fenêtre (\`sessionStorage\` : gardé au rechargement, propre à chaque fenêtre). */
 const TOKEN_KEY = 'padel.enligne.jeton';
 
-/** Adresse du serveur : `?serveur=hote:port` (ou une adresse `ws://…` complète), sinon cette machine, port 2567. */
+/** Réveil du serveur : nouvel essai toutes les ce nombre de ms, abandon après ce temps (un serveur gratuit endormi met ~1 min). */
+const WAKE_RETRY = 2000;
+const WAKE_GIVE_UP = 120_000;
+/** Au-delà de ce temps sans réponse, on dit au joueur que le serveur se réveille (ms). */
+const WAKE_SLOW = 1500;
+
+/**
+ * Adresse du serveur : `?serveur=hote:port` (ou une adresse `ws://…` complète), sinon celle fixée au build
+ * (`VITE_SERVEUR`, le serveur sur Internet pour le jeu publié), sinon cette machine, port 2567.
+ */
 export function serverUrl(params: URLSearchParams): string {
-  const given = params.get('serveur');
+  const given = params.get('serveur') || (import.meta.env.VITE_SERVEUR as string | undefined) || null;
   const secure = location.protocol === 'https:';
   if (given?.startsWith('ws://') || given?.startsWith('wss://')) return given;
   return `${secure ? 'wss' : 'ws'}://${given ?? `${location.hostname || 'localhost'}:2567`}`;
+}
+
+/**
+ * Attend que le serveur réponde en HTTP (`server/main.ts`) avant d'ouvrir le WebSocket : un serveur gratuit endormi se
+ * réveille à la première requête, en une minute environ. `slow` est appelé si la réponse tarde. Rend `false` si le
+ * serveur n'a jamais répondu.
+ */
+export async function wakeServer(url: string, slow: () => void): Promise<boolean> {
+  const http = url.replace(/^ws/, 'http');
+  // Un serveur sur cette machine ou le réseau de la maison ne dort pas : s'il ne répond pas, il est éteint.
+  const local = /^(localhost|127\.|\[::1\]|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(new URL(http).hostname);
+  const timer = local ? undefined : window.setTimeout(slow, WAKE_SLOW);
+  const until = performance.now() + (local ? 0 : WAKE_GIVE_UP);
+  try {
+    for (;;) {
+      try {
+        const response = await fetch(http, { cache: 'no-store' });
+        // Pendant son réveil, l'hébergeur peut répondre à sa place : seule notre réponse compte.
+        if (response.ok && (response.headers.get('content-type') ?? '').includes('application/json')) return true;
+      } catch {
+        // Pas encore joignable.
+      }
+      if (performance.now() >= until) return false;
+      await new Promise((resolve) => window.setTimeout(resolve, WAKE_RETRY));
+    }
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 /** Identifiant de cette fenêtre, créé à sa première visite. */
