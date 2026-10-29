@@ -8,6 +8,11 @@ import { createBots, createMatchDuel, type MatchConfig } from './protocol';
 
 /** Une empreinte de l'état toutes les ce nombre de pas (1 s), pour vérifier que chaque joueur calcule le même match. */
 export const HASH_EVERY = 240;
+/**
+ * Commandes acceptées au plus ce nombre de pas en avance (5 s) : un navigateur calcule une demi-seconde d'avance au
+ * pire (moitié du ping + 25 ms) ; au-delà, c'est un client modifié qui remplirait la mémoire du serveur.
+ */
+export const MAX_AHEAD = 1200;
 
 /**
  * Le match tel que le serveur le tient (`research/en-ligne/PLAN_EN_LIGNE.md`, modèle C) : il reçoit les commandes des
@@ -56,6 +61,7 @@ export class MatchServer {
         this.late[seat]!++;
         continue;
       }
+      if (tick >= this.tick + MAX_AHEAD) break;
       this.pending[seat]!.set(tick, decodeCommands(data, i * COMMAND_BYTES));
     }
   }

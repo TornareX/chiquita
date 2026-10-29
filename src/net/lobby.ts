@@ -1,6 +1,7 @@
-import type { AiLevel } from '../sim/bot';
+import { AI_LEVELS, type AiLevel } from '../sim/bot';
 import { SIM_DT } from '../sim/constants';
-import type { DuelFormat } from '../sim/duel';
+import type { AssistLevel, DuelFormat, PrepMove } from '../sim/duel';
+import type { Hand } from '../sim/shots';
 import { MatchServer } from './matchServer';
 import { encodeFinals, decodeFrame, type ClientMessage, type MatchConfig, type PlayerPrefs, type RoomView, type ServerMessage } from './protocol';
 import { serializeState } from './snapshot';
@@ -13,6 +14,31 @@ const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const RULES = { setsToWin: 1, gamesPerSet: 6, goldenPoint: false };
 /** Place gardée à un joueur coupé pendant un match (ms) : l'IA la tient, il la reprend s'il revient à temps. */
 export const HOLD_MS = 60_000;
+/**
+ * Messages acceptés par connexion et par seconde : un navigateur en envoie ~60 (une image) + 2 pings, jusqu'à ~150
+ * sur un écran à 144 Hz. Au-delà, les messages sont ignorés ; au-delà de `RATE_KICK`, la connexion est fermée.
+ */
+export const RATE_LIMIT = 400;
+export const RATE_KICK = 2000;
+
+/** Valeurs permises des réglages : tout le reste, venu d'un client modifié, est remplacé par le réglage par défaut. */
+const ASSISTS: readonly AssistLevel[] = ['magnet', 'full', 'partial', 'off'];
+const PREP_MOVES: readonly PrepMove[] = ['libre', 'ralenti', 'bloque', 'tard'];
+const HANDS: readonly Hand[] = ['right', 'left'];
+const LEVELS = Object.keys(AI_LEVELS) as AiLevel[];
+
+function oneOf<T>(allowed: readonly T[], value: unknown, fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+/**
+ * Texte lisible d'un client : une chaîne, coupée à `max`, sans caractères de contrôle ni d'inversion du sens d'écriture
+ * (qui feraient s'afficher un nom à l'envers ou déborder sur le texte d'à côté).
+ */
+function cleanText(value: unknown, max: number): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\p{Cc}\p{Bidi_Control}\p{Zl}\p{Zp}]/gu, '').slice(0, max).trim();
+}
 
 /** Un navigateur connecté : ce qu'on sait de lui, et comment lui écrire. */
 interface Member {
@@ -25,6 +51,11 @@ interface Member {
   prefs: PlayerPrefs;
   room: Room | null;
   send(message: ServerMessage | Uint8Array): void;
+  /** Ferme la connexion (client qui inonde le serveur). */
+  close(): void;
+  /** Début de la seconde en cours et messages reçus depuis (limite de débit). */
+  rateStart: number;
+  rateCount: number;
 }
 
 interface Room {
@@ -58,30 +89,81 @@ export class Lobby {
     private readonly random: () => number = Math.random,
     /** Version du jeu attendue (`version.ts`) ; `null` : tout le monde est accepté (tests). */
     private readonly version: string | null = null,
+    /** Où écrire une erreur attrapée (la console du serveur). */
+    private readonly onError: (context: string, error: unknown) => void = (context, error) => console.error(context, error),
   ) {}
 
-  /** Un navigateur se connecte ; rend son identifiant. */
-  connect(send: Member['send']): number {
+  /** Un navigateur se connecte ; rend son identifiant. `close` ferme sa connexion s'il inonde le serveur. */
+  connect(send: Member['send'], close: Member['close'] = () => {}): number {
     const id = this.nextId++;
-    this.members.set(id, { id, token: `anonyme-${id}`, refused: false, name: `Joueur ${id}`, prefs: DEFAULT_PREFS, room: null, send });
+    this.members.set(id, {
+      id,
+      token: `anonyme-${id}`,
+      refused: false,
+      name: `Joueur ${id}`,
+      prefs: DEFAULT_PREFS,
+      room: null,
+      send,
+      close,
+      rateStart: this.now(),
+      rateCount: 0,
+    });
     return id;
+  }
+
+  /** Compte un message de `member` ; `false` s'il dépasse la limite (message ignoré, connexion fermée si abus). */
+  private allow(member: Member): boolean {
+    const now = this.now();
+    if (now - member.rateStart >= 1000) {
+      member.rateStart = now;
+      member.rateCount = 0;
+    }
+    member.rateCount++;
+    if (member.rateCount === RATE_KICK) {
+      // Pas de place gardée pour lui : il est parti, pas coupé.
+      member.refused = true;
+      this.leave(member);
+      this.members.delete(member.id);
+      member.close();
+    }
+    return member.rateCount <= RATE_LIMIT;
   }
 
   disconnect(id: number): void {
     const member = this.members.get(id);
     if (!member) return;
     // Coupé pendant un match : sa place lui est gardée un moment (l'IA la tient en attendant).
-    this.leave(member, true);
+    this.guarded(member, () => this.leave(member, true));
     this.members.delete(id);
   }
 
-  /** Message texte (JSON) d'un navigateur. */
+  /**
+   * Message texte (JSON) d'un navigateur. Rien n'y est cru sur parole : un client modifié peut envoyer n'importe quoi,
+   * chaque champ est vérifié ou remplacé.
+   */
   message(id: number, message: ClientMessage): void {
     const member = this.members.get(id);
-    if (!member || member.refused) return;
+    if (!member || member.refused || !this.allow(member)) return;
+    if (typeof message !== 'object' || message === null) return;
+    this.guarded(member, () => this.handle(member, message));
+  }
+
+  /** Exécute `run` ; une erreur ferme la salle du joueur (s'il en a une), jamais le serveur. */
+  private guarded(member: Member, run: () => void): void {
+    const room = member.room;
+    try {
+      run();
+    } catch (error) {
+      if (room && this.rooms.get(room.code) === room) this.fail(room, error);
+      else this.onError(`Erreur sur un message du joueur ${member.id} :`, error);
+    }
+  }
+
+  private handle(member: Member, message: ClientMessage): void {
     const room = member.room;
     switch (message.t) {
       case 'ping':
+        if (typeof message.at !== 'number' || !Number.isFinite(message.at)) return;
         member.send({ t: 'pong', at: message.at, server: this.now() });
         return;
       case 'hello': {
@@ -90,9 +172,15 @@ export class Lobby {
           member.send({ t: 'error', message: 'Ta version du jeu n’est pas celle du serveur : recharge la page (Ctrl+F5).' });
           return;
         }
-        member.name = String(message.name).slice(0, 20) || member.name;
-        member.prefs = { ...DEFAULT_PREFS, ...message.prefs };
-        if (message.token) member.token = String(message.token).slice(0, 64);
+        member.name = cleanText(message.name, 20) || member.name;
+        const prefs: Partial<Record<keyof PlayerPrefs, unknown>> = typeof message.prefs === 'object' && message.prefs !== null ? message.prefs : {};
+        member.prefs = {
+          assist: oneOf(ASSISTS, prefs.assist, DEFAULT_PREFS.assist),
+          prepMove: oneOf(PREP_MOVES, prefs.prepMove, DEFAULT_PREFS.prepMove),
+          hand: oneOf(HANDS, prefs.hand, DEFAULT_PREFS.hand),
+        };
+        const token = cleanText(message.token, 64);
+        if (token) member.token = token;
         // Revenu après une coupure pendant un match : il reprend sa place.
         for (const held of this.rooms.values()) {
           const seat = held.held.get(member.token);
@@ -113,7 +201,7 @@ export class Lobby {
         this.join(member, this.createRoom(member.id));
         return;
       case 'join': {
-        const target = this.rooms.get(String(message.code).toUpperCase());
+        const target = this.rooms.get(cleanText(message.code, 4).toUpperCase());
         if (!target) return member.send({ t: 'error', message: 'Aucune salle avec ce code : vérifie les 4 lettres avec tes amis.' });
         if (target.match) return member.send({ t: 'error', message: 'Le match de cette salle a déjà commencé : crée ta salle, ou demande un autre code.' });
         this.leave(member);
@@ -124,15 +212,17 @@ export class Lobby {
         if (!room || room.match) return;
         const seat = message.seat;
         const count = room.format === 'double' ? 4 : 2;
+        // `null` : quitter sa place ; autre chose qu'une place de la salle : message ignoré, on garde la sienne.
+        if (seat !== null && !(Number.isInteger(seat) && seat >= 0 && seat < count)) return;
         room.seats = room.seats.map((holder) => (holder === member.id ? null : holder));
-        if (seat !== null && seat >= 0 && seat < count && room.seats[seat] === null) room.seats[seat] = member.id;
+        if (seat !== null && room.seats[seat] === null) room.seats[seat] = member.id;
         this.broadcastRoom(room);
         return;
       }
       case 'setup':
         if (!room || room.match || room.host !== member.id) return;
         room.format = message.format === 'simple' ? 'simple' : 'double';
-        room.level = message.level;
+        room.level = oneOf(LEVELS, message.level, room.level);
         // En simple, les places 3 et 4 n'existent pas.
         if (room.format === 'simple') room.seats = room.seats.map((holder, i) => (i < 2 ? holder : null));
         this.broadcastRoom(room);
@@ -147,12 +237,13 @@ export class Lobby {
   /** Message binaire (commandes d'une place). */
   binary(id: number, bytes: Uint8Array): void {
     const member = this.members.get(id);
-    const room = member?.room;
-    if (!member || !room?.match) return;
+    if (!member || member.refused || !this.allow(member)) return;
+    const room = member.room;
+    if (!room?.match) return;
     const frame = decodeFrame(bytes);
     // On ne joue que pour sa place.
     if (frame?.kind !== 'inputs' || room.seats[frame.seat] !== member.id) return;
-    room.match.receive(frame.seat, frame.start, frame.data);
+    this.guarded(member, () => room.match!.receive(frame.seat, frame.start, frame.data));
   }
 
   /** Fait avancer les matchs jusqu'à maintenant et envoie à chacun les commandes retenues et les empreintes. */
@@ -167,8 +258,25 @@ export class Lobby {
       }
       const match = room.match;
       if (!match || now < room.startAt) continue;
-      match.advanceTo(Math.floor((now - room.startAt) / TICK_MS) + 1);
-      this.flush(room);
+      try {
+        match.advanceTo(Math.floor((now - room.startAt) / TICK_MS) + 1);
+        this.flush(room);
+      } catch (error) {
+        this.fail(room, error);
+      }
+    }
+  }
+
+  /**
+   * Une erreur dans le match d'une salle (bogue de la sim, ou message piégé passé entre les mailles) : cette salle
+   * seule est fermée, les autres continuent. Ses joueurs reviennent au salon avec un message.
+   */
+  private fail(room: Room, error: unknown): void {
+    this.onError(`Erreur dans la salle ${room.code}, fermée :`, error);
+    this.rooms.delete(room.code);
+    for (const member of room.members) {
+      member.room = null;
+      member.send({ t: 'error', message: 'Le match s’est arrêté sur une erreur du serveur, désolé. Crée une nouvelle salle.' });
     }
   }
 

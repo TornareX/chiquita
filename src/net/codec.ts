@@ -39,7 +39,8 @@ export function encodeCommands(commands: ArcadeCommands, out = new Uint8Array(CO
 
 /** Relit des commandes écrites par `encodeCommands`. */
 export function decodeCommands(data: Uint8Array, offset = 0): ArcadeCommands {
-  const signed = (byte: number): number => ((byte << 24) >> 24) / STICK_STEPS;
+  // -128 n'est jamais écrit : lu d'un client modifié, il vaut -127 (un stick ne dépasse pas 1).
+  const signed = (byte: number): number => Math.max(-STICK_STEPS, (byte << 24) >> 24) / STICK_STEPS;
   const buttons = data[offset + 2]!;
   const extra = data[offset + 3]!;
   const commands: ArcadeCommands = {

@@ -167,6 +167,22 @@ Vérifié en local : `npm run typecheck`, `tests/net` (24 tests), les tests en l
 plusieurs tombent, `reseau.spec.ts` compris qui n'utilise pas le serveur : charge de la machine). Origine autorisée :
 connexion ouverte ; autre site : refus 403.
 
+### Durcissement face à un client modifié (29/10/2026)
+
+Côté navigateur, rien à faire : aucun secret dans le jeu publié, liaison chiffrée, noms des autres joueurs toujours
+affichés comme du texte (jamais comme du HTML), et le score est celui du serveur. Le serveur, lui, ne croit plus rien
+sur parole :
+
+| Risque | Parade | Où |
+|---|---|---|
+| Commandes pour des pas très lointains, qui rempliraient la mémoire | Refusées au-delà de 5 s d'avance (`MAX_AHEAD`) | `src/net/matchServer.ts` |
+| Réglages, niveau d'IA, place, code, nom absurdes | Chaque champ vérifié ; une valeur inconnue devient le réglage par défaut ; nom sans caractères de contrôle ni d'inversion du sens d'écriture, 20 caractères au plus | `src/net/lobby.ts` |
+| Stick à -128 (jamais écrit par le jeu) | Lu comme -127 | `src/net/codec.ts` |
+| Une erreur dans une salle qui arrêterait tout le serveur | La salle seule est fermée, ses joueurs reçoivent un message ; dernier filet dans `server/main.ts` | `Lobby.fail`, `Lobby.guarded` |
+| Inondation de messages | Au-delà de 400 par seconde, ignorés ; à 2 000, connexion coupée, place laissée à l'IA sans la garder | `RATE_LIMIT`, `RATE_KICK` |
+
+Tests : `tests/net/hardening.test.ts` envoie exprès ces messages piégés.
+
 ### Ce qu'il reste à faire, à la main (une fois)
 1. Pousser ces changements sur `main` (GitHub).
 2. Sur https://render.com : créer un compte avec GitHub (gratuit, sans carte), **New → Blueprint**, choisir le dépôt :

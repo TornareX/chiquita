@@ -78,10 +78,14 @@ sockets.on('connection', (socket, request) => {
   perAddress.set(address, (perAddress.get(address) ?? 0) + 1);
   // Pas d'attente de Nagle : les commandes partent tout de suite.
   (socket as unknown as { _socket?: { setNoDelay?(on: boolean): void } })._socket?.setNoDelay?.(true);
-  const id = lobby.connect((message) => {
-    if (socket.readyState !== socket.OPEN) return;
-    socket.send(message instanceof Uint8Array ? message : JSON.stringify(message));
-  });
+  const id = lobby.connect(
+    (message) => {
+      if (socket.readyState !== socket.OPEN) return;
+      socket.send(message instanceof Uint8Array ? message : JSON.stringify(message));
+    },
+    // Client qui inonde le serveur (`RATE_KICK`) : coupé net.
+    () => socket.terminate(),
+  );
   socket.on('message', (data: RawData, isBinary: boolean) => {
     if (isBinary) {
       const buffer = Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data as ArrayBuffer);
@@ -95,11 +99,11 @@ sockets.on('connection', (socket, request) => {
       // Message illisible : ignoré.
       return;
     }
+    // Le salon attrape lui-même les erreurs d'une salle ; ceci reste un dernier filet, pour ne jamais tomber.
     try {
       lobby.message(id, message);
     } catch (error) {
-      // Une erreur du serveur ne doit pas passer inaperçue (ni le faire tomber).
-      console.error(`Erreur sur le message « ${message.t} » :`, error);
+      console.error('Erreur sur un message :', error);
     }
   });
   socket.on('close', () => {
@@ -118,6 +122,9 @@ setInterval(() => {
   expected = now + LOOP_MS;
   lobby.tick();
 }, LOOP_MS);
+
+// Dernier filet : une erreur oubliée est écrite, le serveur continue pour les autres salles.
+process.on('uncaughtException', (error) => console.error('Erreur non attrapée :', error));
 
 http.listen(PORT, () => {
   console.log(`Serveur Padel Smash en ligne : ws://localhost:${PORT} (version ${version}, boucle ${LOOP_MS} ms)`);
