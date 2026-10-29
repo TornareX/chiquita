@@ -420,6 +420,70 @@ sur une bande plus petite. Ton : service en encre et texte blanc ; faute, let et
 jaune balle ; point et fin du match à la couleur de l'équipe, texte encre. Elle claque à l'arrivée (échelle 1,35 →
 0,96 → 1, en 160 ms) puis disparaît sans traîner ; rien ne bouge sans mouvement réduit.
 
+## Personnages et cosmétiques
+
+**Direction choisie le 29/10/2026, pas encore construite** : les personnages actuels (`src/render/character.ts`,
+volumes lisses et grosse tête façon Wii Sports) restent en place jusqu'au prototype.
+
+### North Star : « Pâte de club »
+
+Des joueurs de club, pas des pros. Le padel se joue entre amis, à tout âge et à toute corpulence : le papa avec du
+ventre, la retraitée redoutable à la vitre, l'ado qui smashe tout. On choisit quelqu'un à qui s'identifier, comme on
+choisissait un gnome mage, pas une star. Ce sont des figurines en pâte à modeler, trapues, aux grosses mains et aux
+gros pieds, qu'on a envie de toucher. Le jeu est sérieux, et le fun se fait autour, par la personnalisation, comme
+dans Rocket League.
+
+Ingrédients, à croiser sans jamais copier une seule source :
+- **Formes** : silhouettes trapues et exagérées, lisibles d'un coup d'œil depuis la caméra télé (familles Fall Guys,
+  TF2, Crash, FIFA Street 3, Animal Crossing).
+- **Matière et lumière** : pâte légèrement irrégulière, traces de doigts discrètes, côté fait main (Wallace et
+  Gromit, DOGWALK) ; lumière de salle chaude et douce ; ombres toon teintées et liseré de lumière déjà en place.
+- **Mouvement** : les vrais gestes du padel en base, avec l'emphase du manga de sport (Haikyu!!, Baby Steps) sur les
+  grands moments. Réactions de fin de point exagérées (Food Wars).
+
+### Animation
+
+- Toujours fluide, au rythme de l'affichage : ni 12 images par seconde, ni stop-motion, même hors échange. Le style
+  pâte passe par les formes, la matière et la lumière, pas par le saccadé.
+- Les vrais gestes de padel en base (vidéos de joueurs comme référence, rien de repris dans le jeu), exagérés à
+  trois instants : armé tenu un peu plus longtemps, contact qui claque (micro-pause), fin du geste tenue.
+- La simulation décide du minutage : les poses restent calculées par `src/render/pose.ts`, sans clips figés.
+- Mêmes gestes pour tous les personnages. La personnalité passe par l'attente, les déplacements, les réactions et
+  les célébrations.
+
+### Cosmétiques
+
+| Emplacement | Ce qui varie |
+|---|---|
+| Figurine | Corpulence, âge, visage, coiffure |
+| Tenue | Motifs du maillot, short, chaussettes, chaussures, poignets |
+| Raquette | Forme (ronde, goutte, diamant, les vraies formes du padel), décor, grip |
+| Couvre-chef | Casquette, bandeau, visière… et chapeaux fantaisie |
+| Porte-clé | Breloque accrochée à la raquette, qui se balance dans les coups |
+| Traînée | Arc de raquette d'une frappe parfaite |
+| Célébration | Effet du point gagnant (ex. : la vitre en confettis sur un por tres) |
+| Carte de joueur | Titre (« Roi de la bandeja »), bannière, ¡Vamos! |
+
+Chaque objet est une variante paramétrée d'une forme de base (couleurs, motifs, proportions) : une dizaine de formes
+faites à la main ou dans le code donnent des centaines d'objets, sans rien acheter.
+
+### Named Rules
+**The Same Game Rule.** Aucun cosmétique ne change le jeu : même taille, mêmes zones de frappe, même portée, même
+vitesse. Une figurine trapue et une figurine longue jouent exactement pareil.
+
+**The Clean Ball Rule.** La balle n'est jamais décorée ni recolorée : c'est l'objet le plus important à lire.
+
+**The Readable Swing Rule.** Un cosmétique ne cache jamais le geste. Un chapeau ne masque pas le bras, une raquette
+fantaisie garde la taille et la forme lisible d'une raquette, une traînée ne cache pas la balle. Depuis la caméra
+télé, on reconnaît toujours une bandeja d'une víbora.
+
+**The Team Jersey Rule.** La couleur principale du maillot suit l'équipe (`src/render/teamColors.ts`), comme dans
+Rocket League, où la voiture prend toujours la couleur de son équipe. La personnalisation joue sur les motifs, les
+accents et les accessoires, jamais sur un bleu ou un rouge qui ferait douter du camp (The Team Ownership Rule).
+
+**The Earned Not Bought Rule.** Tout se gagne en jouant, jamais en payant. De préférence en maîtrisant une technique
+(GAME_DESIGN.md §10) : réussir dix contre-vitres débloque un objet.
+
 ## Do's and Don'ts
 
 ### Do:

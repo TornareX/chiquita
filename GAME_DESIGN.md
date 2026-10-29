@@ -164,7 +164,8 @@ Au clavier : mêmes actions sur des touches, pour 1 ou 2 joueurs par clavier.
 
 - **Stylisé / cartoon** : lisibilité (balle surdimensionnée, couleurs d'équipe vives), coût de
   production compatible avec un jeu web en Three.js, ton fun.
-- Personnages inventés, expressifs (célébrations, réactions aux points).
+- Personnages inventés, expressifs (célébrations, réactions aux points). Direction « Pâte de club » et
+  cosmétiques : DESIGN.md, section « Personnages et cosmétiques ».
 - Audio : impacts de balle distincts selon le coup et la qualité, son de vitre et de grillage
   différenciés, ambiance de public qui réagit au spectaculaire.
 
